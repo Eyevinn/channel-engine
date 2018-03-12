@@ -1,0 +1,25 @@
+The Eyevinn Channel Engine is a microservice that offers the functionality to generate personalized live streams from available VOD content.
+
+![system description](https://github.com/Eyevinn/channel-engine/blob/master/docs/system-description.png)
+
+A live demonstration of the Channel Engine is available at https://tv.eyevinn.technology/
+
+## Installation
+
+To install and run an instance of the Eyevinn Channel Engine we have a Docker image available that can be used. The Channel Engine requests from an Asset Manager API what content to play next. This API is not included in this package and needs to be provided seperately. The Asset Manager API needs to provide the Channel Engine with an endpoint `/nextVod/PLAYLIST` that returns an JSON object in the following format:
+
+```
+{
+  "id": ASSETID,
+  "uri": URI-TO-VOD-HLS,
+  "title": TITLE
+}
+
+This will be the next content to be stitched into the live stream by the engine. To start the Channel Engine run the Docker container and specify with an environment variable the address to the Asset Manager API.
+
+```
+$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:latest
+```
+
+The point an HLS video player to playback the URL `http://localhost:8000/live/master.m3u8`
+
