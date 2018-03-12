@@ -26,6 +26,10 @@ The point an HLS video player to playback the URL `http://localhost:8000/live/ma
 
 ## Node Module
 
+```
+$ npm install --save eyevinn-channel-engine
+```
+
 To use the Channel Engine in your NodeJS code you initiate the engine like this:
 
 ```
