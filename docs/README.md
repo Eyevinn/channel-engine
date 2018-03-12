@@ -25,9 +25,29 @@ A live demonstration of this concept is available at https://tv.eyevinn.technolo
 
 ![screenshot](screenshot.png)
 
+## Installation
+
+The Eyevinn Channel Engine is available as a Docker image. To run it locally on your computer (assuming you already have Docker Engine installed) just run the following command:
+
+```
+$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:latest
+```
+
+Asset Manager API is where you decide what next content the Channel Engine should stitch by implementing a REST resource called `/nextVod/CHANNEL` returning a JSON object in the following format:
+
+```
+{
+  "id": ASSETID,
+  "uri": URI-TO-VOD-HLS,
+  "title": TITLE
+}
+```
+
+The HLS live stream is then available at `http://localhost:8000/live/master.m3u8`.
+
 ## License
 
-We are making this Channel Engine available as Open Source under the Apache License version 2.0. If you are using this component in your platform and in production we would be really happy if you would drop us a note at info@eyevinn.se. It's just always fun to know!
+We are making the Eyevinn Channel Engine available as Open Source under the Apache License version 2.0. If you are using this component in your platform and in production we would be really happy if you would drop us a note at info@eyevinn.se. It's just always fun to know!
 
 ## Contributing
 
