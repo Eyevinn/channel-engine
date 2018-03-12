@@ -11,11 +11,27 @@ The component that dynamically stitch these VOD packages together is what we cal
 
 ![system description](system-description.png)
 
+## Features
+
+Eyevinn Channel Engine currently includes the following features:
+
+* Apple HLS live stream from Apple HLS VOD
+* Eventstream for video application to poll metadata of what is currently inserted into the live stream
+* Basic server-side ad insertion
+
 ## Demo
 
 A live demonstration of this concept is available at https://tv.eyevinn.technology
 
 ![screenshot](screenshot.png)
+
+## License
+
+We are making this Channel Engine available as Open Source under the Apache License version 2.0. If you are using this component in your platform and in production we would be really happy if you would drop us a note at info@eyevinn.se. It's just always fun to know!
+
+## Contributing
+
+Pull requests are welcome and we prefer to develop in a topic branch and avoid develop directly against master.
 
 ## References
 
