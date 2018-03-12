@@ -1,0 +1,13 @@
+sudo: required
+dist: trusty
+language: node_js
+node_js:
+- '6'
+deploy:
+  provider: npm
+  email: jonas.birme@eyevinn.se
+  api_key:
+    secure: BHEsKcEYzwGTGu/N4r88O8BVTJB8d9QhgnPEBdAh5p+IBFUiDRgk6O+xW8pVdr87Y++5Kf7PNLJLRZiHHJqthV4hFLn10s+BqIWhb9IME0m+6xFsdqtz0lco4f7Ytjrr1BpWCErAmoG8r9lQWpLlchBV0hClsMtmDOth9icKl382nwM4Fsctn70+Dgxxyo32Ceq229YZU52gYA/fUfWT2+3eQYnotlckguVUFiPSiEYUto7jI9pwnBkxumlnGeVugITLHlq5lXtB0/cHNk+xvRvYzyR9RrvM1d9qF6K7qFPaTRCG5a2hzVk+C0BBRxOjy4I3ZW0tpuisGVGTNpxu2pEfMyTjOmaqN94OzMbvryegv8KJ3oI5x8yuVStcZIogHqq3Tx1xXMcV2hoLKIHNafZNreR9xui18N7icDd2gtzryLmha+HHW+989Tggo8p7n+bHSC0mmE5IHvlhvUHAsSJbTQKbWxm97ppKU9bXYV10x9y7tA6elRTqEudcnn7kPXaUKyyTrFiC4S7/buZ6wKxsvIyBDo0radYjFQP/0eJKTzGwqKRH9ED2yVScEq4+16VCB3WIGc6Oj+otUTaUYwvtFlf/+hpPdzJt1zMvAikWpEMJ8x8WiEKJJ8lhTLklwzJQ+HVKauEgyCgu9Yc3AAoFJRASs7yLXHK5PsLaCYk=
+  on:
+    tags: true
+    repo: Eyevinn/channel-engine

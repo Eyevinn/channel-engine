@@ -5,14 +5,19 @@
   "main": "index.js",
   "scripts": {
     "debug-server": "DEBUG=engine-*,vod-to-live node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "$(npm bin)/jasmine",
+    "postversion": "git push && git push --tags"
   },
   "author": "Jonas Rydholm Birmé <jonas.birme@eyevinn.se>",
   "repository": "https://github.com/Eyevinn/channel-engine",
   "license": "Apache-2.0",
   "dependencies": {
     "debug": "^3.1.0",
+    "request": "^2.85.0",
     "restify": "^6.3.4",
     "vod-to-live.js": "^0.5.1"
+  },
+  "devDependencies": {
+    "jasmine": "^3.1.0"
   }
 }
