@@ -14,6 +14,7 @@ To install and run an instance of the Eyevinn Channel Engine we have a Docker im
   "uri": URI-TO-VOD-HLS,
   "title": TITLE
 }
+```
 
 This will be the next content to be stitched into the live stream by the engine. To start the Channel Engine run the Docker container and specify with an environment variable the address to the Asset Manager API.
 
@@ -29,7 +30,7 @@ To use the Channel Engine in your NodeJS code you initiate the engine like this:
 
 ```
   const ChannelEngine = require('eyevinn-channel-engine');
-  
+
   const engine = new ChannelEngine('http://assetmgr-api.example.com');
   engine.listen(process.env.PORT || 8000);
 ```
