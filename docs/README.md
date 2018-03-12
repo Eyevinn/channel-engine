@@ -9,13 +9,13 @@ The general concept that we used is that we take a content repository with alrea
 
 The component that dynamically stitch these VOD packages together is what we call the Eyevinn Channel Engine.
 
-![system description](https://github.com/Eyevinn/channel-engine/blob/master/docs/system-description.png)
+![system description](system-description.png)
 
 ## Demo
 
 A live demonstration of this concept is available at https://tv.eyevinn.technology
 
-![screenshot](https://github.com/Eyevinn/channel-engine/blob/master/docs/screenshot.png)
+![screenshot](screenshot.png)
 
 ## References
 
