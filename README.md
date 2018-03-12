@@ -4,7 +4,7 @@ The Eyevinn Channel Engine is a microservice that offers the functionality to ge
 
 A live demonstration of the Channel Engine is available at https://tv.eyevinn.technology/
 
-## Installation
+## Running
 
 To install and run an instance of the Eyevinn Channel Engine we have a Docker image available that can be used. The Channel Engine requests from an Asset Manager API what content to play next. This API is not included in this package and needs to be provided seperately. The Asset Manager API needs to provide the Channel Engine with an endpoint `/nextVod/PLAYLIST` that returns an JSON object in the following format:
 
@@ -23,3 +23,13 @@ $ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinnte
 
 The point an HLS video player to playback the URL `http://localhost:8000/live/master.m3u8`
 
+## Node Module
+
+To use the Channel Engine in your NodeJS code you initiate the engine like this:
+
+```
+  const ChannelEngine = require('eyevinn-channel-engine');
+  
+  const engine = new ChannelEngine('http://assetmgr-api.example.com');
+  engine.listen(process.env.PORT || 8000);
+```
