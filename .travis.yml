@@ -11,7 +11,7 @@ after_success:
 - docker build -f Dockerfile -t $REPO:$COMMIT .
 - docker tag $REPO:$COMMIT $REPO:$TAG
 - docker tag $REPO:$COMMIT $REPO:travis-$TRAVIS_BUILD_NUMBER
-- docker push $REPO
+- if [ ! -z "$TRAVIS_TAG" ]; then docker push $REPO ; fi
 deploy:
   provider: npm
   email: jonas.birme@eyevinn.se
