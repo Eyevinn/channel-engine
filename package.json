@@ -6,7 +6,8 @@
   "scripts": {
     "debug-server": "DEBUG=engine-*,vod-to-live node server.js",
     "test": "$(npm bin)/jasmine",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push && git push --tags",
+    "start": "node server.js"
   },
   "author": "Jonas Rydholm Birmé <jonas.birme@eyevinn.se>",
   "repository": "https://github.com/Eyevinn/channel-engine",
