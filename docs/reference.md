@@ -16,7 +16,7 @@ The Channel Engine expects that the Asset Manager API implements the following i
 Resource | Method | Request Payload | Response Payload | Description
 -------- | ------ | --------------- | ---------------- | -----------
 /nextVod/random | GET | n/a | ASSET JSON | Return next VOD chosen by random to stitch
-/nextVod/PLAYLIST[?position=CURRENTPOSITION] | GET | n/a | ASSET JSON | Return next VOD in the playlist PLAYLIST after position CURRENTPOSITION
+/nextVod/PLAYLIST[?position=CURRENT] | GET | n/a | ASSET JSON | Return next VOD in the playlist PLAYLIST after position CURRENT (integer)
 /vod/ID | GET | n/a | ASSET JSON | Return asset metadata for a specific asset ID
 
 ### ASSET JSON
@@ -25,7 +25,7 @@ Key | Value | Type | Description
 --- | ----- | ---- | -----------
 id  | ASSETID | string | The unique ID of the asset
 uri | HLSURI | string | URI to HLS master manifest for the VOD
-title (optional) | TITLE | The title of the asset
+title (optional) | TITLE | string |  The title of the asset
 playlistPosition (optional) | POSITION | id | Current position of the VOD in the playlist
 
 ## Node Module
