@@ -28,3 +28,19 @@ uri | HLSURI | string | URI to HLS master manifest for the VOD
 title (optional) | TITLE | The title of the asset
 playlistPosition (optional) | POSITION | id | Current position of the VOD in the playlist
 
+## Node Module
+
+The Channel Engine is also available as a Node module and then initiated as described by the following example.
+
+```javascript
+  const ChannelEngine = require('eyevinn-channel-engine');
+
+  const engine = new ChannelEngine('http://assetmgr-api.example.com');
+  engine.listen(process.env.PORT || 8000);
+```
+
+The module is called `eyevinn-channel-engine` and installed with `npm install`
+
+```
+$ npm install --save eyevinn-channel-engine
+```
