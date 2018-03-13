@@ -45,6 +45,10 @@ Asset Manager API is where you decide what next content the Channel Engine shoul
 
 The HLS live stream is then available at `http://localhost:8000/live/master.m3u8`.
 
+## Documentation
+
+For full documentation on the expected API interfaces and find the reference documentation [here](reference.md).
+
 ## License
 
 We are making the Eyevinn Channel Engine available as Open Source under the Apache License version 2.0. If you are using this component in your platform and in production we would be really happy if you would drop us a note at info@eyevinn.se. It's just always fun to know!
