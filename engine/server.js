@@ -59,7 +59,7 @@ class ChannelEngine {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "X-Session-Id",
         "Access-Control-Expose-Headers": "X-Session-Id",
-        "Cache-Control": "max-age=4",
+        "Cache-Control": "no-cache",
         "X-Session-Id": session.sessionId,
       });
       next();
