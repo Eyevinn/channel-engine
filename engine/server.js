@@ -8,10 +8,11 @@ const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
-  constructor(assetMgrUri, adCopyMgrUri) {
+  constructor(assetMgrUri, adCopyMgrUri, adXchangeUri) {
     this.server = restify.createServer();
     this.assetMgrUri = assetMgrUri;
     this.adCopyMgrUri = adCopyMgrUri;
+    this.adXchangeUri = adXchangeUri;
     this.server.use(restify.plugins.queryParser());
 
     this.server.get('/live/master.m3u8', this._handleMasterManifest.bind(this));
@@ -36,7 +37,7 @@ class ChannelEngine {
     if (req.query['session'] && sessions[req.query['session']]) {
       session = sessions[req.query['session']];
       if (session.currentPlaylist !== playlist) {
-        session = new Session(this.assetMgrUri, this.adCopyMgrUri, playlist);
+        session = new Session(this.assetMgrUri, this.adCopyMgrUri, this.adXchangeUri, playlist);
         sessions[session.sessionId] = session;
       }
     } else {
@@ -45,7 +46,7 @@ class ChannelEngine {
         startWithId = req.query['startWithId'];
         debug(`New session to start with assetId=${startWithId}`);
       }
-      session = new Session(this.assetMgrUri, this.adCopyMgrUri, playlist, startWithId);
+      session = new Session(this.assetMgrUri, this.adCopyMgrUri, this.adXchangeUri, playlist, startWithId);
       sessions[session.sessionId] = session;
     }
     const eventStream = new EventStream(session);

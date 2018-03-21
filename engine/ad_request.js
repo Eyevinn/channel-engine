@@ -71,11 +71,31 @@ const debug = require('debug')('engine-adrequest');
 const DEFAULT_BREAK_PATTERN = [
   { position: 0.0 },
   { position: 10 * 60.0 }
-]
+];
+const MOCK_ADS = [
+  'video-sff-impression',
+  'video-apotea-impression',
+//  'video-spp-impression',
+];
+const ADID_MAP = {
+  'video-sff-impression': { adid: 4 },
+  'video-apotea-impression': { adid: 5 },
+  'video-spp-impression': { adid: 3 },
+};
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i+1));
+    let temp = array[i];
+    array[i] = array[j];
+    array[j] = temp;
+  }
+}
 
 class AdRequest {
-  constructor(adCopyMgrUri) {
+  constructor(adCopyMgrUri, adXchangeUri) {
     this._adCopyMgrUri = adCopyMgrUri;
+    this._adXchangeUri = adXchangeUri;
     this._splices = [];
   }
 
@@ -105,19 +125,32 @@ class AdRequest {
     });
   }
 
+  _requestAdsFromXchange() {
+    return new Promise((resolve, reject) => {
+      let ads = MOCK_ADS;
+      debug(`Got ads from xchange:`);
+      debug(ads);
+      resolve(ads);
+    });
+  }
+
   _requestAds() {
     return new Promise((resolve, reject) => {
-      let ads = [ { adid: 3 } ];
-      let adPromises = [];
-      for(let i = 0; i < ads.length; i++) {
-        adPromises.push(this._getAdById(ads[i]));
-      }
-      Promise.all(adPromises).then(() => {
-        debug(`Got ads:`);
-        debug(ads);
-        resolve(ads);
-      })
-      .catch(reject);
+      this._requestAdsFromXchange().then(ads => {
+        let resolvedAds = [];
+        let adPromises = [];
+        for(let i = 0; i < ads.length; i++) {
+          const ad = ADID_MAP[ads[i]];
+          resolvedAds.push(ad);
+          adPromises.push(this._getAdById(ad));
+        }
+        Promise.all(adPromises).then(() => {
+          debug(`Got ads:`);
+          debug(resolvedAds);
+          resolve(resolvedAds);
+        })
+        .catch(reject);
+      });
     });
   }
 

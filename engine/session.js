@@ -12,9 +12,10 @@ const SessionState = Object.freeze({
 });
 
 class Session {
-  constructor(assetMgrUri, adCopyMgrUri, playlist, startWithId) {
+  constructor(assetMgrUri, adCopyMgrUri, adXchangeUri, playlist, startWithId) {
     this._assetMgrUri = assetMgrUri;
     this._adCopyMgrUri = adCopyMgrUri;
+    this._adXchangeUri = adXchangeUri;
     this._playlist = playlist;
     this._sessionId = crypto.randomBytes(20).toString('hex');
     this._state = {
@@ -157,7 +158,7 @@ class Session {
           this._state.state = SessionState.VOD_NEXT_INITIATING;
           let vodPromise;
           if (this._adCopyMgrUri) {
-            const adRequest = new AdRequest(this._adCopyMgrUri);
+            const adRequest = new AdRequest(this._adCopyMgrUri, this._adXchangeUri);
             vodPromise = new Promise((resolve, reject) => {
               adRequest.resolve().then(_splices => {
                 debug(`[${this._sessionId}]: got splices=${_splices.length}`);
