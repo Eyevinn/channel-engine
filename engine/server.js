@@ -1,6 +1,7 @@
 const restify = require('restify');
 const errs = require('restify-errors');
 const debug = require('debug')('engine-server');
+const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
 const EventStream = require('./event_stream.js');
 
@@ -8,15 +9,21 @@ const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
-  constructor(assetMgrUri, adCopyMgrUri, adXchangeUri) {
+  constructor(assetMgr, options) {
+    if (options && options.adCopyMgrUri) {
+      this.adCopyMgrUri = options.adCopyMgrUri;
+    }
+    if (options && options.adXchangeUri) {
+      this.adXchangeUri = options.adXchangeUri;
+    }
+    this.assetMgr = assetMgr;
+
     this.server = restify.createServer();
-    this.assetMgrUri = assetMgrUri;
-    this.adCopyMgrUri = adCopyMgrUri;
-    this.adXchangeUri = adXchangeUri;
     this.server.use(restify.plugins.queryParser());
 
     this.server.get('/live/master.m3u8', this._handleMasterManifest.bind(this));
     this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
+    this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
   }
 
@@ -30,31 +37,30 @@ class ChannelEngine {
     debug('req.url=' + req.url);
     debug(req.query);
     let session;
-    let playlist = 'random';
+    let options = {};
     if (req.query['playlist']) {
-      playlist = req.query['playlist'];
+      // Backward compatibility
+      options.category = req.query['playlist'];
+    }
+    if (req.query['category']) {
+      options.category = req.query['category'];
     }
     if (req.query['session'] && sessions[req.query['session']]) {
       session = sessions[req.query['session']];
-      if (session.currentPlaylist !== playlist) {
-        session = new Session(this.assetMgrUri, this.adCopyMgrUri, this.adXchangeUri, playlist);
-        sessions[session.sessionId] = session;
-      }
     } else {
-      let startWithId;
       if (req.query['startWithId']) {
-        startWithId = req.query['startWithId'];
-        debug(`New session to start with assetId=${startWithId}`);
+        options.startWithId = req.query['startWithId'];
+        debug(`New session to start with assetId=${options.startWithId}`);
       }
-      session = new Session(this.assetMgrUri, this.adCopyMgrUri, this.adXchangeUri, playlist, startWithId);
+      options.adCopyMgrUri = this.adCopyMgrUri;
+      options.adXchangeUri = this.adXchangeUri;
+      session = new Session(this.assetMgr, options);
       sessions[session.sessionId] = session;
     }
     const eventStream = new EventStream(session);
     eventStreams[session.sessionId] = eventStream;
 
     session.getMasterManifest().then(body => {
-      debug(`[${session.sessionId}] body=`);
-      debug(body);
       res.sendRaw(200, body, { 
         "Content-Type": "application/x-mpegURL",
         "Access-Control-Allow-Origin": "*",
@@ -67,6 +73,28 @@ class ChannelEngine {
     }).catch(err => {
       next(this._errorHandler(err));
     });    
+  }
+
+  _handleAudioManifest(req, res, next) {
+    debug(`req.url=${req.url}`);
+    const session = sessions[req.params[1]];
+    if (session) {
+      session.getAudioManifest(req.params[0]).then(body => {
+        verbose(`[${session.sessionId}] body=`);
+        verbose(body);
+        res.sendRaw(200, body, {
+          "Content-Type": "application/x-mpegURL",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "max-age=4",
+        });
+        next();
+      }).catch(err => {
+        next(this._gracefulErrorHandler(err));
+      });
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      next(err);
+    }
   }
 
   _handleMediaManifest(req, res, next) {
@@ -83,7 +111,7 @@ class ChannelEngine {
         });
         next();
       }).catch(err => {
-        next(this._errorHandler(err));
+        next(this._gracefulErrorHandler(err));
       })
     } else {
       const err = new errs.NotFoundError('Invalid session');
@@ -115,6 +143,12 @@ class ChannelEngine {
       });
       next();
     } 
+  }
+
+  _gracefulErrorHandler(errMsg) {
+    console.error(errMsg);
+    const err = new errs.NotFoundError(errMsg);
+    return err;
   }
 
   _errorHandler(errMsg) {

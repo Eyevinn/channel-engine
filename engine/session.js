@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const request = require('request');
 const debug = require('debug')('engine-session');
 const HLSVod = require('vod-to-live.js');
 const AdRequest = require('./ad_request.js');
@@ -11,28 +10,45 @@ const SessionState = Object.freeze({
   VOD_NEXT_INITIATING: 4,
 });
 
+const AVERAGE_SEGMENT_DURATION = 3000;
+
 class Session {
-  constructor(assetMgrUri, adCopyMgrUri, adXchangeUri, playlist, startWithId) {
-    this._assetMgrUri = assetMgrUri;
-    this._adCopyMgrUri = adCopyMgrUri;
-    this._adXchangeUri = adXchangeUri;
-    this._playlist = playlist;
+  /**
+   * 
+   * config: {
+   *   startWithId,
+   * }
+   * 
+   */
+  constructor(assetManager, config) {
+    this._assetManager = assetManager;
     this._sessionId = crypto.randomBytes(20).toString('hex');
     this._state = {
       mediaSeq: 0,
       discSeq: 0,
-      vodMediaSeq: 0,
+      vodMediaSeq: {
+        video: 0,
+        audio: 0, // assume only one audio group now
+      },
       state: SessionState.VOD_INIT,
-      lastM3u8: null,
-      playlistPosition: 0,
-      tsLastRequest: null,
+      lastM3u8: {},
+      tsLastRequest: {
+        video: null,
+        master: null,
+        audio: null
+      },
     };
     this.currentVod;
     this.currentMetadata = {};
     this._events = [];
-    if (startWithId) {
-      this._state.state = SessionState.VOD_INIT_BY_ID;
-      this._state.assetId = startWithId;
+    if (config) { 
+      if (config.startWithId) {
+        this._state.state = SessionState.VOD_INIT_BY_ID;
+        this._state.assetId = config.startWithId;
+      }
+      if (config.category) {
+        this._category = config.category;
+      }
     }
   }
 
@@ -40,31 +56,75 @@ class Session {
     return this._sessionId;
   }
 
-  get currentPlaylist() {
-    return this._playlist;
-  }
-
   getMediaManifest(bw) {
     return new Promise((resolve, reject) => {
       this._tick().then(() => {
+        let timeSinceLastRequest = (this._state.tsLastRequest.video === null) ? 0 : Date.now() - this._state.tsLastRequest.video;
+
         if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
-          // Serve from cache
           this._state.state = SessionState.VOD_PLAYING;
-          debug(`[${this._sessionId}]: serving m3u8 from cache`);
-          resolve(this._state.lastM3u8);
         } else {
-          const m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq, this._state.discSeq);
-          debug(`[${this._sessionId}]: bandwidth=${bw} vodMediaSeq=${this._state.vodMediaSeq}`);
-          this._state.lastM3u8 = m3u8;
-          if (this._state.tsLastRequest != null && (Date.now() - this._state.tsLastRequest) < 3000) {
-            debug(`Last request less than 3 seconds ago, not increasing mediaseq counter`)
+          let sequencesToIncrement = Math.ceil(timeSinceLastRequest / AVERAGE_SEGMENT_DURATION);
+          this._state.vodMediaSeq.video += sequencesToIncrement;
+        }
+        if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
+          this._state.vodMediaSeq.video = this.currentVod.getLiveMediaSequencesCount() - 1;
+          this._state.state = SessionState.VOD_NEXT_INIT;
+        }
+
+        debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+        let m3u8;
+        try {
+          m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
+        } catch (exc) {
+          if (this._state.lastM3u8[bw]) {
+            m3u8 = this._state.lastM3u8[bw]
           } else {
-            this._state.vodMediaSeq++;
+            reject('Failed to generate media manifest');
           }
-          this._state.tsLastRequest = Date.now();
+        }
+        this._state.lastM3u8[bw] = m3u8;
+        this._state.lastServedM3u8 = m3u8;
+        this._state.tsLastRequest.video = Date.now();
+        if (this._state.state === SessionState.VOD_NEXT_INIT) {
+          this._tick().then(() => {
+            resolve(m3u8);
+          });
+        } else {
           resolve(m3u8);
         }
       }).catch(reject);
+    });
+  }
+
+  getAudioManifest(audioGroupId) {
+    return new Promise((resolve, reject) => {
+      let timeSinceLastRequest = (this._state.tsLastRequest.audio === null) ? 0 : Date.now() - this._state.tsLastRequest.audio;
+      if (this._state.state !== SessionState.VOD_NEXT_INITIATING) {
+        let sequencesToIncrement = Math.ceil(timeSinceLastRequest / AVERAGE_SEGMENT_DURATION);
+      
+        if (this._state.vodMediaSeq.audio < this._state.vodMediaSeq.video) {
+          this._state.vodMediaSeq.audio += sequencesToIncrement;
+          if (this._state.vodMediaSeq.audio >= this.currentVod.getLiveMediaSequencesCount() - 1) {
+            this._state.vodMediaSeq.audio = this.currentVod.getLiveMediaSequencesCount() - 1;
+          }
+        }
+      }
+
+      debug(`[${this._sessionId}]: AUDIO ${timeSinceLastRequest} audioGroupId=${audioGroupId} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+      let m3u8;
+      try {
+        m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.mediaSeq, audioGroupId, this._state.vodMediaSeq.audio, this._state.discSeq);
+      } catch (exc) {
+        if (this._state.lastM3u8[audioGroupId]) {
+          m3u8 = this._state.lastM3u8[audioGroupId];
+        } else {
+          reject('Failed to generate audio manifest');
+        }
+      }
+      this._state.lastM3u8[audioGroupId] = m3u8;
+      this._state.tsLastRequest.audio = Date.now();
+      resolve(m3u8);
     });
   }
 
@@ -72,12 +132,28 @@ class Session {
     return new Promise((resolve, reject) => {
       this._tick().then(() => {
         let m3u8 = "#EXTM3U\n";
+        m3u8 += "#EXT-X-VERSION:4\n";
         m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
         m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
+        let audioGroupIds = this.currentVod.getAudioGroups();
+        let defaultAudioGroupId;
+        if (audioGroupIds.length > 0) {
+          m3u8 += "# AUDIO groups\n";
+          for (let i = 0; i < audioGroupIds.length; i++) {
+            let audioGroupId = audioGroupIds[i];
+            m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",NAME="audio",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",URI="master-${audioGroupId}.m3u8;session=${this._sessionId}"\n`;
+          }
+          defaultAudioGroupId = audioGroupIds[0];
+        }
         this.currentVod.getUsageProfiles().forEach(profile => {
-          m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution + ',CODECS="' + profile.codecs + '"\n';
+          m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
           m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
         });
+        for (let i = 0; i < audioGroupIds.length; i++) {
+          let audioGroupId = audioGroupIds[i];
+          m3u8 += `#EXT-X-STREAM-INF:BANDWIDTH=97000,CODECS="mp4a.40.2",AUDIO="${audioGroupId}"\n`;
+          m3u8 += `master-${audioGroupId}.m3u8;session=${this._sessionId}\n`;
+        }
         this.produceEvent({
           type: 'NOW_PLAYING',
           data: {
@@ -85,7 +161,7 @@ class Session {
             title: this.currentMetadata.title,
           }
         });
-        this._state.tsLastRequest = Date.now();
+        this._state.tsLastRequest.master = Date.now();
         resolve(m3u8);
       }).catch(reject);
     });
@@ -124,11 +200,9 @@ class Session {
             return this.currentVod.load();
           }).then(() => {
             debug(`[${this._sessionId}]: first VOD loaded`);
-            debug(newVod);
-            this._state.vodMediaSeq = this.currentVod.getLiveMediaSequencesCount() - 5;
-            if (this._state.vodMediaSeq < 0 || this._playlist !== 'random' || this._state.state === SessionState.VOD_INIT_BY_ID) {
-              this._state.vodMediaSeq = 0;
-            }
+            //debug(newVod);
+            this._state.vodMediaSeq.video = 0;
+            this._state.vodMediaSeq.audio = 0;
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
@@ -141,10 +215,12 @@ class Session {
           }).catch(reject);
           break;
         case SessionState.VOD_PLAYING:
-          debug(`[${this._sessionId}]: state=VOD_PLAYING (${this._state.vodMediaSeq}, ${this.currentVod.getLiveMediaSequencesCount()})`);
-          if (this._state.vodMediaSeq === this.currentVod.getLiveMediaSequencesCount() - 1) {
+          debug(`[${this._sessionId}]: state=VOD_PLAYING (${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio}, ${this.currentVod.getLiveMediaSequencesCount()})`);
+          /*
+          if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
             this._state.state = SessionState.VOD_NEXT_INIT;
           }
+          */         
           resolve();
           break;
         case SessionState.VOD_NEXT_INITIATING:
@@ -187,10 +263,11 @@ class Session {
             return newVod.loadAfter(this.currentVod);
           }).then(() => {
             debug(`[${this._sessionId}]: next VOD loaded`);
-            debug(newVod);
+            //debug(newVod);
             this.currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${this.currentVod.getLiveMediaSequencesCount()}`);
-            this._state.vodMediaSeq = 0;
+            this._state.vodMediaSeq.video = 0;
+            this._state.vodMediaSeq.audio = 0;
             this._state.mediaSeq += length;
             this._state.discSeq += lastDiscontinuity;
             this.produceEvent({
@@ -212,41 +289,28 @@ class Session {
 
   _getNextVod() {
     return new Promise((resolve, reject) => {
-      this._state.playlistPosition++;
-      const nextVodUri = this._assetMgrUri + '/nextVod/' + this._playlist + '?position=' + this._state.playlistPosition;
-      request.get(nextVodUri, (err, resp, body) => {
-        const data = JSON.parse(body);
-        if (data.playlistPosition !== undefined) {
-          this._state.playlistPosition = data.playlistPosition;
-        }
-        debug(`[${this._sessionId}]: nextVod=${data.uri} new position=${this._state.playlistPosition}`);
-        debug(data);
+      this._assetManager.getNextVod(this._sessionId, this._category)
+      .then(nextVod => {
+        debug(nextVod);
         this.currentMetadata = {
-          id: data.id,
-          title: data.title || '',
+          id: nextVod.id,
+          title: nextVod.title || '',
         };
-        resolve(data.uri);
-      }).on('error', err => {
-        reject(err);
+        resolve(nextVod.uri);
       });
     });
   }
 
   _getNextVodById(id) {
     return new Promise((resolve, reject) => {
-      const assetUri = this._assetMgrUri + '/vod/' + id;
-      request.get(assetUri, (err, resp, body) => {
-        const data = JSON.parse(body);
-        this._state.playlistPosition = 0;
-        debug(`[${this._sessionId}]: nextVod=${data.uri} new position=${this._state.playlistPosition}`)
-        debug(data);
+      this._assetManager.getNextVodById(this._sessionId, id)
+      .then(nextVod => {
+        //debug(nextVod);
         this.currentMetadata = {
-          id: data.id,
-          title: data.title || '',
+          id: nextVod.id,
+          title: nextVod.title || '',
         };
-        resolve(data.uri);
-      }).on('error', err => {
-        reject(err);
+        resolve(nextVod.uri);
       });
     });
   }
