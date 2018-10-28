@@ -53,6 +53,10 @@ For full documentation on the expected API interfaces and find the reference doc
 
 We are making the Eyevinn Channel Engine available as Open Source under the Apache License version 2.0. If you are using this component in your platform and in production we would be really happy if you would drop us a note at info@eyevinn.se. It's just always fun to know!
 
+## Support
+
+If you intend to use the Eyevinn Channel Engine commercially in your platform we can offer you a support license. Contact sales@eyevinn.se for more information.
+
 ## Contributing
 
 Pull requests are welcome and we prefer to develop in a topic branch and avoid develop directly against master.
