@@ -19,7 +19,7 @@ To install and run an instance of the Eyevinn Channel Engine we have a Docker im
 This will be the next content to be stitched into the live stream by the engine. To start the Channel Engine run the Docker container and specify with an environment variable the address to the Asset Manager API.
 
 ```
-$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:latest
+$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:v1.0.2
 ```
 
 The point an HLS video player to playback the URL `http://localhost:8000/live/master.m3u8`
