@@ -30,7 +30,7 @@ A live demonstration of this concept is available at https://tv.eyevinn.technolo
 The Eyevinn Channel Engine is available as a Docker image. To run it locally on your computer (assuming you already have Docker Engine installed) just run the following command:
 
 ```
-$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:latest
+$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:v1.0.2
 ```
 
 Asset Manager API is where you decide what next content the Channel Engine should stitch by implementing a REST resource called `/nextVod/CHANNEL` returning a JSON object in the following format:
