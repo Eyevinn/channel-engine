@@ -20,7 +20,13 @@ class ChannelEngine {
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
-
+    
+    if (options && options.staticDirectory) {
+      this.server.get(/^\/$/, restify.plugins.serveStatic({
+        directory: options.staticDirectory,
+        default: 'index.html'
+      }));
+    }
     this.server.get('/live/master.m3u8', this._handleMasterManifest.bind(this));
     this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
     this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
