@@ -34,10 +34,22 @@ The Channel Engine is also available as a Node module and then initiated as desc
 
 ```javascript
   const ChannelEngine = require('eyevinn-channel-engine');
+  const MyAssetManager = require('./my_asset_manager.js');
 
-  const engine = new ChannelEngine('http://assetmgr-api.example.com');
+  /**
+   * Implements the interface:
+   *
+   * getNextVod(sessionId, category) -> { id, title, uri }
+   * getNextVodById(sessionId, id) -> { id, title, uri }
+   *
+   * Example in ./assetmanagers/default.js
+   */
+  const assetManager = new MyAssetManager();
+  const engine = new ChannelEngine(assetManager);
   engine.listen(process.env.PORT || 8000);
 ```
+Above example also shows you how to implement your own module to feed the engine with assets to play,
+if you for example want to provide the engine with assets using an already existing service endpoint.
 
 The module is called `eyevinn-channel-engine` and installed with `npm install`
 
