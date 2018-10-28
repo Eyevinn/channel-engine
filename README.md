@@ -40,7 +40,8 @@ have the possibility to provide a custom asset manager that you have built:
   /**
    * Implements the interface:
    *
-   * getNextVod(sessionId, category) -> { id, title, uri}
+   * getNextVod(sessionId, category) -> { id, title, uri }
+   * getNextVodById(sessionId, id) -> { id, title, uri }
    *
    * Example in ./assetmanagers/default.js
    */
