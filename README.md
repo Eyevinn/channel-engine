@@ -30,11 +30,21 @@ The point an HLS video player to playback the URL `http://localhost:8000/live/ma
 $ npm install --save eyevinn-channel-engine
 ```
 
-To use the Channel Engine in your NodeJS code you initiate the engine like this:
+To use the Channel Engine in your NodeJS code you initiate the engine like this, and where you also
+have the possibility to provide a custom asset manager that you have built:
 
 ```
   const ChannelEngine = require('eyevinn-channel-engine');
+  const MyAssetManager = require('./my_asset_manager.js');
 
-  const engine = new ChannelEngine('http://assetmgr-api.example.com');
+  /**
+   * Implements the interface:
+   *
+   * getNextVod(sessionId, category) -> { id, title, uri}
+   *
+   * Example in ./assetmanagers/default.js
+   */
+  const assetManager = new MyAssetManager();
+  const engine = new ChannelEngine(assetManager);
   engine.listen(process.env.PORT || 8000);
 ```
