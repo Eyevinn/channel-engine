@@ -88,6 +88,23 @@ class Session {
         this._state.tsLastRequest.video = Date.now();
         if (this._state.state === SessionState.VOD_NEXT_INIT) {
           this._tick().then(() => {
+            timeSinceLastRequest = (this._state.tsLastRequest.video === null) ? 0 : Date.now() - this._state.tsLastRequest.video;
+            if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
+              this._state.state = SessionState.VOD_PLAYING;
+            }
+            debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+            try {
+              m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
+            } catch (exc) {
+              if (this._state.lastM3u8[bw]) {
+                m3u8 = this._state.lastM3u8[bw]
+              } else {
+                reject('Failed to generate media manifest');
+              }
+            }
+            this._state.lastM3u8[bw] = m3u8;
+            this._state.lastServedM3u8 = m3u8;
+            this._state.tsLastRequest.video = Date.now();    
             resolve(m3u8);
           });
         } else {
