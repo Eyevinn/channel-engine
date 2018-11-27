@@ -55,7 +55,8 @@ We are making the Eyevinn Channel Engine available as Open Source under the Apac
 
 ## Support
 
-If you intend to use the Eyevinn Channel Engine commercially in your platform we can offer you a support license. Contact sales@eyevinn.se for more information.
+If you intend to use the Eyevinn Channel Engine commercially in a production environment we strongly recommend
+you to sign a support and license agreement. Contact sales@eyevinn.se for more information.
 
 ## Contributing
 
