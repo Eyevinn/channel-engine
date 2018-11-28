@@ -41,6 +41,7 @@ class Session {
     this.currentVod;
     this.currentMetadata = {};
     this._events = [];
+    this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
     if (config) { 
       if (config.startWithId) {
         this._state.state = SessionState.VOD_INIT_BY_ID;
@@ -48,6 +49,9 @@ class Session {
       }
       if (config.category) {
         this._category = config.category;
+      }
+      if (config.averageSegmentDuration) {
+        this.averageSegmentDuration = config.averageSegmentDuration;
       }
     }
   }
@@ -64,7 +68,7 @@ class Session {
         if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
           this._state.state = SessionState.VOD_PLAYING;
         } else {
-          let sequencesToIncrement = Math.ceil(timeSinceLastRequest / AVERAGE_SEGMENT_DURATION);
+          let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
           this._state.vodMediaSeq.video += sequencesToIncrement;
         }
         if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
@@ -72,7 +76,7 @@ class Session {
           this._state.state = SessionState.VOD_NEXT_INIT;
         }
 
-        debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+        debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} (${this.averageSegmentDuration}) bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
         let m3u8;
         try {
           m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
@@ -92,7 +96,7 @@ class Session {
             if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
               this._state.state = SessionState.VOD_PLAYING;
             }
-            debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+            debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} (${this.averageSegmentDuration}) bandwidth=${bw} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
             try {
               m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
             } catch (exc) {
@@ -118,7 +122,7 @@ class Session {
     return new Promise((resolve, reject) => {
       let timeSinceLastRequest = (this._state.tsLastRequest.audio === null) ? 0 : Date.now() - this._state.tsLastRequest.audio;
       if (this._state.state !== SessionState.VOD_NEXT_INITIATING) {
-        let sequencesToIncrement = Math.ceil(timeSinceLastRequest / AVERAGE_SEGMENT_DURATION);
+        let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
       
         if (this._state.vodMediaSeq.audio < this._state.vodMediaSeq.video) {
           this._state.vodMediaSeq.audio += sequencesToIncrement;
@@ -128,7 +132,7 @@ class Session {
         }
       }
 
-      debug(`[${this._sessionId}]: AUDIO ${timeSinceLastRequest} audioGroupId=${audioGroupId} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+      debug(`[${this._sessionId}]: AUDIO ${timeSinceLastRequest} (${this.averageSegmentDuration}) audioGroupId=${audioGroupId} vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
       let m3u8;
       try {
         m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.mediaSeq, audioGroupId, this._state.vodMediaSeq.audio, this._state.discSeq);

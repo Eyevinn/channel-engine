@@ -27,6 +27,10 @@ class ChannelEngine {
         default: 'index.html'
       }));
     }
+    this.streamerOpts = {};
+    if (options && options.averageSegmentDuration) {
+      this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
+    }
     this.server.get('/live/master.m3u8', this._handleMasterManifest.bind(this));
     this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
     this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
@@ -60,6 +64,7 @@ class ChannelEngine {
       }
       options.adCopyMgrUri = this.adCopyMgrUri;
       options.adXchangeUri = this.adXchangeUri;
+      options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
       session = new Session(this.assetMgr, options);
       sessions[session.sessionId] = session;
     }
