@@ -16,6 +16,10 @@ class ChannelEngine {
     if (options && options.adXchangeUri) {
       this.adXchangeUri = options.adXchangeUri;
     }
+    this.useDemuxedAudio = false;
+    if (options && options.demuxedAudio === true) {
+      this.useDemuxedAudio = true;
+    }
     this.assetMgr = assetMgr;
 
     this.server = restify.createServer();
@@ -65,6 +69,7 @@ class ChannelEngine {
       options.adCopyMgrUri = this.adCopyMgrUri;
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
+      options.useDemuxedAudio = this.useDemuxedAudio;
       session = new Session(this.assetMgr, options);
       sessions[session.sessionId] = session;
     }

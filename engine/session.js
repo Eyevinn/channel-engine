@@ -42,6 +42,7 @@ class Session {
     this.currentMetadata = {};
     this._events = [];
     this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
+    this.use_demuxed_audio = false;
     if (config) { 
       if (config.startWithId) {
         this._state.state = SessionState.VOD_INIT_BY_ID;
@@ -52,6 +53,9 @@ class Session {
       }
       if (config.averageSegmentDuration) {
         this.averageSegmentDuration = config.averageSegmentDuration;
+      }
+      if (config.useDemuxedAudio) {
+        this.use_demuxed_audio = true;
       }
     }
   }
@@ -158,22 +162,26 @@ class Session {
         m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
         let audioGroupIds = this.currentVod.getAudioGroups();
         let defaultAudioGroupId;
-        if (audioGroupIds.length > 0) {
-          m3u8 += "# AUDIO groups\n";
-          for (let i = 0; i < audioGroupIds.length; i++) {
-            let audioGroupId = audioGroupIds[i];
-            m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",NAME="audio",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",URI="master-${audioGroupId}.m3u8;session=${this._sessionId}"\n`;
+        if (this.use_demuxed_audio === true) {
+          if (audioGroupIds.length > 0) {
+            m3u8 += "# AUDIO groups\n";
+            for (let i = 0; i < audioGroupIds.length; i++) {
+              let audioGroupId = audioGroupIds[i];
+              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",NAME="audio",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",URI="master-${audioGroupId}.m3u8;session=${this._sessionId}"\n`;
+            }
+            defaultAudioGroupId = audioGroupIds[0];
           }
-          defaultAudioGroupId = audioGroupIds[0];
         }
         this.currentVod.getUsageProfiles().forEach(profile => {
           m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
           m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
         });
-        for (let i = 0; i < audioGroupIds.length; i++) {
-          let audioGroupId = audioGroupIds[i];
-          m3u8 += `#EXT-X-STREAM-INF:BANDWIDTH=97000,CODECS="mp4a.40.2",AUDIO="${audioGroupId}"\n`;
-          m3u8 += `master-${audioGroupId}.m3u8;session=${this._sessionId}\n`;
+        if (this.use_demuxed_audio === true) {
+          for (let i = 0; i < audioGroupIds.length; i++) {
+            let audioGroupId = audioGroupIds[i];
+            m3u8 += `#EXT-X-STREAM-INF:BANDWIDTH=97000,CODECS="mp4a.40.2",AUDIO="${audioGroupId}"\n`;
+            m3u8 += `master-${audioGroupId}.m3u8;session=${this._sessionId}\n`;
+          }
         }
         this.produceEvent({
           type: 'NOW_PLAYING',
