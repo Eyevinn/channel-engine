@@ -39,12 +39,22 @@ class ChannelEngine {
     this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
     this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
+
+    if (options && options.heartbeat) {
+      this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
+    }  
   }
 
   listen(port) {
     this.server.listen(port, () => {
       debug('%s listening at %s', this.server.name, this.server.url);
     });
+  }
+
+  _handleHeartbeat(req, res, next) {
+    debug('req.url=' + req.url);
+    res.send(200);
+    next();
   }
 
   _handleMasterManifest(req, res, next) {
