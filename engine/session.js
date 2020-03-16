@@ -12,6 +12,8 @@ const SessionState = Object.freeze({
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 
+const timer = ms => new Promise(res => setTimeout(res, ms));
+
 class Session {
   /**
    * 
@@ -44,6 +46,9 @@ class Session {
     this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
     this.use_demuxed_audio = false;
     if (config) { 
+      if (config.sessionId) {
+        this._sessionId = config.sessionId;
+      }
       if (config.startWithId) {
         this._state.state = SessionState.VOD_INIT_BY_ID;
         this._state.assetId = config.startWithId;
@@ -62,6 +67,58 @@ class Session {
 
   get sessionId() {
     return this._sessionId;
+  }
+
+  startPlayhead() {
+    const loop = () => {
+      return this.getMediaManifest(180000)
+      .then(manifest => {
+        if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(this._state.state) !== -1) {
+          return loop();
+        } else {
+          const firstDuration = this.averageSegmentDuration / 1000;
+          debug(`[${this._sessionId}]: Next tick in ${firstDuration} seconds`)
+          return timer((firstDuration * 1000) - 50).then(() => {
+            return loop();
+          });
+        }  
+      }).catch(err => {
+        console.error(err);
+      });
+    }
+    loop().then(final => {
+      debug(`[${this._sessionId}]: Playhead consumer started`)
+    }).catch(err => {
+      console.error(err);
+    });
+  }
+
+  stopPlayhead() {
+
+  }
+
+  getCurrentMediaManifest(bw, playbackSessionId) {
+    return new Promise((resolve, reject) => {
+      if (this.currentVod) {
+        const m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
+        debug(`[${playbackSessionId}]: [${this._state.mediaSeq + this._state.vodMediaSeq.video}] Current media manifest for ${bw} requested`);
+        resolve(m3u8);
+      } else {
+        resolve("Engine not ready");
+      }
+    });
+  }
+
+  getCurrentAudioManifest(audioGroupId, playbackSessionId) {
+    return new Promise((resolve, reject) => {
+      if (this.currentVod) {
+        const m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.mediaSeq, audioGroupId, this._state.vodMediaSeq.audio, this._state.discSeq);
+        debug(`[${playbackSessionId}]: [${this._state.mediaSeq + this._state.vodMediaSeq.audio}] Current audio manifest for ${bw} requested`);
+        resolve(m3u8);
+      } else {
+        resolve("Engine not ready");
+      }
+    });
   }
 
   getMediaManifest(bw) {
@@ -221,10 +278,10 @@ class Session {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${this._state.assetId}`);
             nextVodPromise = this._getNextVodById(this._state.assetId);
           }
-          nextVodPromise.then(uri => {
-            debug(`[${this._sessionId}]: got first VOD uri=${uri}`);
+          nextVodPromise.then(vodResponse => {
+            debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
             //newVod = new HLSVod(uri, [], Date.now());
-            newVod = new HLSVod(uri, []);
+            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
             this.currentVod = newVod;
             return this.currentVod.load();
           }).then(() => {
@@ -278,9 +335,9 @@ class Session {
             vodPromise = this._getNextVod();
           }
 
-          vodPromise.then(uri => {
-            debug(`[${this._sessionId}]: got next VOD uri=${uri}`);
-            newVod = new HLSVod(uri, splices);
+          vodPromise.then(vodResponse => {
+            debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
+            newVod = new HLSVod(vodResponse.uri, splices, null, vodResponse.offset * 1000);
             this.produceEvent({
               type: 'NEXT_VOD_SELECTED',
               data: {
@@ -318,14 +375,18 @@ class Session {
 
   _getNextVod() {
     return new Promise((resolve, reject) => {
-      this._assetManager.getNextVod(this._sessionId, this._category)
+      this._assetManager.getNextVod({ 
+        sessionId: this._sessionId, 
+        category: this._category, 
+        playlistId: this._sessionId
+      })
       .then(nextVod => {
         debug(nextVod);
         this.currentMetadata = {
           id: nextVod.id,
           title: nextVod.title || '',
         };
-        resolve(nextVod.uri);
+        resolve(nextVod);
       });
     });
   }
@@ -339,7 +400,7 @@ class Session {
           id: nextVod.id,
           title: nextVod.title || '',
         };
-        resolve(nextVod.uri);
+        resolve(nextVod);
       });
     });
   }

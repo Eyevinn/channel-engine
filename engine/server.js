@@ -42,7 +42,27 @@ class ChannelEngine {
 
     if (options && options.heartbeat) {
       this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
-    }  
+    }
+
+    if (options && options.channelManager) {
+      const channels = options.channelManager.getChannels();
+      channels.map(channel => {
+        if (!sessions[channel.id]) {
+          sessions[channel.id] = new Session(this.assetMgr, {
+            sessionId: channel.id,
+            averageSegmentDuration: options.averageSegmentDuration,
+            demuxedAudio: options.demuxedAudio
+          });
+        }
+      });
+    }
+  }
+
+  start() {
+    Object.keys(sessions).map(channelId => {
+      const session = sessions[channelId];
+      session.startPlayhead();
+    });
   }
 
   listen(port) {
@@ -69,13 +89,11 @@ class ChannelEngine {
     if (req.query['category']) {
       options.category = req.query['category'];
     }
-    if (req.query['session'] && sessions[req.query['session']]) {
+    if (req.query['channel'] && sessions[req.query['channel']]) {
+      session = sessions[req.query['channel']];
+    } else if (req.query['session'] && sessions[req.query['session']]) {
       session = sessions[req.query['session']];
     } else {
-      if (req.query['startWithId']) {
-        options.startWithId = req.query['startWithId'];
-        debug(`New session to start with assetId=${options.startWithId}`);
-      }
       options.adCopyMgrUri = this.adCopyMgrUri;
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
@@ -83,31 +101,39 @@ class ChannelEngine {
       session = new Session(this.assetMgr, options);
       sessions[session.sessionId] = session;
     }
-    const eventStream = new EventStream(session);
-    eventStreams[session.sessionId] = eventStream;
+    if (req.query['startWithId']) {
+      options.startWithId = req.query['startWithId'];
+      debug(`New session to start with assetId=${options.startWithId}`);
+    }
+    if (session) {
+      const eventStream = new EventStream(session);
+      eventStreams[session.sessionId] = eventStream;
 
-    session.getMasterManifest().then(body => {
-      res.sendRaw(200, body, { 
-        "Content-Type": "application/x-mpegURL",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "X-Session-Id",
-        "Access-Control-Expose-Headers": "X-Session-Id",
-        "Cache-Control": "no-cache",
-        "X-Session-Id": session.sessionId,
+      session.getMasterManifest().then(body => {
+        res.sendRaw(200, body, { 
+          "Content-Type": "application/x-mpegURL",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "X-Session-Id",
+          "Access-Control-Expose-Headers": "X-Session-Id",
+          "Cache-Control": "no-cache",
+          "X-Session-Id": session.sessionId,
+        });
+        next();
+      }).catch(err => {
+        next(this._errorHandler(err));
       });
-      next();
-    }).catch(err => {
-      next(this._errorHandler(err));
-    });    
+    } else {
+      next(this._gracefulErrorHandler("Could not find a valid session"));
+    } 
   }
 
   _handleAudioManifest(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getAudioManifest(req.params[0]).then(body => {
-        verbose(`[${session.sessionId}] body=`);
-        verbose(body);
+      session.getCurrentAudioManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+        //verbose(`[${session.sessionId}] body=`);
+        //verbose(body);
         res.sendRaw(200, body, {
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
@@ -124,12 +150,12 @@ class ChannelEngine {
   }
 
   _handleMediaManifest(req, res, next) {
-    debug(`req.url=${req.url}`);
+    debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getMediaManifest(req.params[0]).then(body => {
-        debug(`[${session.sessionId}] body=`);
-        debug(body);
+      session.getCurrentMediaManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+        //verbose(`[${session.sessionId}] body=`);
+        //verbose(body);
         res.sendRaw(200, body, { 
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
