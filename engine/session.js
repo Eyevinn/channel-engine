@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const debug = require('debug')('engine-session');
 const HLSVod = require('vod-to-live.js');
 const AdRequest = require('./ad_request.js');
+const m3u8 = require('@eyevinn/m3u8');
+const Readable = require('stream').Readable;
 
 const SessionState = Object.freeze({
   VOD_INIT: 1,
@@ -71,15 +73,17 @@ class Session {
 
   startPlayhead() {
     const loop = () => {
-      return this.getMediaManifest(180000)
+      return this.getMediaManifest(180000, { playhead: true })
       .then(manifest => {
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(this._state.state) !== -1) {
           return loop();
         } else {
-          const firstDuration = this.averageSegmentDuration / 1000;
-          debug(`[${this._sessionId}]: Next tick in ${firstDuration} seconds`)
-          return timer((firstDuration * 1000) - 50).then(() => {
-            return loop();
+          this._getFirstDuration(manifest)
+          .then(firstDuration => {
+            debug(`[${this._sessionId}]: Next tick in ${firstDuration} seconds`)
+            return timer((firstDuration * 1000) - 50).then(() => {
+              return loop();
+            });  
           });
         }  
       }).catch(err => {
@@ -121,7 +125,7 @@ class Session {
     });
   }
 
-  getMediaManifest(bw) {
+  getMediaManifest(bw, opts) {
     return new Promise((resolve, reject) => {
       this._tick().then(() => {
         let timeSinceLastRequest = (this._state.tsLastRequest.video === null) ? 0 : Date.now() - this._state.tsLastRequest.video;
@@ -130,6 +134,9 @@ class Session {
           this._state.state = SessionState.VOD_PLAYING;
         } else {
           let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
+          if (opts && opts.playhead) {
+            sequencesToIncrement = 1;
+          }
           this._state.vodMediaSeq.video += sequencesToIncrement;
         }
         if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
@@ -179,12 +186,15 @@ class Session {
     });
   }
 
-  getAudioManifest(audioGroupId) {
+  getAudioManifest(audioGroupId, opts) {
     return new Promise((resolve, reject) => {
       let timeSinceLastRequest = (this._state.tsLastRequest.audio === null) ? 0 : Date.now() - this._state.tsLastRequest.audio;
       if (this._state.state !== SessionState.VOD_NEXT_INITIATING) {
         let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-      
+        if (opts && opts.playhead) {
+          sequencesToIncrement = 1;
+        }
+    
         if (this._state.vodMediaSeq.audio < this._state.vodMediaSeq.video) {
           this._state.vodMediaSeq.audio += sequencesToIncrement;
           if (this._state.vodMediaSeq.audio >= this.currentVod.getLiveMediaSequencesCount() - 1) {
@@ -342,7 +352,7 @@ class Session {
               type: 'NEXT_VOD_SELECTED',
               data: {
                 id: this.currentMetadata.id,
-                uri: uri,
+                uri: vodResponse.uri,
                 title: this.currentMetadata.title || '',
               }
             });
@@ -413,6 +423,31 @@ class Session {
       }
     }
     return availableBandwidths[availableBandwidths.length - 1];
+  }
+
+  _getFirstDuration(manifest) {
+    return new Promise((resolve, reject) => {
+      try {
+        const parser = m3u8.createStream();
+        let manifestStream = new Readable();
+        manifestStream.push(manifest);
+        manifestStream.push(null);
+
+        manifestStream.pipe(parser);
+        parser.on('m3u', m3u => {
+          if (m3u.items.PlaylistItem[0]) {
+            let firstDuration = m3u.items.PlaylistItem[0].get("duration");
+            resolve(firstDuration);
+          } else {
+            console.error("Empy media playlist");
+            console.error(manifest);
+            reject('Empty media playlist!')
+          }
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 }
 
