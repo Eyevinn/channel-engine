@@ -39,6 +39,7 @@ class ChannelEngine {
     this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
     this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
+    this.server.get('/status/:sessionId', this._handleStatus.bind(this));
 
     if (options && options.heartbeat) {
       this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
@@ -62,7 +63,17 @@ class ChannelEngine {
     Object.keys(sessions).map(channelId => {
       const session = sessions[channelId];
       session.startPlayhead();
+      setInterval(() => {
+        session.getStatus().then(status => {
+          debug(`MONITOR [${status.sessionId}]: playhead: ${status.playhead.state}`);
+          if (status.playhead.state === 'crashed') {
+            debug(`[${status.sessionId}]: Playhead crashed, restarting`);
+            session.startPlayhead();
+          }
+        });
+      }, 5000);
     });
+
   }
 
   listen(port) {
@@ -195,6 +206,20 @@ class ChannelEngine {
       });
       next();
     } 
+  }
+
+  _handleStatus(req, res, next) {
+    debug(`req.url=${req.url}`);
+    const session = sessions[req.params.sessionId];
+    if (session) {
+      session.getStatus().then(body => {
+        res.send(200, body);
+        next();
+      });
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      next(err);
+    }
   }
 
   _gracefulErrorHandler(errMsg) {

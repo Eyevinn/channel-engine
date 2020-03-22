@@ -12,6 +12,13 @@ const SessionState = Object.freeze({
   VOD_NEXT_INITIATING: 4,
 });
 
+const PlayheadState = Object.freeze({
+  RUNNING: 1,
+  STOPPED: 2,
+  CRASHED: 3,
+  IDLE: 4
+});
+
 const AVERAGE_SEGMENT_DURATION = 3000;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
@@ -41,6 +48,9 @@ class Session {
         master: null,
         audio: null
       },
+      playhead: {
+        state: PlayheadState.IDLE
+      }
     };
     this.currentVod;
     this.currentMetadata = {};
@@ -88,17 +98,39 @@ class Session {
         }  
       }).catch(err => {
         console.error(err);
+        debug(`[${this._sessionId}]: Playhead consumer crashed`);
+        this._state.playhead.state = PlayheadState.CRASHED;
       });
     }
     loop().then(final => {
-      debug(`[${this._sessionId}]: Playhead consumer started`)
+      debug(`[${this._sessionId}]: Playhead consumer started`);
+      this._state.playhead.state = PlayheadState.RUNNING;
     }).catch(err => {
       console.error(err);
+      debug(`[${this._sessionId}]: Playhead consumer crashed`);
+      this._state.playhead.state = PlayheadState.CRASHED;
     });
   }
 
   stopPlayhead() {
 
+  }
+
+  getStatus() {
+    return new Promise((resolve, reject) => {
+      const playheadStateMap = {};
+      playheadStateMap[PlayheadState.IDLE] = 'idle';
+      playheadStateMap[PlayheadState.RUNNING] = 'running';
+      playheadStateMap[PlayheadState.CRASHED] = 'crashed';
+  
+      const status = {
+        sessionId: this._sessionId,
+        playhead: {
+          state: playheadStateMap[this._state.playhead.state]
+        }
+      };
+      resolve(status);
+    });    
   }
 
   getCurrentMediaManifest(bw, playbackSessionId) {
@@ -397,7 +429,8 @@ class Session {
           title: nextVod.title || '',
         };
         resolve(nextVod);
-      });
+      })
+      .catch(reject);
     });
   }
 
@@ -411,7 +444,8 @@ class Session {
           title: nextVod.title || '',
         };
         resolve(nextVod);
-      });
+      })
+      .catch(reject);
     });
   }
 
@@ -439,7 +473,7 @@ class Session {
             let firstDuration = m3u.items.PlaylistItem[0].get("duration");
             resolve(firstDuration);
           } else {
-            console.error("Empy media playlist");
+            console.error("Empty media playlist");
             console.error(manifest);
             reject('Empty media playlist!')
           }
