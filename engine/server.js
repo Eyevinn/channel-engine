@@ -65,7 +65,7 @@ class ChannelEngine {
       session.startPlayhead();
       setInterval(() => {
         session.getStatus().then(status => {
-          debug(`MONITOR [${status.sessionId}]: playhead: ${status.playhead.state}`);
+          debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
           if (status.playhead.state === 'crashed') {
             debug(`[${status.sessionId}]: Playhead crashed, restarting`);
             session.restartPlayhead();

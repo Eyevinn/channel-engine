@@ -96,28 +96,31 @@ class Session {
             });  
           }).catch(err => {
             console.error(err);
-            debug(`[${this._sessionId}]: Playhead consumer crashed`);
+            debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
             this._state.playhead.state = PlayheadState.CRASHED;
           });
         }  
       }).catch(err => {
         console.error(err);
-        debug(`[${this._sessionId}]: Playhead consumer crashed`);
+        debug(`[${this._sessionId}]: Playhead consumer crashed (2)`);
         this._state.playhead.state = PlayheadState.CRASHED;
       });
     }
     loop().then(final => {
-      debug(`[${this._sessionId}]: Playhead consumer started`);
-      this._state.playhead.state = PlayheadState.RUNNING;
+      if (this._state.playhead.state !== PlayheadState.CRASHED) {
+        debug(`[${this._sessionId}]: Playhead consumer started`);
+        this._state.playhead.state = PlayheadState.RUNNING;
+      }
     }).catch(err => {
       console.error(err);
-      debug(`[${this._sessionId}]: Playhead consumer crashed`);
+      debug(`[${this._sessionId}]: Playhead consumer crashed (2)`);
       this._state.playhead.state = PlayheadState.CRASHED;
     });
   }
 
   restartPlayhead() {
     this._state.state = SessionState.VOD_NEXT_INIT;
+    debug(`[${this._sessionId}]: Restarting playhead consumer`);
     this.startPlayhead();
   }
 
@@ -417,8 +420,7 @@ class Session {
             resolve();
           }).catch(err => {
             console.error("Failed to initiate next VOD: ", err);
-            this._state.state = SessionState.VOD_NEXT_INIT;
-            resolve();
+            reject(err);
           });
           break;
         default:
@@ -436,12 +438,16 @@ class Session {
         playlistId: this._sessionId
       })
       .then(nextVod => {
-        debug(nextVod);
-        this.currentMetadata = {
-          id: nextVod.id,
-          title: nextVod.title || '',
-        };
-        resolve(nextVod);
+        if (nextVod && nextVod.uri) {
+          this.currentMetadata = {
+            id: nextVod.id,
+            title: nextVod.title || '',
+          };
+          resolve(nextVod);
+        } else {
+          console.error("Invalid VOD:", nextVod);
+          reject("Invalid VOD from asset manager")
+        }
       })
       .catch(reject);
     });
