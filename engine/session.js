@@ -94,6 +94,10 @@ class Session {
             return timer((firstDuration * 1000) - 50).then(() => {
               return loop();
             });  
+          }).catch(err => {
+            console.error(err);
+            debug(`[${this._sessionId}]: Playhead consumer crashed`);
+            this._state.playhead.state = PlayheadState.CRASHED;
           });
         }  
       }).catch(err => {
@@ -110,6 +114,11 @@ class Session {
       debug(`[${this._sessionId}]: Playhead consumer crashed`);
       this._state.playhead.state = PlayheadState.CRASHED;
     });
+  }
+
+  restartPlayhead() {
+    this._state.state = SessionState.VOD_NEXT_INIT;
+    this.startPlayhead();
   }
 
   stopPlayhead() {

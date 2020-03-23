@@ -68,7 +68,7 @@ class ChannelEngine {
           debug(`MONITOR [${status.sessionId}]: playhead: ${status.playhead.state}`);
           if (status.playhead.state === 'crashed') {
             debug(`[${status.sessionId}]: Playhead crashed, restarting`);
-            session.startPlayhead();
+            session.restartPlayhead();
           }
         });
       }, 5000);
