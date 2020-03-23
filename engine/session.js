@@ -415,7 +415,11 @@ class Session {
               }
             });            
             resolve();
-          }).catch(reject);
+          }).catch(err => {
+            console.error("Failed to initiate next VOD: ", err);
+            this._state.state = SessionState.VOD_NEXT_INIT;
+            resolve();
+          });
           break;
         default:
           reject("Invalid state: " + this.state.state);
