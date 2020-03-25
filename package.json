@@ -9,14 +9,14 @@
     "postversion": "git push && git push --tags",
     "start": "node server.js"
   },
-  "author": "Jonas Rydholm Birmé <jonas.birme@eyevinn.se>",
+  "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "repository": "https://github.com/Eyevinn/channel-engine",
   "license": "Apache-2.0",
   "dependencies": {
     "debug": "^3.1.0",
     "request": ">=2.88.0",
     "restify": "^6.3.4",
-    "vod-to-live.js": ">=0.9.1"
+    "vod-to-live.js": ">=0.9.2"
   },
   "devDependencies": {
     "jasmine": "^3.1.0"
