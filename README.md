@@ -44,7 +44,7 @@ Find a simplistic reference implementation for guidance in `./server.js`.
 
 ## Commercial Alternative
 
-Eyevinn offers a commercial alternative based on this module called `Consuo`. `Consuo` is an out-of-the-box software component (Docker container) that can be plugged into your online video platform to provide you with unlimited thematic, regional or personal linear TV channels based on an existing VOD library.
+Eyevinn offers a commercial alternative based on this module called `Consuo`. `Consuo` is a software component (Docker container) that can be plugged into your online video platform to provide you with unlimited thematic, regional or personal linear TV channels based on an existing VOD library.
 
 Contact sales@eyevinn.se if you want to know more.
 
