@@ -26,7 +26,7 @@ class ChannelEngine {
     this.server.use(restify.plugins.queryParser());
     
     if (options && options.staticDirectory) {
-      this.server.get(/^\/$/, restify.plugins.serveStatic({
+      this.server.get('/', restify.plugins.serveStatic({
         directory: options.staticDirectory,
         default: 'index.html'
       }));
@@ -35,9 +35,21 @@ class ChannelEngine {
     if (options && options.averageSegmentDuration) {
       this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
     }
-    this.server.get('/live/master.m3u8', this._handleMasterManifest.bind(this));
-    this.server.get(/^\/live\/master(\d+).m3u8;session=(.*)$/, this._handleMediaManifest.bind(this));
-    this.server.get(/^\/live\/master-(\S+).m3u8;session=(.*)$/, this._handleAudioManifest.bind(this));
+    this.server.get('/live/:file', (req, res, next) => {
+      debug(req.params);
+      let m;
+      if (req.params.file.match(/master.m3u8/)) {
+        this._handleMasterManifest(req, res, next);
+      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+        req.params[0] = m[1];
+        req.params[1] = m[2];
+        this._handleMediaManifest(req, res, next);
+      } else if (m = req.params.file.match(/master-(\S+).m3u8;session=(.*)$/)) {
+        req.params[0] = m[1];
+        req.params[1] = m[2];
+        this._handleAudioManifest(req, res, next);
+      }
+    });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
 
@@ -162,6 +174,7 @@ class ChannelEngine {
 
   _handleMediaManifest(req, res, next) {
     debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    debug(req.params);
     const session = sessions[req.params[1]];
     if (session) {
       session.getCurrentMediaManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
