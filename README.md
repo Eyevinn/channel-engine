@@ -1,54 +1,52 @@
-The Eyevinn Channel Engine is a microservice that offers the functionality to generate personalized live streams from available VOD content.
+The Eyevinn Channel Engine is an NPM library that provides the functionality to generate "fake" live HLS stream by stitching HLS VOD's together. The library is provided as open source and this repository includes a basic reference implementation as a guide on how the library can be used.
 
-![system description](https://github.com/Eyevinn/channel-engine/blob/master/docs/system-description.png)
+## Usage
 
-A live demonstration of the Channel Engine is available at https://tv.eyevinn.technology/
-
-## Running
-
-To install and run an instance of the Eyevinn Channel Engine we have a Docker image available that can be used. The Channel Engine requests from an Asset Manager API what content to play next. This API is not included in this package and needs to be provided seperately. The Asset Manager API needs to provide the Channel Engine with an endpoint `/nextVod/PLAYLIST` that returns an JSON object in the following format:
-
-```
-{
-  "id": ASSETID,
-  "uri": URI-TO-VOD-HLS,
-  "title": TITLE
-}
-```
-
-This will be the next content to be stitched into the live stream by the engine. To start the Channel Engine run the Docker container and specify with an environment variable the address to the Asset Manager API.
-
-```
-$ docker run -e ASSETMGR_URI=https://assetmgr.example.com -p 8000:8000 eyevinntechnology/channelengine:v1.0.2
-```
-
-The point an HLS video player to playback the URL `http://localhost:8000/live/master.m3u8`
-
-## Node Module
+To use this library in your NodeJS project download and install the library in your project by running the following in your project folder.
 
 ```
 $ npm install --save eyevinn-channel-engine
 ```
 
-To use the Channel Engine in your NodeJS code you initiate the engine like this, and where you also
-have the possibility to provide a custom asset manager that you have built:
+And to run the basic reference implementation included in this repository you run:
 
 ```
-  const ChannelEngine = require('eyevinn-channel-engine');
-  const MyAssetManager = require('./my_asset_manager.js');
-
-  /**
-   * Implements the interface:
-   *
-   * getNextVod({ sessionId, category, playlistId }) -> { id, title, uri, offset }
-   * getNextVodById({ sessionId, id, playlistId }) -> { id, title, uri, offset }
-   *
-   * Example in ./assetmanagers/default.js
-   */
-  const assetManager = new MyAssetManager();
-  const engine = new ChannelEngine(assetManager);
-  engine.listen(process.env.PORT || 8000);
+$ npm start
 ```
+
+Then point your HLS video player to `http://localhost:8000/live/master.m3u8?channel=1` to start playing the linear live stream.
+
+## API
+
+Initiate and start the engine as below.
+
+```
+const ChannelEngine = require('eyevinn-channel-engine);
+
+const engine = new ChannelEngine(myAssetManager, { channelManager: myChannelManager });
+engine.start();
+engine.listen(process.env.port || 8000);
+```
+
+where `myAssetManager` and `myChannelManager` are classes implementing the interfaces below.
+
+```
+class MyAssetManager {
+  getNextVod({ sessionId, category, playlistId }) -> { id, title, uri, offset }
+}
+
+class MyChannelManager {
+  getChannels() -> [ { id, name } ]
+}
+```
+
+Find a simplistic reference implementation for guidance in `./server.js`.
+
+## Commercial Alternative
+
+Eyevinn offers a commercial alternative based on this module called `Consuo`. `Consuo` is an out-of-the-box software component (Docker container) that can be plugged into your online video platform to provide you with unlimited thematic, regional or personal linear TV channels based on an existing VOD library.
+
+Contact sales@eyevinn.se if you want to know more.
 
 ## About Eyevinn Technology
 

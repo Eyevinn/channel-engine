@@ -1,14 +1,59 @@
+/*
+ * Reference implementation of Channel Engine library
+ */
+
 const ChannelEngine = require('./index.js');
-const AssetManager = require('./assetmanagers/default.js');
 
-const ASSETMGR_URI = process.env.ASSETMGR_URI;
-const ADCOPYMGR_URI = process.env.ADCOPYMGR_URI;
-const ADXCHANGE_URI = process.env.ADXCHANGE_URI;
+class RefAssetManager {
+  constructor(opts) {
+    this.assets = {
+      '1': [
+        { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+        { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
+      ]
+    };
+    this.pos = {
+      '1': 0
+    };
+  }
 
-if (!ASSETMGR_URI) {
-  console.error("An ASSETMGR_URI must be specified");
-} else {
-  const assetManager = new AssetManager(ASSETMGR_URI);
-  const engine = new ChannelEngine(assetManager, { adCopyMgrUri: ADCOPYMGR_URI, adXchangeUri: ADXCHANGE_URI });
-  engine.listen(process.env.PORT || 8000);
-}
+  /**
+   * 
+   * @param {Object} vodRequest
+   *   {
+   *      sessionId,
+   *      category,
+   *      playlistId
+   *   } 
+   */
+  getNextVod(vodRequest) {
+    return new Promise((resolve, reject) => {
+      const channelId = vodRequest.playlistId;
+      let vod = this.assets[channelId][this.pos[channelId]++];
+      if (this.pos[channelId] > this.assets[channelId].length - 1) {
+        this.pos[channelId] = 0;
+      }
+      resolve(vod);
+    });
+  }
+};
+
+class RefChannelManager {
+  getChannels() {
+    return [ { id: '1' } ];
+  }
+};
+
+const refAssetManager = new RefAssetManager();
+const refChannelManager = new RefChannelManager();
+
+const engineOptions = {
+  heartbeat: '/',
+  averageSegmentDuration: 2000,
+  channelManager: refChannelManager
+};
+
+const engine = new ChannelEngine(refAssetManager, engineOptions);
+engine.start();
+engine.listen(process.env.port || 8000);
+
