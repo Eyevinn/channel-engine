@@ -34,8 +34,9 @@ describe("Playhead consumer", () => {
       let expectedMseq = 1;
       for (let promiseFn of promiseFns) {
         manifest = await promiseFn();
-        expect(manifest.match('#EXT-X-MEDIA-SEQUENCE:' + expectedMseq++)).not.toBeNull();
-        fail(manifest);
+        if (!manifest.match('#EXT-X-MEDIA-SEQUENCE:' + expectedMseq++)) {
+          fail(manifest);
+        }
       }
     };
     await loop(100);
