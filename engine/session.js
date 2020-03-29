@@ -199,9 +199,6 @@ class Session {
           this._state.state = SessionState.VOD_PLAYING;
         } else {
           let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-          if (opts && opts.playhead) {
-            sequencesToIncrement = 1;
-          }
           this._state.vodMediaSeq.video += sequencesToIncrement;
         }
         if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
@@ -256,9 +253,6 @@ class Session {
       let timeSinceLastRequest = (this._state.tsLastRequest.audio === null) ? 0 : Date.now() - this._state.tsLastRequest.audio;
       if (this._state.state !== SessionState.VOD_NEXT_INITIATING) {
         let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-        if (opts && opts.playhead) {
-          sequencesToIncrement = 1;
-        }
     
         if (this._state.vodMediaSeq.audio < this._state.vodMediaSeq.video) {
           this._state.vodMediaSeq.audio += sequencesToIncrement;
