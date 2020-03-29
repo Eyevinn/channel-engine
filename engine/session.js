@@ -49,7 +49,7 @@ class Session {
         audio: null
       },
       playhead: {
-        state: PlayheadState.IDLE
+        state: PlayheadState.IDLE,
       }
     };
     this.currentVod;
@@ -83,7 +83,7 @@ class Session {
 
   startPlayhead() {
     const loop = () => {
-      return this.getMediaManifest(180000, { playhead: true })
+      return this.increment()
       .then(manifest => {
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(this._state.state) !== -1) {
           return loop();
@@ -148,8 +148,8 @@ class Session {
   getCurrentMediaManifest(bw, playbackSessionId) {
     return new Promise((resolve, reject) => {
       if (this.currentVod) {
-        const m3u8 = this.currentVod.getLiveMediaSequences(this._state.mediaSeq, bw, this._state.vodMediaSeq.video, this._state.discSeq);
-        debug(`[${playbackSessionId}]: [${this._state.mediaSeq + this._state.vodMediaSeq.video}] Current media manifest for ${bw} requested`);
+        const m3u8 = this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, bw, this._state.playhead.vodMediaSeq.video, this._state.discSeq);
+        debug(`[${playbackSessionId}]: [${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.video}] Current media manifest for ${bw} requested`);
         resolve(m3u8);
       } else {
         resolve("Engine not ready");
@@ -160,13 +160,34 @@ class Session {
   getCurrentAudioManifest(audioGroupId, playbackSessionId) {
     return new Promise((resolve, reject) => {
       if (this.currentVod) {
-        const m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.mediaSeq, audioGroupId, this._state.vodMediaSeq.audio, this._state.discSeq);
-        debug(`[${playbackSessionId}]: [${this._state.mediaSeq + this._state.vodMediaSeq.audio}] Current audio manifest for ${bw} requested`);
+        const m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.playhead.mediaSeq, audioGroupId, this._state.playhead.vodMediaSeq.audio, this._state.discSeq);
+        debug(`[${playbackSessionId}]: [${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.audio}] Current audio manifest for ${bw} requested`);
         resolve(m3u8);
       } else {
         resolve("Engine not ready");
       }
     });
+  }
+
+  increment() {
+    return new Promise((resolve, reject) => {
+      this._tick().then(() => {
+        if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
+          this._state.state = SessionState.VOD_PLAYING;
+        } else {
+          this._state.vodMediaSeq.video += 1;
+          this._state.vodMediaSeq.audio += 1;
+        }
+        if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
+          this._state.vodMediaSeq.video = this._state.vodMediaSeq.audio = this.currentVod.getLiveMediaSequencesCount() - 1;
+          this._state.state = SessionState.VOD_NEXT_INIT;
+        }
+        debug(`[${this._sessionId}]: INCREMENT vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
+        this._state.playhead.mediaSeq = this._state.mediaSeq;
+        this._state.playhead.vodMediaSeq = this._state.vodMediaSeq;
+        resolve(this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, 180000, this._state.playhead.vodMediaSeq.video, this._state.discSeq));
+      });
+    })
   }
 
   getMediaManifest(bw, opts) {
