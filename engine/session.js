@@ -182,21 +182,11 @@ class Session {
           this._state.vodMediaSeq.video = this._state.vodMediaSeq.audio = this.currentVod.getLiveMediaSequencesCount() - 1;
           this._state.state = SessionState.VOD_NEXT_INIT;
         }
-        debug(`[${this._sessionId}]: INCREMENT vodMediaSeq=(${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio})`);
         this._state.playhead.mediaSeq = this._state.mediaSeq;
         this._state.playhead.vodMediaSeq = this._state.vodMediaSeq;
+        debug(`[${this._sessionId}]: INCREMENT (mseq=${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.video}) vodMediaSeq=(${this._state.playhead.vodMediaSeq.video}_${this._state.playhead.vodMediaSeq.audio})`);
         let m3u8 = this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, 180000, this._state.playhead.vodMediaSeq.video, this._state.discSeq);
-        if (this._state.state === SessionState.VOD_NEXT_INIT) {
-          this._tick().then(() => {
-            if (this._state.state === SessionState.VOD_NEXT_INITIATING) {
-              this._state.state = SessionState.VOD_PLAYING;
-            }
-            m3u8 = this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, 180000, this._state.playhead.vodMediaSeq.video, this._state.discSeq);
-            resolve(m3u8);
-          });
-        } else {
-          resolve(m3u8);
-        }
+        resolve(m3u8);
       });
     })
   }
