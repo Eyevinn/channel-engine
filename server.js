@@ -13,7 +13,7 @@ class RefAssetManager {
       ]
     };
     this.pos = {
-      '1': 0
+      '1': 1
     };
   }
 
