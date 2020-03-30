@@ -64,7 +64,8 @@ class ChannelEngine {
           sessions[channel.id] = new Session(this.assetMgr, {
             sessionId: channel.id,
             averageSegmentDuration: options.averageSegmentDuration,
-            demuxedAudio: options.demuxedAudio
+            demuxedAudio: options.demuxedAudio,
+            profile: channel.profile
           });
         }
       });

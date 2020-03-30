@@ -115,11 +115,62 @@ describe("Playhead consumer", () => {
     done();
   });
 
-  it("provides all available bitrates for all media sequences", async (done) => {
+  it("provides all available bitrates for all media sequences with provided channel profile", async (done) => {
+    const assetMgr = new TestAssetManager();
+    const channelProfile = [
+      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+    ];
+    const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile });
+    const masterManifest = await session.getMasterManifest();
+    const profile = await parseMasterManifest(masterManifest);
+    expect(profile[0].bw).toEqual(6134000);
+    expect(profile[1].bw).toEqual(2323000);
+    expect(profile[2].bw).toEqual(1313000);
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while (remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            const bwMap = {
+              '6134000': '2000',
+              '2323000': '1000',
+              '1313000': '600'
+            };
+            session.increment()
+            .then(manifest => {
+              profile.map(p => {
+                session.getCurrentMediaManifest(p.bw)
+                .then(mediaManifest => {
+                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+                });
+              });
+              resolve();
+            });
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    };
+    await loop(100);
+    done();
+  });
+
+  it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' });
     const masterManifest = await session.getMasterManifest();
     const profile = await parseMasterManifest(masterManifest);
+    expect(profile[0].bw).toEqual(6134000);
+    expect(profile[1].bw).toEqual(2323000);
+    expect(profile[2].bw).toEqual(1313000);
     const loop = async (increments) => {
       let remain = increments;
       let verificationFns = [];
