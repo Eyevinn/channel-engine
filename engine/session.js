@@ -74,6 +74,9 @@ class Session {
       if (config.useDemuxedAudio) {
         this.use_demuxed_audio = true;
       }
+      if (config.profile) {
+        this._sessionProfile = config.profile;
+      }
     }
   }
 
@@ -299,10 +302,17 @@ class Session {
             defaultAudioGroupId = audioGroupIds[0];
           }
         }
-        this.currentVod.getUsageProfiles().forEach(profile => {
-          m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
-          m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
-        });
+        if (this._sessionProfile) {
+          this._sessionProfile.forEach(profile => {
+            m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
+            m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
+          });
+        } else {
+          this.currentVod.getUsageProfiles().forEach(profile => {
+            m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
+            m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
+          });
+        }
         if (this.use_demuxed_audio === true) {
           for (let i = 0; i < audioGroupIds.length; i++) {
             let audioGroupId = audioGroupIds[i];
