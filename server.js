@@ -40,7 +40,15 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1' } ];
+    return [ { id: '1', profile: this._getProfile() } ];
+  }
+
+  _getProfile() {
+    return [
+      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+    ];
   }
 };
 

@@ -58,6 +58,24 @@ const verificationLoop = async (session, increments) => {
   }
 };
 
+const parseMasterManifest = async (manifest) => {
+  const parser = m3u8.createStream();
+  const streams = await new Promise((resolve, reject) => {
+    let manifestStream = new Readable();
+    manifestStream.push(manifest);
+    manifestStream.push(null);
+    manifestStream.pipe(parser);
+    parser.on('m3u', m3u => {
+      let profile = [];
+      m3u.items.StreamItem.map(streamItem => {
+        profile.push({ bw: streamItem.get('bandwidth'), resolution: streamItem.get('resolution') });
+      });
+      resolve(profile);
+    });
+  });
+  return streams;
+};
+
 describe("Playhead consumer", () => {
   it("continously increases media sequence over two VOD switches", async (done) => {
     const assetMgr = new TestAssetManager();
@@ -94,6 +112,97 @@ describe("Playhead consumer", () => {
     const assetMgr = new TestAssetManager([{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
     const session = new Session(assetMgr, { sessionId: '1' });
     await verificationLoop(session, 10);
+    done();
+  });
+
+  it("provides all available bitrates for all media sequences with provided channel profile", async (done) => {
+    const assetMgr = new TestAssetManager();
+    const channelProfile = [
+      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+    ];
+    const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile });
+    const masterManifest = await session.getMasterManifest();
+    const profile = await parseMasterManifest(masterManifest);
+    expect(profile[0].bw).toEqual(6134000);
+    expect(profile[1].bw).toEqual(2323000);
+    expect(profile[2].bw).toEqual(1313000);
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while (remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            const bwMap = {
+              '6134000': '2000',
+              '2323000': '1000',
+              '1313000': '600'
+            };
+            session.increment()
+            .then(manifest => {
+              profile.map(p => {
+                session.getCurrentMediaManifest(p.bw)
+                .then(mediaManifest => {
+                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+                });
+              });
+              resolve();
+            });
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    };
+    await loop(100);
+    done();
+  });
+
+  it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
+    const assetMgr = new TestAssetManager();
+    const session = new Session(assetMgr, { sessionId: '1' });
+    const masterManifest = await session.getMasterManifest();
+    const profile = await parseMasterManifest(masterManifest);
+    expect(profile[0].bw).toEqual(6134000);
+    expect(profile[1].bw).toEqual(2323000);
+    expect(profile[2].bw).toEqual(1313000);
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while (remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            const bwMap = {
+              '6134000': '2000',
+              '2323000': '1000',
+              '1313000': '600'
+            };
+            session.increment()
+            .then(manifest => {
+              profile.map(p => {
+                session.getCurrentMediaManifest(p.bw)
+                .then(mediaManifest => {
+                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+                });
+              });
+              resolve();
+            });
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    };
+    await loop(100);
     done();
   });
 });
