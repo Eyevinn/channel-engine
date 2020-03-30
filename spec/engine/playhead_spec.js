@@ -91,7 +91,7 @@ describe("Playhead consumer", () => {
   });
 
   it("can handle three short VODs in a row", async (done) => {
-    const assetMgr = new TestAssetManager([{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/ads/apotea-15s.mp4/master.m3u8" }]);
+    const assetMgr = new TestAssetManager([{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
     const session = new Session(assetMgr, { sessionId: '1' });
     await verificationLoop(session, 10);
     done();
