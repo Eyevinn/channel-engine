@@ -76,6 +76,20 @@ const parseMasterManifest = async (manifest) => {
   return streams;
 };
 
+const parseMediaManifest = async (manifest) => {
+  const parser = m3u8.createStream();
+  const m3u = await new Promise((resolve, reject) => {
+    let manifestStream = new Readable();
+    manifestStream.push(manifest);
+    manifestStream.push(null);
+    manifestStream.pipe(parser);
+    parser.on('m3u', m3u => {
+      resolve(m3u);
+    });
+  });
+  return m3u;
+};
+
 describe("Playhead consumer", () => {
   it("continously increases media sequence over two VOD switches", async (done) => {
     const assetMgr = new TestAssetManager();
@@ -203,6 +217,45 @@ describe("Playhead consumer", () => {
       }
     };
     await loop(100);
+    done();
+  });
+
+  it("plays all segments of a VOD before the next one", async (done) => {
+    const assetMgr = new TestAssetManager();
+    const session = new Session(assetMgr, { sessionId: '1' });
+    const expectedLastSegment = "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/2000/2000-00091.ts";
+    let found = false;
+
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while(remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            session.increment()
+            .then(async (manifest) => {
+              return session.getCurrentMediaManifest(6134000);
+            })
+            .then(async (manifest) => {
+              const m3u = await parseMediaManifest(manifest);
+              const playlistItems = m3u.items.PlaylistItem;
+              if (playlistItems[playlistItems.length - 1].get('uri') === expectedLastSegment) {
+                found = true;
+              }
+              resolve();
+            });
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    }
+    await loop(100);
+    expect(found).toBe(true);
     done();
   });
 });
