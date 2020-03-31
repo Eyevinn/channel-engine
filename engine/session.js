@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const debug = require('debug')('engine-session');
-const HLSVod = require('vod-to-live.js');
+const HLSVod = require('@eyevinn/hls-vodtolive');
 const AdRequest = require('./ad_request.js');
 const m3u8 = require('@eyevinn/m3u8');
 const Readable = require('stream').Readable;
