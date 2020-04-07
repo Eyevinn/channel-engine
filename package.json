@@ -17,7 +17,8 @@
     "debug": "^3.1.0",
     "request": ">=2.88.0",
     "restify": ">=8.0.0",
-    "@eyevinn/hls-vodtolive": "^1.0.1"
+    "@eyevinn/hls-vodtolive": "^1.0.1",
+    "@eyevinn/hls-repeat": "^0.1.1"
   },
   "devDependencies": {
     "jasmine": "^3.1.0"
