@@ -384,16 +384,20 @@ class Session {
             resolve();
           }).catch(e => {
             console.error("Failed to init first VOD, use slate instead");
-            this._loadSlate()
-            .then(slateVod => {
-              this.currentVod = slateVod;
-              debug(`[${this._sessionId}]: slate loaded`);
-              this._state.vodMediaSeq.video = 0;
-              this._state.vodMediaSeq.audio = 0;
-              this._state.state = SessionState.VOD_PLAYING;
-              resolve();    
-            })
-            .catch(reject);
+            if(this.slateUri) {
+              this._loadSlate()
+              .then(slateVod => {
+                this.currentVod = slateVod;
+                debug(`[${this._sessionId}]: slate loaded`);
+                this._state.vodMediaSeq.video = 0;
+                this._state.vodMediaSeq.audio = 0;
+                this._state.state = SessionState.VOD_PLAYING;
+                resolve();    
+              })
+              .catch(reject);
+            } else {
+              debug('No slate to load');
+            }
           });
           break;
         case SessionState.VOD_PLAYING:
@@ -467,18 +471,22 @@ class Session {
           })
           .catch(err => {
             console.error("Failed to init next VOD, using slate instead");
-            this._loadSlate()
-            .then(slateVod => {
-              this.currentVod = slateVod;
-              debug(`[${this._sessionId}]: slate loaded`);
-              this._state.vodMediaSeq.video = 0;
-              this._state.vodMediaSeq.audio = 0;
-              this._state.mediaSeq += length;
-              this._state.discSeq += lastDiscontinuity;
-              this._state.state = SessionState.VOD_PLAYING;
-              resolve();    
-            })
-            .catch('No slate: ' + err);
+            if(this.slateUri) {
+              this._loadSlate()
+              .then(slateVod => {
+                this.currentVod = slateVod;
+                debug(`[${this._sessionId}]: slate loaded`);
+                this._state.vodMediaSeq.video = 0;
+                this._state.vodMediaSeq.audio = 0;
+                this._state.mediaSeq += length;
+                this._state.discSeq += lastDiscontinuity;
+                this._state.state = SessionState.VOD_PLAYING;
+                resolve();    
+              })
+              .catch('No slate: ' + err);
+            } else {
+              debug('No slate to load');
+            }
           }) 
           break;
         default:
