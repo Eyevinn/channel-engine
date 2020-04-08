@@ -3,6 +3,7 @@ const debug = require('debug')('engine-session');
 const HLSVod = require('@eyevinn/hls-vodtolive');
 const AdRequest = require('./ad_request.js');
 const m3u8 = require('@eyevinn/m3u8');
+const HLSRepeatVod = require('@eyevinn/hls-repeat');
 const Readable = require('stream').Readable;
 
 const SessionState = Object.freeze({
@@ -76,6 +77,9 @@ class Session {
       }
       if (config.profile) {
         this._sessionProfile = config.profile;
+      }
+      if (config.slateUri) {
+        this.slateUri = config.slateUri;
       }
     }
   }
@@ -378,7 +382,23 @@ class Session {
             });
             this._state.state = SessionState.VOD_PLAYING;
             resolve();
-          }).catch(reject);
+          }).catch(e => {
+            console.error("Failed to init first VOD, use slate instead");
+            if(this.slateUri) {
+              this._loadSlate()
+              .then(slateVod => {
+                this.currentVod = slateVod;
+                debug(`[${this._sessionId}]: slate loaded`);
+                this._state.vodMediaSeq.video = 0;
+                this._state.vodMediaSeq.audio = 0;
+                this._state.state = SessionState.VOD_PLAYING;
+                resolve();    
+              })
+              .catch(reject);
+            } else {
+              debug('No slate to load');
+            }
+          });
           break;
         case SessionState.VOD_PLAYING:
           debug(`[${this._sessionId}]: state=VOD_PLAYING (${this._state.vodMediaSeq.video}_${this._state.vodMediaSeq.audio}, ${this.currentVod.getLiveMediaSequencesCount()})`);
@@ -427,7 +447,11 @@ class Session {
               }
             });
             return newVod.loadAfter(this.currentVod);
-          }).then(() => {
+          })
+          .catch(err => {
+            console.error("Failed to init next VOD, will use slate instead");
+          })
+          .then(() => {
             debug(`[${this._sessionId}]: next VOD loaded`);
             //debug(newVod);
             this.currentVod = newVod;
@@ -444,15 +468,30 @@ class Session {
               }
             });            
             resolve();
-          }).catch(err => {
-            console.error("Failed to initiate next VOD: ", err);
-            reject(err);
-          });
+          })
+          .catch(err => {
+            console.error("Failed to init next VOD, using slate instead");
+            if(this.slateUri) {
+              this._loadSlate()
+              .then(slateVod => {
+                this.currentVod = slateVod;
+                debug(`[${this._sessionId}]: slate loaded`);
+                this._state.vodMediaSeq.video = 0;
+                this._state.vodMediaSeq.audio = 0;
+                this._state.mediaSeq += length;
+                this._state.discSeq += lastDiscontinuity;
+                this._state.state = SessionState.VOD_PLAYING;
+                resolve();    
+              })
+              .catch('No slate: ' + err);
+            } else {
+              debug('No slate to load');
+            }
+          }) 
           break;
         default:
           reject("Invalid state: " + this.state.state);
       }
-
     });
   }
 
@@ -476,6 +515,35 @@ class Session {
         }
       })
       .catch(reject);
+    });
+  }
+
+  _loadSlate() {
+    return new Promise((resolve, reject) => {
+      try {
+        const slateVod = new HLSRepeatVod(this.slateUri, 3);
+
+        slateVod.load()
+        .then(() => {
+          let hlsVod = new HLSVod(this.slateUri);
+          if(!this.currentVod) {
+            const slateMediaManifestLoader = (bw) => {
+              let mediaManifestStream = new Readable();
+              mediaManifestStream.push(slateVod.getMediaManifest(bw));
+              mediaManifestStream.push(null);
+              return mediaManifestStream;
+            };
+            hlsVod.load(null, slateMediaManifestLoader)
+            .then(() => {
+              resolve(hlsVod);
+            })
+            .catch(reject);
+          }
+        })
+        .catch(reject);
+      } catch(err) {
+        reject(err);
+      }
     });
   }
 

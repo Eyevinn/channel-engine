@@ -3,7 +3,7 @@ const m3u8 = require('@eyevinn/m3u8');
 const Readable = require('stream').Readable;
 
 class TestAssetManager {
-  constructor(assets) {
+  constructor(opts, assets) {
     this.assets = [
       { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
       { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
@@ -12,14 +12,25 @@ class TestAssetManager {
       this.assets = assets;
     }
     this.pos = 0;
+    this.doFail = false;
+    if (opts && opts.fail) {
+      this.doFail = true;
+    }
+    if (opts && opts.failOnIndex) {
+      this.failOnIndex = 1;
+    }
   }
   getNextVod(vodRequest) {
     return new Promise((resolve, reject) => {
-      const vod = this.assets[this.pos++];
-      if (this.pos > this.assets.length - 1) {
-        this.pos = 0;
+      if (this.doFail || this.pos === this.failOnIndex) {
+        reject("should fail");
+      } else {
+        const vod = this.assets[this.pos++];
+        if (this.pos > this.assets.length - 1) {
+          this.pos = 0;
+        }
+        resolve(vod);
       }
-      resolve(vod);
     });
 
   }
@@ -123,7 +134,7 @@ describe("Playhead consumer", () => {
   });
 
   it("can handle three short VODs in a row", async (done) => {
-    const assetMgr = new TestAssetManager([{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
+    const assetMgr = new TestAssetManager(null, [{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
     const session = new Session(assetMgr, { sessionId: '1' });
     await verificationLoop(session, 10);
     done();
@@ -256,6 +267,76 @@ describe("Playhead consumer", () => {
     }
     await loop(100);
     expect(found).toBe(true);
+    done();
+  });
+
+  it("inserts a slate when asset manager fails to return an initial VOD", async (done) => {
+    const assetMgr = new TestAssetManager({ fail: true });
+    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
+    let slateManifest;
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while (remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            session.increment()
+            .then(async (manifest) => {
+              return session.getCurrentMediaManifest(6134000);
+            })
+            .then(manifest => {
+              slateManifest = manifest;
+              resolve();
+            });
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    };
+
+    await loop(1);
+    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/1080p_000.ts\n');
+    expect(m).not.toBeNull;
+    done();
+  });
+
+  it("inserts a slate when asset manager fails to return a next VOD", async (done) => {
+    const assetMgr = new TestAssetManager({failOnIndex: 1});
+    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
+    let slateManifest;
+    const loop = async (increments) => {
+      let remain = increments;
+      let verificationFns = [];
+      while (remain > 0) {
+        const verificationFn = () => {
+          return new Promise((resolve, reject) => {
+            session.increment()
+            .then(async (manifest) => {
+              return session.getCurrentMediaManifest(6134000);
+            })
+            .then(manifest => {
+              slateManifest = manifest;
+              resolve();
+            })
+            .catch(reject);
+          });
+        };
+        verificationFns.push(verificationFn);
+        remain--;
+      }
+      for (let verificationFn of verificationFns) {
+        await verificationFn();
+      }
+    };
+
+    await loop(85);
+    // console.log('slateManifest', slateManifest);
+    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/1080p_000.ts\n');
+    expect(m).not.toBeNull();
     done();
   });
 });
