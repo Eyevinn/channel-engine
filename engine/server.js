@@ -52,6 +52,7 @@ class ChannelEngine {
     });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
+    this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
 
     if (options && options.heartbeat) {
       this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
@@ -229,6 +230,23 @@ class ChannelEngine {
       session.getStatus().then(body => {
         res.send(200, body);
         next();
+      });
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      next(err);
+    }
+  }
+
+  _handleSessionHealth(req, res, next) {
+    debug(`req.url=${req.url}`);
+    const session = sessions[req.params.sessionId];
+    if (session) {
+      session.getStatus().then(status => {
+        if (status.playhead && status.playhead.state === "running") {
+          res.send(200, { "health": "ok" });
+        } else {
+          res.send(503, { "health": "unhealthy" });
+        }
       });
     } else {
       const err = new errs.NotFoundError('Invalid session');
