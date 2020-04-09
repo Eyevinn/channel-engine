@@ -29,7 +29,7 @@ class RefAssetManager {
   getNextVod(vodRequest) {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
-      if (this.pos[channelId]) {
+      if (this.assets[channelId]) {
         let vod = this.assets[channelId][this.pos[channelId]++];
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
@@ -44,7 +44,7 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1', profile: this._getProfile() }, { id: '2', profile: this._getProfile() } ];
+    return [ { id: '1', profile: this._getProfile() } ];
   }
 
   _getProfile() {
