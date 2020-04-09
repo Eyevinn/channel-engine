@@ -449,6 +449,7 @@ class Session {
             return newVod.loadAfter(this.currentVod);
           })
           .catch(err => {
+            console.error(err);
             console.error("Failed to init next VOD, will use slate instead");
           })
           .then(() => {
@@ -486,6 +487,7 @@ class Session {
               .catch('No slate: ' + err);
             } else {
               debug('No slate to load');
+              reject(err);
             }
           }) 
           break;
