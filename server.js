@@ -29,18 +29,22 @@ class RefAssetManager {
   getNextVod(vodRequest) {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
-      let vod = this.assets[channelId][this.pos[channelId]++];
-      if (this.pos[channelId] > this.assets[channelId].length - 1) {
-        this.pos[channelId] = 0;
+      if (this.pos[channelId]) {
+        let vod = this.assets[channelId][this.pos[channelId]++];
+        if (this.pos[channelId] > this.assets[channelId].length - 1) {
+          this.pos[channelId] = 0;
+        }
+        resolve(vod);  
+      } else {
+        reject("Invalid channelId provided");
       }
-      resolve(vod);
     });
   }
 };
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1', profile: this._getProfile() } ];
+    return [ { id: '1', profile: this._getProfile() }, { id: '2', profile: this._getProfile() } ];
   }
 
   _getProfile() {
