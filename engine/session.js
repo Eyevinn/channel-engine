@@ -394,9 +394,9 @@ class Session {
                 this._state.state = SessionState.VOD_PLAYING;
                 resolve();    
               })
-              .catch(reject);
+              .catch(err => reject('No slate: ' + err));
             } else {
-              debug('No slate to load');
+              reject('No slate to load');
             }
           });
           break;
@@ -484,10 +484,9 @@ class Session {
                 this._state.state = SessionState.VOD_PLAYING;
                 resolve();    
               })
-              .catch('No slate: ' + err);
+              .catch(err => reject('No slate: ' + err));
             } else {
-              debug('No slate to load');
-              reject(err);
+              reject('No slate to load');
             }
           }) 
           break;
