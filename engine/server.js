@@ -21,6 +21,7 @@ class ChannelEngine {
       this.useDemuxedAudio = true;
     }
     this.assetMgr = assetMgr;
+    this.monitorTimer = {};
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
@@ -59,33 +60,34 @@ class ChannelEngine {
     }
 
     if (options && options.channelManager) {
-      const channels = options.channelManager.getChannels();
-      channels.map(channel => {
-        if (!sessions[channel.id]) {
-          sessions[channel.id] = new Session(this.assetMgr, {
-            sessionId: channel.id,
-            averageSegmentDuration: options.averageSegmentDuration,
-            demuxedAudio: options.demuxedAudio,
-            profile: channel.profile
-          });
-        }
-      });
+      this.updateChannels(options.channelManager, options);
+      setInterval(() => this.updateChannels(options.channelManager, options), 60 * 1000);
     }
+  }
+
+  updateChannels(channelMgr, options) {
+    debug(`Do we have any new channels?`);
+    const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
+    newChannels.map(channel => {
+      debug(`Adding channel with ID ${channel.id}`);
+      sessions[channel.id] = new Session(this.assetMgr, {
+        sessionId: channel.id,
+        averageSegmentDuration: options.averageSegmentDuration,
+        demuxedAudio: options.demuxedAudio,
+        profile: channel.profile
+      });
+      if (!this.monitorTimer[channel.id]) {
+        this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
+      }
+    });
   }
 
   start() {
     Object.keys(sessions).map(channelId => {
       const session = sessions[channelId];
-      session.startPlayhead();
-      setInterval(() => {
-        session.getStatus().then(status => {
-          debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
-          if (status.playhead.state === 'crashed') {
-            debug(`[${status.sessionId}]: Playhead crashed, restarting`);
-            session.restartPlayhead();
-          }
-        });
-      }, 5000);
+      if (!this.monitorTimer[channelId]) {
+        this.monitorTimer[channel.id] = setInterval(() => this._monitor(session), 5000);
+      }
     });
 
   }
@@ -93,6 +95,19 @@ class ChannelEngine {
   listen(port) {
     this.server.listen(port, () => {
       debug('%s listening at %s', this.server.name, this.server.url);
+    });
+  }
+
+  _monitor(session) {
+    session.getStatus().then(status => {
+      debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
+      if (status.playhead.state === 'crashed') {
+        debug(`[${status.sessionId}]: Playhead crashed, restarting`);
+        session.restartPlayhead();
+      } else if (status.playhead.state === 'idle') {
+        debug(`[${status.sessionId}]: Starting playhead`);       
+        session.startPlayhead();
+      }
     });
   }
 
