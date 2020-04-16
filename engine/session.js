@@ -94,6 +94,9 @@ class Session {
       .then(manifest => {
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(this._state.state) !== -1) {
           return loop();
+        } else if (this._state.playhead.state == PlayheadState.STOPPED) {
+          debug(`[${this._sessionId}]: Stopping playhead`);
+          return;
         } else {
           this._getFirstDuration(manifest)
           .then(firstDuration => {
@@ -132,7 +135,7 @@ class Session {
   }
 
   stopPlayhead() {
-
+    this._state.playhead.state = PlayheadState.STOPPED;
   }
 
   getStatus() {

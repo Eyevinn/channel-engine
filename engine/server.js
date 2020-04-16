@@ -80,6 +80,15 @@ class ChannelEngine {
         this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
       }
     });
+
+    debug(`Have any channels been removed?`);
+    const removedChannels = Object.keys(sessions).filter(channelId => !channelMgr.getChannels().find(ch => ch.id == channelId));
+    removedChannels.map(channelId => {
+      debug(`Removing channel with ID ${channelId}`);
+      clearInterval(this.monitorTimer[channelId]);
+      sessions[channelId].stopPlayhead();
+      delete sessions[channelId];
+    });
   }
 
   start() {
@@ -96,6 +105,14 @@ class ChannelEngine {
     this.server.listen(port, () => {
       debug('%s listening at %s', this.server.name, this.server.url);
     });
+  }
+
+  getStatusForSession(sessionId) {
+    return sessions[sessionId].getStatus();
+  }
+
+  getSessionCount() {
+    return Object.keys(sessions).length;
   }
 
   _monitor(session) {
