@@ -451,10 +451,6 @@ class Session {
             });
             return newVod.loadAfter(this.currentVod);
           })
-          .catch(err => {
-            console.error(err);
-            console.error("Failed to init next VOD, will use slate instead");
-          })
           .then(() => {
             debug(`[${this._sessionId}]: next VOD loaded`);
             //debug(newVod);
@@ -476,7 +472,7 @@ class Session {
           .catch(err => {
             console.error("Failed to init next VOD, using slate instead");
             if(this.slateUri) {
-              this._loadSlate()
+              this._loadSlate(this.currentVod)
               .then(slateVod => {
                 this.currentVod = slateVod;
                 debug(`[${this._sessionId}]: slate loaded`);
@@ -484,7 +480,7 @@ class Session {
                 this._state.vodMediaSeq.audio = 0;
                 this._state.mediaSeq += length;
                 this._state.discSeq += lastDiscontinuity;
-                this._state.state = SessionState.VOD_PLAYING;
+                this._state.state = SessionState.VOD_NEXT_INITIATING;
                 resolve();    
               })
               .catch('No slate: ' + err);
@@ -523,27 +519,29 @@ class Session {
     });
   }
 
-  _loadSlate() {
+  _loadSlate(afterVod) {
     return new Promise((resolve, reject) => {
       try {
         const slateVod = new HLSRepeatVod(this.slateUri, 3);
+        let hlsVod;
 
         slateVod.load()
         .then(() => {
-          let hlsVod = new HLSVod(this.slateUri);
-          if(!this.currentVod) {
-            const slateMediaManifestLoader = (bw) => {
-              let mediaManifestStream = new Readable();
-              mediaManifestStream.push(slateVod.getMediaManifest(bw));
-              mediaManifestStream.push(null);
-              return mediaManifestStream;
-            };
-            hlsVod.load(null, slateMediaManifestLoader)
-            .then(() => {
-              resolve(hlsVod);
-            })
-            .catch(reject);
+          hlsVod = new HLSVod(this.slateUri);
+          const slateMediaManifestLoader = (bw) => {
+            let mediaManifestStream = new Readable();
+            mediaManifestStream.push(slateVod.getMediaManifest(bw));
+            mediaManifestStream.push(null);
+            return mediaManifestStream;
+          };
+          if (afterVod) {
+            return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+          } else {
+            return hlsVod.load(null, slateMediaManifestLoader);
           }
+        })
+        .then(() => {
+          resolve(hlsVod);
         })
         .catch(reject);
       } catch(err) {
