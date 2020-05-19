@@ -304,7 +304,7 @@ describe("Playhead consumer", () => {
     done();
   });
 
-  it("inserts a slate when asset manager fails to return a next VOD", async (done) => {
+  xit("inserts a slate when asset manager fails to return a next VOD", async (done) => {
     const assetMgr = new TestAssetManager({failOnIndex: 1});
     const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
     let slateManifest;
