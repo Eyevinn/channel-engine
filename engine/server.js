@@ -20,6 +20,9 @@ class ChannelEngine {
     if (options && options.demuxedAudio === true) {
       this.useDemuxedAudio = true;
     }
+    if (options && options.defaultSlateUri) {
+      this.defaultSlateUri = options.defaultSlateUri;
+    }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
 
@@ -74,7 +77,8 @@ class ChannelEngine {
         sessionId: channel.id,
         averageSegmentDuration: options.averageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
-        profile: channel.profile
+        profile: channel.profile,
+        slateUri: this.defaultSlateUri
       });
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
