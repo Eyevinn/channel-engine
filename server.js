@@ -44,7 +44,7 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1', profile: this._getProfile() } ];
+    return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
   }
 
   _getProfile() {
@@ -62,7 +62,8 @@ const refChannelManager = new RefChannelManager();
 const engineOptions = {
   heartbeat: '/',
   averageSegmentDuration: 2000,
-  channelManager: refChannelManager
+  channelManager: refChannelManager,
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);

@@ -80,6 +80,7 @@ class Session {
       }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
+        debug("Will use slate URI: " + this.slateUri);
       }
     }
   }
