@@ -386,8 +386,9 @@ class Session {
             this._state.state = SessionState.VOD_PLAYING;
             resolve();
           }).catch(e => {
-            console.error("Failed to init first VOD, use slate instead");
+            console.error("Failed to init first VOD");
             if(this.slateUri) {
+              console.error("Will insert slate");
               this._loadSlate()
               .then(slateVod => {
                 this.currentVod = slateVod;
@@ -470,8 +471,9 @@ class Session {
             resolve();
           })
           .catch(err => {
-            console.error("Failed to init next VOD, using slate instead");
+            console.error("Failed to init next VOD");
             if(this.slateUri) {
+              console.error("Will insert slate");
               this._loadSlate(this.currentVod)
               .then(slateVod => {
                 this.currentVod = slateVod;
@@ -483,7 +485,7 @@ class Session {
                 this._state.state = SessionState.VOD_NEXT_INITIATING;
                 resolve();    
               })
-              .catch('No slate: ' + err);
+              .catch(reject);
             } else {
               debug('No slate to load');
               reject(err);
