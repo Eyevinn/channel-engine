@@ -304,7 +304,7 @@ describe("Playhead consumer", () => {
     done();
   });
 
-  xit("inserts a slate when asset manager fails to return a next VOD", async (done) => {
+  it("inserts a slate when asset manager fails to return a next VOD", async (done) => {
     const assetMgr = new TestAssetManager({failOnIndex: 1});
     const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
     let slateManifest;
@@ -334,8 +334,8 @@ describe("Playhead consumer", () => {
     };
 
     await loop(85);
-    // console.log('slateManifest', slateManifest);
-    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/1080p_000.ts\n');
+    //console.log('slateManifest', slateManifest);
+    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/720p_000.ts\n');
     expect(m).not.toBeNull();
     done();
   });
