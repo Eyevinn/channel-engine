@@ -80,7 +80,8 @@ class Session {
       }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
-        debug("Will use slate URI: " + this.slateUri);
+        this.slateRepetitions = config.slateRepetitions || 10;
+        debug(`Will use slate URI ${this.slateUri} (${this.slateRepetitions})`);
       }
     }
   }
@@ -525,7 +526,7 @@ class Session {
   _loadSlate(afterVod) {
     return new Promise((resolve, reject) => {
       try {
-        const slateVod = new HLSRepeatVod(this.slateUri, 3);
+        const slateVod = new HLSRepeatVod(this.slateUri, this.slateRepetitions);
         let hlsVod;
 
         slateVod.load()
