@@ -63,7 +63,8 @@ const engineOptions = {
   heartbeat: '/',
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
-  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  slateRepetitions: 10,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
