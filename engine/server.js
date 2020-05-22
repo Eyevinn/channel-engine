@@ -22,6 +22,7 @@ class ChannelEngine {
     }
     if (options && options.defaultSlateUri) {
       this.defaultSlateUri = options.defaultSlateUri;
+      this.slateRepetitions = options.slateRepetitions || 10;
     }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
@@ -78,7 +79,8 @@ class ChannelEngine {
         averageSegmentDuration: options.averageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
         profile: channel.profile,
-        slateUri: this.defaultSlateUri
+        slateUri: this.defaultSlateUri,
+        slateRepetitions: this.slateRepetitions,
       });
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
