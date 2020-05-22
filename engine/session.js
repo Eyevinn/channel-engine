@@ -368,11 +368,23 @@ class Session {
             nextVodPromise = this._getNextVodById(this._state.assetId);
           }
           nextVodPromise.then(vodResponse => {
-            debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-            //newVod = new HLSVod(uri, [], Date.now());
-            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
-            this.currentVod = newVod;
-            return this.currentVod.load();
+            if (!vodResponse.type) {
+              debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
+              //newVod = new HLSVod(uri, [], Date.now());
+              newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
+              this.currentVod = newVod;
+              return this.currentVod.load();
+            } else {
+              if (vodResponse.type === 'gap') {
+                return new Promise((resolve, reject) => {
+                  this._fillGap(null, vodResponse.desiredDuration)
+                  .then(gapVod => {
+                    this.currentVod = gapVod;
+                    resolve(gapVod);
+                  }).catch(reject);  
+                });
+              }
+            }
           }).then(() => {
             debug(`[${this._sessionId}]: first VOD loaded`);
             //debug(newVod);
@@ -442,17 +454,29 @@ class Session {
           }
 
           vodPromise.then(vodResponse => {
-            debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-            newVod = new HLSVod(vodResponse.uri, splices, null, vodResponse.offset * 1000);
-            this.produceEvent({
-              type: 'NEXT_VOD_SELECTED',
-              data: {
-                id: this.currentMetadata.id,
-                uri: vodResponse.uri,
-                title: this.currentMetadata.title || '',
+            if (!vodResponse.type) {
+              debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
+              newVod = new HLSVod(vodResponse.uri, splices, null, vodResponse.offset * 1000);
+              this.produceEvent({
+                type: 'NEXT_VOD_SELECTED',
+                data: {
+                  id: this.currentMetadata.id,
+                  uri: vodResponse.uri,
+                  title: this.currentMetadata.title || '',
+                }
+              });
+              return newVod.loadAfter(this.currentVod);
+            } else {
+              if (vodResponse.type === 'gap') {
+                return new Promise((resolve, reject) => {
+                  this._fillGap(this.currentVod, vodResponse.desiredDuration)
+                  .then(gapVod => {
+                    newVod = gapVod;
+                    resolve(newVod);
+                  }).catch(reject);  
+                })
               }
-            });
-            return newVod.loadAfter(this.currentVod);
+            }
           })
           .then(() => {
             debug(`[${this._sessionId}]: next VOD loaded`);
@@ -474,6 +498,7 @@ class Session {
           })
           .catch(err => {
             console.error("Failed to init next VOD");
+            debug(err);
             if(this.slateUri) {
               console.error("Will insert slate");
               this._loadSlate(this.currentVod)
@@ -514,6 +539,12 @@ class Session {
             title: nextVod.title || '',
           };
           resolve(nextVod);
+        } else if (nextVod && nextVod.type === 'gap') {
+          this.currentMetadata = {
+            id: 'GAP',
+            title: 'GAP of ' + Math.floor(nextVod.desiredDuration) + ' sec',
+          };
+          resolve(nextVod);
         } else {
           console.error("Invalid VOD:", nextVod);
           reject("Invalid VOD from asset manager")
@@ -523,10 +554,10 @@ class Session {
     });
   }
 
-  _loadSlate(afterVod) {
+  _loadSlate(afterVod, reps) {
     return new Promise((resolve, reject) => {
       try {
-        const slateVod = new HLSRepeatVod(this.slateUri, this.slateRepetitions);
+        const slateVod = new HLSRepeatVod(this.slateUri, reps || this.slateRepetitions);
         let hlsVod;
 
         slateVod.load()
@@ -547,10 +578,23 @@ class Session {
         .then(() => {
           resolve(hlsVod);
         })
-        .catch(reject);
+        .catch(err => {
+          debug(err);
+          reject(err);
+        });
       } catch(err) {
         reject(err);
       }
+    });
+  }
+
+  _fillGap(afterVod, desiredDuration) {
+    return new Promise((resolve, reject) => {
+      const reps = Math.floor(desiredDuration / 4000);
+      debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
+      this._loadSlate(afterVod, reps).then(hlsVod => {
+        resolve(hlsVod);
+      }).catch(reject);
     });
   }
 
