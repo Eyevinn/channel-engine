@@ -21,7 +21,7 @@ Then point your HLS video player to `http://localhost:8000/live/master.m3u8?chan
 Initiate and start the engine as below.
 
 ```
-const ChannelEngine = require('eyevinn-channel-engine);
+const ChannelEngine = require('eyevinn-channel-engine');
 
 const engine = new ChannelEngine(myAssetManager, { channelManager: myChannelManager });
 engine.start();
