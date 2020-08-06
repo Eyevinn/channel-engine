@@ -1,7 +1,16 @@
+const redis = require("redis");
+const REDIS_URL = process.env.REDIS_URL;
+
 class SharedStateStore {
-  constructor(initData) {
+  constructor(type, initData) {
     this.sharedStates = {};
-    this.initData = initData
+    this.initData = initData;
+    this.keyPrefix = `${type}:`;
+
+    this.client = undefined;
+    if (REDIS_URL) {
+      this.client = redis.createClient(REDIS_URL);
+    }
   }
 
   init(id) {
@@ -10,18 +19,21 @@ class SharedStateStore {
     }
   }
 
-  get(id) {
+  async get(id) {
+    const key = "" + this.keyPrefix + id;
     if (!this.sharedStates[id]) {
       this.init(id);  
     }
     return this.sharedStates[id];
   }
 
-  set(id, key, value) {
+  async set(id, key, value) {
+    const storeKey = "" + this.keyPrefix + id;
     if (!this.sharedStates[id]) {
       this.init(id);
     }
     this.sharedStates[id][key] = value;
+    return this.sharedStates[id];
   }
 }
 
