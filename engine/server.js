@@ -5,6 +5,9 @@ const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
 const EventStream = require('./event_stream.js');
 
+const { SessionStateStore } = require('./session_state.js');
+const { PlayheadStateStore } = require('./playhead_state.js');
+
 const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
 
@@ -29,7 +32,12 @@ class ChannelEngine {
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
-    
+
+    this.sessionStore = {
+      sessionStateStore: new SessionStateStore(),
+      playheadStateStore: new PlayheadStateStore()
+    };
+
     if (options && options.staticDirectory) {
       this.server.get('/', restify.plugins.serveStatic({
         directory: options.staticDirectory,
@@ -81,7 +89,7 @@ class ChannelEngine {
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
-      });
+      }, this.sessionStore);
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
       }
@@ -161,7 +169,7 @@ class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
-      session = new Session(this.assetMgr, options);
+      session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
     if (req.query['startWithId']) {
