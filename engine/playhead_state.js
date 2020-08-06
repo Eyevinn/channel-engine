@@ -1,3 +1,5 @@
+const SharedStateStore = require('./shared_state_store.js');
+
 const PlayheadState = Object.freeze({
   RUNNING: 1,
   STOPPED: 2,
@@ -5,32 +7,13 @@ const PlayheadState = Object.freeze({
   IDLE: 4
 });
 
-class PlayheadStateStore {
+class PlayheadStateStore extends SharedStateStore {
   constructor() {
-    this.playheadStates = {};
+    super({ state: PlayheadState.IDLE });
   }
   
   create(sessionId) {
-    if (!this.playheadStates[sessionId]) {
-      this.playheadStates[sessionId] = {
-        state: PlayheadState.IDLE,
-      }
-    }
-    return this.playheadStates[sessionId];    
-  }
-
-  get(sessionId) {
-    if (!this.playheadStates[sessionId]) {
-      this.create(sessionId);  
-    }
-    return this.playheadStates[sessionId];
-  }
-
-  set(sessionId, key, value) {
-    if (!this.playheadStates[sessionId]) {
-      this.create(sessionId);
-    }
-    this.playheadStates[sessionId][key] = value;
+    return this.init(sessionId);
   }
 }
 
