@@ -29,11 +29,6 @@ class Session {
 
     this._sessionStateStore.create(this._sessionId);
 
-    this._state = {
-      playhead: {
-        state: PlayheadState.IDLE,
-      }
-    };
     this.currentVod;
     this.currentMetadata = {};
     this._events = [];
@@ -78,7 +73,7 @@ class Session {
         const sessionState = this._sessionStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           return loop();
-        } else if (this._state.playhead.state == PlayheadState.STOPPED) {
+        } else if (this._playheadStateStore.get(this._sessionId).state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
@@ -91,24 +86,24 @@ class Session {
           }).catch(err => {
             console.error(err);
             debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
-            this._state.playhead.state = PlayheadState.CRASHED;
+            this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
           });
         }  
       }).catch(err => {
         console.error(err);
         debug(`[${this._sessionId}]: Playhead consumer crashed (2)`);
-        this._state.playhead.state = PlayheadState.CRASHED;
+        this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
       });
     }
     loop().then(final => {
-      if (this._state.playhead.state !== PlayheadState.CRASHED) {
+      if (this._playheadStateStore.get(this._sessionId).state !== PlayheadState.CRASHED) {
         debug(`[${this._sessionId}]: Playhead consumer started`);
-        this._state.playhead.state = PlayheadState.RUNNING;
+        this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
       }
     }).catch(err => {
       console.error(err);
       debug(`[${this._sessionId}]: Playhead consumer crashed (2)`);
-      this._state.playhead.state = PlayheadState.CRASHED;
+      this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
     });
   }
 
@@ -119,7 +114,7 @@ class Session {
   }
 
   stopPlayhead() {
-    this._state.playhead.state = PlayheadState.STOPPED;
+    this._playheadStateStore.set(this._sessionId, "state", PlayheadState.STOPPED);
   }
 
   getStatus() {
@@ -132,7 +127,7 @@ class Session {
       const status = {
         sessionId: this._sessionId,
         playhead: {
-          state: playheadStateMap[this._state.playhead.state]
+          state: playheadStateMap[this._playheadStateStore.get(this._sessionId).state]
         }
       };
       resolve(status);
@@ -143,8 +138,8 @@ class Session {
     return new Promise((resolve, reject) => {
       const sessionState = this._sessionStateStore.get(this._sessionId);
       if (this.currentVod) {
-        const m3u8 = this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, bw, this._state.playhead.vodMediaSeq.video, sessionState.discSeq);
-        debug(`[${playbackSessionId}]: [${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.video}] Current media manifest for ${bw} requested`);
+        const m3u8 = this.currentVod.getLiveMediaSequences(this._playheadStateStore.get(this._sessionId).mediaSeq, bw, this._playheadStateStore.get(this._sessionId).vodMediaSeqVideo, sessionState.discSeq);
+        debug(`[${playbackSessionId}]: [${this._playheadStateStore.get(this._sessionId).mediaSeq + this._playheadStateStore.get(this._sessionId).vodMediaSeqVideo}] Current media manifest for ${bw} requested`);
         resolve(m3u8);
       } else {
         resolve("Engine not ready");
@@ -156,8 +151,8 @@ class Session {
     return new Promise((resolve, reject) => {
       const sessionState = this._sessionStateStore.get(this._sessionId);
       if (this.currentVod) {
-        const m3u8 = this.currentVod.getLiveMediaAudioSequences(this._state.playhead.mediaSeq, audioGroupId, this._state.playhead.vodMediaSeq.audio, sessionState.discSeq);
-        debug(`[${playbackSessionId}]: [${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.audio}] Current audio manifest for ${bw} requested`);
+        const m3u8 = this.currentVod.getLiveMediaAudioSequences(this._playheadStateStore.get(this._sessionId).mediaSeq, audioGroupId, this._playheadStateStore.get(this._sessionId).vodMediaSeqAudio, sessionState.discSeq);
+        debug(`[${playbackSessionId}]: [${this._playheadStateStore.get(this._sessionId).mediaSeq + this._playheadStateStore.get(this._sessionId).vodMediaSeqAudio}] Current audio manifest for ${bw} requested`);
         resolve(m3u8);
       } else {
         resolve("Engine not ready");
@@ -180,13 +175,11 @@ class Session {
           this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", this.currentVod.getLiveMediaSequencesCount() - 1);
           this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
         }
-        this._state.playhead.mediaSeq = this._sessionStateStore.get(this._sessionId).mediaSeq;
-        this._state.playhead.vodMediaSeq = {
-          video: this._sessionStateStore.get(this._sessionId).vodMediaSeqVideo,
-          audio: this._sessionStateStore.get(this._sessionId).vodMediaSeqAudio,
-        };
-        debug(`[${this._sessionId}]: INCREMENT (mseq=${this._state.playhead.mediaSeq + this._state.playhead.vodMediaSeq.video}) vodMediaSeq=(${this._state.playhead.vodMediaSeq.video}_${this._state.playhead.vodMediaSeq.audio})`);
-        let m3u8 = this.currentVod.getLiveMediaSequences(this._state.playhead.mediaSeq, 180000, this._state.playhead.vodMediaSeq.video, this._sessionStateStore.get(this._sessionId).discSeq);
+        this._playheadStateStore.set(this._sessionId, "mediaSeq", this._sessionStateStore.get(this._sessionId).mediaSeq);
+        this._playheadStateStore.set(this._sessionId, "vodMediaSeqVideo", this._sessionStateStore.get(this._sessionId).vodMediaSeqVideo);
+        this._playheadStateStore.set(this._sessionId, "vodMediaSeqAudio", this._sessionStateStore.get(this._sessionId).vodMediaSeqAudio);
+        debug(`[${this._sessionId}]: INCREMENT (mseq=${this._playheadStateStore.get(this._sessionId).mediaSeq + this._playheadStateStore.get(this._sessionId).vodMediaSeqVideo}) vodMediaSeq=(${this._playheadStateStore.get(this._sessionId).vodMediaSeqVideo}_${this._playheadStateStore.get(this._sessionId).vodMediaSeqAudio})`);
+        let m3u8 = this.currentVod.getLiveMediaSequences(this._playheadStateStore.get(this._sessionId).mediaSeq, 180000, this._playheadStateStore.get(this._sessionId).vodMediaSeqVideo, this._sessionStateStore.get(this._sessionId).discSeq);
         resolve(m3u8);
       });
     })
