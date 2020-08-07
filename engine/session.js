@@ -436,7 +436,7 @@ class Session {
           });
           break;
         case SessionState.VOD_PLAYING:
-          debug(`[${this._sessionId}]: state=VOD_PLAYING (${this._sessionStateStore.get(this._sessionId).vodMediaSeqVideo}_${this._sessionStateStore.get(this._sessionId).vodMediaSeqAudio}, ${this.currentVod.getLiveMediaSequencesCount()})`);
+          debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${this.currentVod.getLiveMediaSequencesCount()})`);
           /*
           if (this._state.vodMediaSeq.video >= this.currentVod.getLiveMediaSequencesCount() - 1) {
             this._state.state = SessionState.VOD_NEXT_INIT;
