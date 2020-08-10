@@ -13,7 +13,9 @@ class PlayheadStateStore extends SharedStateStore {
   }
   
   create(sessionId) {
-    return this.init(sessionId);
+    (async () => {
+      await this.init(sessionId);
+    })();
   }
 }
 

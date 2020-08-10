@@ -28,6 +28,7 @@ class Session {
     this._playheadStateStore = sessionStore.playheadStateStore;
 
     this._sessionStateStore.create(this._sessionId);
+    this._playheadStateStore.create(this._sessionId);
 
     this.currentVod;
     this.currentMetadata = {};
