@@ -20,7 +20,7 @@ class SharedStateStore {
     const storeKey = "" + this.keyPrefix + id;
     const getAsync = new Promise((resolve, reject) => {
       this.client.get(storeKey, (err, reply) => {
-        debug(`REDIS get ${storeKey}:${reply}`);
+        //debug(`REDIS get ${storeKey}:${reply}`);
         if (!err) {
           resolve(JSON.parse(reply));
         } else {
@@ -36,7 +36,7 @@ class SharedStateStore {
     const storeKey = "" + this.keyPrefix + id;
     const setAsync = new Promise((resolve, reject) => {
       this.client.set(storeKey, JSON.stringify(data), (err, res) => {
-        debug(`REDIS set ${storeKey}:${JSON.stringify(data)}`);
+        //debug(`REDIS set ${storeKey}:${JSON.stringify(data)}`);
         if (!err) {
           resolve(data);
         } else {

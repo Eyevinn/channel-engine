@@ -111,6 +111,7 @@ class ChannelEngine {
       if (!this.monitorTimer[channelId]) {
         this.monitorTimer[channel.id] = setInterval(() => this._monitor(session), 5000);
       }
+      session.startPlayhead();
     });
 
   }
