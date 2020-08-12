@@ -8,6 +8,7 @@ class SharedStateStore {
     this.sharedStates = {};
     this.initData = initData;
     this.keyPrefix = `${type}:`;
+    this.type = type;
 
     this.client = undefined;
     if (REDIS_URL) {
@@ -50,7 +51,10 @@ class SharedStateStore {
   async init(id) {
     if (!this.client) {
       if (!this.sharedStates[id]) {
-        this.sharedStates[id] = this.initData;
+        this.sharedStates[id] = {};
+        Object.keys(this.initData).forEach(key => {
+          this.sharedStates[id][key] = this.initData[key];
+        });
       }
       return this.sharedStates[id];
     } else {

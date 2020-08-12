@@ -72,15 +72,17 @@ class ChannelEngine {
     }
 
     if (options && options.channelManager) {
-      this.updateChannels(options.channelManager, options);
-      setInterval(() => this.updateChannels(options.channelManager, options), 60 * 1000);
+      (async () => {
+        await this.updateChannelsAsync(options.channelManager, options);
+        setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);  
+      })();
     }
   }
 
-  updateChannels(channelMgr, options) {
+  async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
-    newChannels.map(channel => {
+    const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
         sessionId: channel.id,
@@ -90,30 +92,35 @@ class ChannelEngine {
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
       }, this.sessionStore);
+      await sessions[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
-        this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
+        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
       }
-    });
+    };
+    await Promise.all(newChannels.map(channel => addAsync(channel)));
 
     debug(`Have any channels been removed?`);
     const removedChannels = Object.keys(sessions).filter(channelId => !channelMgr.getChannels().find(ch => ch.id == channelId));
-    removedChannels.map(channelId => {
+    const removeAsync = async (channelId) => {
       debug(`Removing channel with ID ${channelId}`);
       clearInterval(this.monitorTimer[channelId]);
-      sessions[channelId].stopPlayhead();
+      await sessions[channelId].stopPlayheadAsync();
       delete sessions[channelId];
-    });
+    };
+    await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
 
   start() {
-    Object.keys(sessions).map(channelId => {
+    const startAsync = async (channelId) => {
       const session = sessions[channelId];
       if (!this.monitorTimer[channelId]) {
-        this.monitorTimer[channel.id] = setInterval(() => this._monitor(session), 5000);
+        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session) }, 5000);
       }
-      session.startPlayhead();
-    });
-
+      await session.startPlayheadAsync();
+    };
+    (async () => {
+      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)));
+    })();
   }
 
   listen(port) {
@@ -122,14 +129,27 @@ class ChannelEngine {
     });
   }
 
-  getStatusForSession(sessionId) {
-    return sessions[sessionId].getStatus();
+  async getStatusForSession(sessionId) {
+    return await sessions[sessionId].getStatusAsync();
   }
 
   getSessionCount() {
     return Object.keys(sessions).length;
   }
 
+  async _monitorAsync(session) {
+    const status = await session.getStatusAsync();
+    debug(`ASYNC MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
+    if (status.playhead.state === 'crashed') {
+      debug(`ASYNC [${status.sessionId}]: Playhead crashed, restarting`);
+      await session.restartPlayheadAsync();
+    } else if (status.playhead.state === 'idle') {
+      debug(`ASYNC [${status.sessionId}]: Starting playhead`);       
+      await session.startPlayheadAsync();
+    }
+  }
+
+  /*
   _monitor(session) {
     session.getStatus().then(status => {
       debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
@@ -142,6 +162,7 @@ class ChannelEngine {
       }
     });
   }
+  */
 
   _handleHeartbeat(req, res, next) {
     debug('req.url=' + req.url);
