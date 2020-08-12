@@ -43,7 +43,7 @@ const verificationLoop = async (session, increments) => {
   let remain = increments;
   let promiseFns = [];
   while (remain > 0) {
-    promiseFns.push(() => session.increment());
+    promiseFns.push(() => session.incrementAsync());
     remain--;
   }
   let lastUri = null;
@@ -120,7 +120,7 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let promiseFns = [];
       while (remain > 0) {
-        promiseFns.push(() => session.increment());
+        promiseFns.push(() => session.incrementAsync());
         remain--;
       }
       let expectedMseq = 1;
@@ -129,7 +129,7 @@ describe("Playhead consumer", () => {
         if (!manifest.match('#EXT-X-MEDIA-SEQUENCE:' + expectedMseq++)) {
           fail(manifest);
         }
-        currentMediaManifest = await session.getCurrentMediaManifest(180000);
+        currentMediaManifest = await session.getCurrentMediaManifestAsync(180000);
         expect(currentMediaManifest).toEqual(manifest);
       }
     };
@@ -159,7 +159,7 @@ describe("Playhead consumer", () => {
       { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
     const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile }, sessionStore);
-    const masterManifest = await session.getMasterManifest();
+    const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
     expect(profile[1].bw).toEqual(2323000);
@@ -168,24 +168,17 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            const bwMap = {
-              '6134000': '2000',
-              '2323000': '1000',
-              '1313000': '600'
-            };
-            session.increment()
-            .then(manifest => {
-              profile.map(p => {
-                session.getCurrentMediaManifest(p.bw)
-                .then(mediaManifest => {
-                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
-                });
-              });
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const bwMap = {
+            '6134000': '2000',
+            '2323000': '1000',
+            '1313000': '600'
+          };
+          const manifest = await session.incrementAsync();
+          await Promise.all(profile.map(async (p) => {
+            const mediaManifest = await session.getCurrentMediaManifestAsync(p.bw);
+            expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+          }));
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -202,7 +195,7 @@ describe("Playhead consumer", () => {
   it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
-    const masterManifest = await session.getMasterManifest();
+    const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
     expect(profile[1].bw).toEqual(2323000);
@@ -211,24 +204,17 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            const bwMap = {
-              '6134000': '2000',
-              '2323000': '1000',
-              '1313000': '600'
-            };
-            session.increment()
-            .then(manifest => {
-              profile.map(p => {
-                session.getCurrentMediaManifest(p.bw)
-                .then(mediaManifest => {
-                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
-                });
-              });
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const bwMap = {
+            '6134000': '2000',
+            '2323000': '1000',
+            '1313000': '600'
+          };
+          const manifest = await session.incrementAsync();
+          await Promise.all(profile.map(async (p) => {
+            const mediaManifest = await session.getCurrentMediaManifestAsync(p.bw);
+            expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+          }));
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -252,21 +238,14 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while(remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(async (manifest) => {
-              const m3u = await parseMediaManifest(manifest);
-              const playlistItems = m3u.items.PlaylistItem;
-              if (playlistItems[playlistItems.length - 1].get('uri') === expectedLastSegment) {
-                found = true;
-              }
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const manifest = await session.incrementAsync();
+          const mediaManifest = await session.getCurrentMediaManifestAsync(6134000);
+          const m3u = await parseMediaManifest(mediaManifest);
+          const playlistItems = m3u.items.PlaylistItem;
+          if (playlistItems[playlistItems.length - 1].get('uri') === expectedLastSegment) {
+            found = true;
+          }
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -289,17 +268,10 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(manifest => {
-              slateManifest = manifest;
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          await session.incrementAsync();
+          const manifest = await session.getCurrentMediaManifestAsync(6134000);
+          slateManifest = manifest;
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -323,18 +295,10 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(manifest => {
-              slateManifest = manifest;
-              resolve();
-            })
-            .catch(reject);
-          });
+        const verificationFn = async () => {
+          await session.incrementAsync();
+          const manifest = await session.getCurrentMediaManifestAsync(6134000);
+          slateManifest = manifest;
         };
         verificationFns.push(verificationFn);
         remain--;

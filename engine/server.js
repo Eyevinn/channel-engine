@@ -48,19 +48,19 @@ class ChannelEngine {
     if (options && options.averageSegmentDuration) {
       this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
     }
-    this.server.get('/live/:file', (req, res, next) => {
+    this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
       if (req.params.file.match(/master.m3u8/)) {
-        this._handleMasterManifest(req, res, next);
+        await this._handleMasterManifest(req, res, next);
       } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        this._handleMediaManifest(req, res, next);
+        await this._handleMediaManifest(req, res, next);
       } else if (m = req.params.file.match(/master-(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        this._handleAudioManifest(req, res, next);
+        await this._handleAudioManifest(req, res, next);
       }
     });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
@@ -129,7 +129,7 @@ class ChannelEngine {
     });
   }
 
-  async getStatusForSession(sessionId) {
+  async getStatusForSessionAsync(sessionId) {
     return await sessions[sessionId].getStatusAsync();
   }
 
@@ -170,7 +170,7 @@ class ChannelEngine {
     next();
   }
 
-  _handleMasterManifest(req, res, next) {
+  async _handleMasterManifest(req, res, next) {
     debug('req.url=' + req.url);
     debug(req.query);
     let session;
@@ -202,7 +202,8 @@ class ChannelEngine {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
 
-      session.getMasterManifest().then(body => {
+      try {
+        const body = await session.getMasterManifestAsync();
         res.sendRaw(200, body, { 
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
@@ -212,19 +213,20 @@ class ChannelEngine {
           "X-Session-Id": session.sessionId,
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._errorHandler(err));
-      });
+      }
     } else {
       next(this._gracefulErrorHandler("Could not find a valid session"));
     } 
   }
 
-  _handleAudioManifest(req, res, next) {
+  async _handleAudioManifest(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getCurrentAudioManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+      try {
+        const body = await session.getCurrentAudioManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, body, {
@@ -233,21 +235,22 @@ class ChannelEngine {
           "Cache-Control": "max-age=4",
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._gracefulErrorHandler(err));
-      });
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
   }
 
-  _handleMediaManifest(req, res, next) {
+  async _handleMediaManifest(req, res, next) {
     debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getCurrentMediaManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+      try {
+        const body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, body, { 
@@ -256,9 +259,9 @@ class ChannelEngine {
           "Cache-Control": "max-age=4",
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._gracefulErrorHandler(err));
-      })
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
