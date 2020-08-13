@@ -150,21 +150,6 @@ class ChannelEngine {
     }
   }
 
-  /*
-  _monitor(session) {
-    session.getStatus().then(status => {
-      debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
-      if (status.playhead.state === 'crashed') {
-        debug(`[${status.sessionId}]: Playhead crashed, restarting`);
-        session.restartPlayhead();
-      } else if (status.playhead.state === 'idle') {
-        debug(`[${status.sessionId}]: Starting playhead`);       
-        session.startPlayhead();
-      }
-    });
-  }
-  */
-
   _handleHeartbeat(req, res, next) {
     debug('req.url=' + req.url);
     res.send(200);
@@ -295,31 +280,29 @@ class ChannelEngine {
     } 
   }
 
-  _handleStatus(req, res, next) {
+  async _handleStatus(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params.sessionId];
     if (session) {
-      session.getStatus().then(body => {
-        res.send(200, body);
-        next();
-      });
+      const body = await session.getStatusAsync();
+      res.send(200, body);
+      next();
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
   }
 
-  _handleSessionHealth(req, res, next) {
+  async _handleSessionHealth(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params.sessionId];
     if (session) {
-      session.getStatus().then(status => {
-        if (status.playhead && status.playhead.state === "running") {
-          res.send(200, { "health": "ok" });
-        } else {
-          res.send(503, { "health": "unhealthy" });
-        }
-      });
+      const status = await session.getStatusAsync();
+      if (status.playhead && status.playhead.state === "running") {
+        res.send(200, { "health": "ok" });
+      } else {
+        res.send(503, { "health": "unhealthy" });
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
