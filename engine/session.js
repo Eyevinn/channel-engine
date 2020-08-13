@@ -90,7 +90,7 @@ class Session {
   }
 
   async startPlayheadAsync() {
-    debug(`ASYNC [${this._sessionId}]: Playhead consumer started`);
+    debug(`[${this._sessionId}]: Playhead consumer started`);
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
@@ -101,11 +101,11 @@ class Session {
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
 
         } else if (playheadState.state == PlayheadState.STOPPED) {
-          debug(`ASYNC [${this._sessionId}]: Stopping playhead`);
+          debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
           const firstDuration = await this._getFirstDuration(manifest);
-          debug(`ASYNC [${this._sessionId}]: Next tick in ${firstDuration} seconds`)
+          debug(`[${this._sessionId}]: Next tick in ${firstDuration} seconds`)
           await timer((firstDuration * 1000) - 50);
         }
       } catch (err) {
@@ -119,12 +119,12 @@ class Session {
 
   async restartPlayheadAsync() {
     await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
-    debug(`ASYNC [${this._sessionId}]: Restarting playhead consumer`);
+    debug(`[${this._sessionId}]: Restarting playhead consumer`);
     await this.startPlayheadAsync();  
   }
 
   async stopPlayheadAsync() {
-    debug(`ASYNC [${this._sessionId}]: Stopping playhead consumer`);
+    debug(`[${this._sessionId}]: Stopping playhead consumer`);
     await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.STOPPED);
   }
 
@@ -352,7 +352,7 @@ class Session {
     this._events.push(event);
   }
 
-  async insertSlate(currentVod) {
+  async _insertSlate(currentVod) {
     if(this.slateUri) {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
@@ -379,16 +379,16 @@ class Session {
         try {
           let nextVodPromise;
           if (sessionState.state === SessionState.VOD_INIT) {
-            debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_INIT`);
+            debug(`[${this._sessionId}]: state=VOD_INIT`);
             nextVodPromise = this._getNextVod();
           } else if (sessionState.state === SessionState.VOD_INIT_BY_ID) {
-            debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
+            debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
           }
           const vodResponse = await nextVodPromise;
           let loadPromise;
           if (!vodResponse.type) {
-            debug(`TICK_ASYNC [${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
+            debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
             newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
             currentVod = newVod;
             loadPromise = currentVod.load();
@@ -404,7 +404,7 @@ class Session {
             }
           }
           await loadPromise;
-          debug(`TICK_ASYNC [${this._sessionId}]: first VOD loaded`);
+          debug(`[${this._sessionId}]: first VOD loaded`);
           //debug(newVod);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
@@ -421,21 +421,21 @@ class Session {
         } catch (err) {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
           debug(err);
-          currentVod = await this.insertSlate(currentVod);
+          currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;
           }
         }
       case SessionState.VOD_PLAYING:
-        debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
+        debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         return;
       case SessionState.VOD_NEXT_INITIATING:
-        debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_NEXT_INITIATING`);
+        debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING`);
         return;
       case SessionState.VOD_NEXT_INIT:
         try {
-          debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_NEXT_INIT`);
+          debug(`[${this._sessionId}]: state=VOD_NEXT_INIT`);
           if (!currentVod) {
             throw new Error("No VOD to init");
           }
@@ -446,7 +446,7 @@ class Session {
           const vodResponse = await vodPromise;
           let loadPromise;
           if (!vodResponse.type) {
-            debug(`TICK_ASYNC [${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
+            debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
             newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000);
             this.produceEvent({
               type: 'NEXT_VOD_SELECTED',
@@ -467,9 +467,9 @@ class Session {
             });
           }
           await loadPromise;
-          debug(`TICK_ASYNC [${this._sessionId}]: next VOD loaded`);
+          debug(`[${this._sessionId}]: next VOD loaded`);
           currentVod = newVod;
-          debug(`TICK_ASYNC [${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
+          debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
           sessionState = await this._sessionStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq + length);
@@ -486,7 +486,7 @@ class Session {
         } catch(err) {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
           debug(err);
-          currentVod = await this.insertSlate(currentVod);
+          currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;
@@ -585,18 +585,6 @@ class Session {
       .catch(reject);
     });
   }
-
-  /*
-  _getNearestBandwidth(bandwidth) {
-    const availableBandwidths = this.currentVod.getBandwidths().sort((a,b) => b - a);
-    for (let i = 0; i < availableBandwidths.length; i++) {
-      if (bandwidth >= availableBandwidths[i]) {
-        return availableBandwidths[i];
-      }
-    }
-    return availableBandwidths[availableBandwidths.length - 1];
-  }
-  */
 
   _getFirstDuration(manifest) {
     return new Promise((resolve, reject) => {
