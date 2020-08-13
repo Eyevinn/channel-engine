@@ -56,7 +56,7 @@ describe("Channel Engine", () => {
     jasmine.clock().uninstall();
   });
 
-  xit("is updated when new channels are added", async () => {
+  it("is updated when new channels are added", async () => {
     const testAssetManager = new TestAssetManager();
     const testChannelManager = new TestChannelManager();
 
@@ -81,19 +81,24 @@ describe("Channel Engine", () => {
 
     const engine = new ChannelEngine(testAssetManager, { channelManager: testChannelManager});
     engine.start();
+
     testChannelManager._increment();
     jasmine.clock().tick((60 * 1000) + 1);
-    jasmine.clock().tick(5001);
-    
+    jasmine.clock().tick(5001);    
+    console.log(engine.getSessionCount());
     expect(engine.getSessionCount()).toEqual(1);
 
     const status = await engine.getStatusForSessionAsync("1");
     expect(status.playhead.state).toEqual("idle");
+
     testChannelManager._increment();
     jasmine.clock().tick((60 * 1000) + 1);
+    console.log(engine.getSessionCount());
     expect(engine.getSessionCount()).toEqual(2);
+
     testChannelManager._increment();
-    jasmine.clock().tick((60 * 1000) + 1);
+    jasmine.clock().tick((2 * 60 * 1000) + 1);
+    console.log(engine.getSessionCount());
     expect(engine.getSessionCount()).toEqual(1);
   });
 });
