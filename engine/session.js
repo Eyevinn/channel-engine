@@ -91,7 +91,8 @@ class Session {
 
   async startPlayheadAsync() {
     debug(`ASYNC [${this._sessionId}]: Playhead consumer started`);
-    let playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
+    let playheadState = await this._playheadStateStore.get(this._sessionId);
+    playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
       try {
         const manifest = await this.incrementAsync();
@@ -109,7 +110,8 @@ class Session {
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
-        console.error(`[${this._sessionId}]: ${err}`);
+        console.error(`[${this._sessionId}]: ${err.message}`);
+        debug(err);
         playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
       }
     }
@@ -361,8 +363,7 @@ class Session {
       await this.setCurrentVod(slateVod);
       return slateVod;
     } else {
-      debug('No slate to load');
-      throw new Error(err);
+      return null;
     }
   }
 
@@ -421,6 +422,10 @@ class Session {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
           debug(err);
           currentVod = await this.insertSlate(currentVod);
+          if (!currentVod) {
+            debug("No slate to load");
+            throw err;
+          }
         }
       case SessionState.VOD_PLAYING:
         debug(`TICK_ASYNC [${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
@@ -482,6 +487,10 @@ class Session {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
           debug(err);
           currentVod = await this.insertSlate(currentVod);
+          if (!currentVod) {
+            debug("No slate to load");
+            throw err;
+          }
         }
         break;
       default:
