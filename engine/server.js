@@ -13,6 +13,7 @@ const eventStreams = {};
 
 class ChannelEngine {
   constructor(assetMgr, options) {
+    this.options = options;
     if (options && options.adCopyMgrUri) {
       this.adCopyMgrUri = options.adCopyMgrUri;
     }
@@ -72,10 +73,7 @@ class ChannelEngine {
     }
 
     if (options && options.channelManager) {
-      (async () => {
-        await this.updateChannelsAsync(options.channelManager, options);
-        setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);  
-      })();
+      const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
   }
 
@@ -96,6 +94,7 @@ class ChannelEngine {
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
       }
+      await sessions[channel.id].startPlayheadAsync();
     };
     await Promise.all(newChannels.map(channel => addAsync(channel)));
 
@@ -119,6 +118,8 @@ class ChannelEngine {
       await session.startPlayheadAsync();
     };
     (async () => {
+      debug("Starting engine");
+      await this.updateChannelsAsync(this.options.channelManager, this.options);
       await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)));
     })();
   }
