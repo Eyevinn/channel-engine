@@ -66,6 +66,7 @@ const engineOptions = {
   channelManager: refChannelManager,
   defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
+  redisUrl: process.env.REDIS_URL,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);

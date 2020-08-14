@@ -8,8 +8,8 @@ const SessionState = Object.freeze({
 });
 
 class SessionStateStore extends SharedStateStore {
-  constructor() {
-    super("session", {
+  constructor(opts) {
+    super("session", opts, {
       mediaSeq: 0,
       discSeq: 0,
       vodMediaSeqVideo: 0,

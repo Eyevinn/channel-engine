@@ -42,6 +42,16 @@ class MyChannelManager {
 
 Find a simplistic reference implementation for guidance in `./server.js`.
 
+### Options
+
+Available options when constructing the Channel Engine object are:
+
+- `defaultSlateUri`: URI to an HLS VOD that can be inserted when a VOD for some reason cannot be loaded.
+- `slateRepetitions`: Number of times the slate should be repeated.
+- `redisUrl`: A Redis DB URL for storing states that can be shared between nodes.
+- `heartbeat`: Path for heartbeat requests
+- `channelManager`: A reference to a channel manager object.
+
 ## Commercial Alternative
 
 Eyevinn offers a commercial alternative based on this module called `Consuo`. `Consuo` is a software component (Docker container) that can be plugged into your online video platform to provide you with unlimited thematic, regional or personal linear TV channels based on an existing VOD library.

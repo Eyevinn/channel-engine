@@ -8,8 +8,8 @@ const PlayheadState = Object.freeze({
 });
 
 class PlayheadStateStore extends SharedStateStore {
-  constructor() {
-    super("playhead", { state: PlayheadState.IDLE });
+  constructor(opts) {
+    super("playhead", opts, { state: PlayheadState.IDLE });
   }
   
   create(sessionId) {

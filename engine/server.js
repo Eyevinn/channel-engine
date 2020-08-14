@@ -35,8 +35,8 @@ class ChannelEngine {
     this.server.use(restify.plugins.queryParser());
 
     this.sessionStore = {
-      sessionStateStore: new SessionStateStore(),
-      playheadStateStore: new PlayheadStateStore()
+      sessionStateStore: new SessionStateStore({ redisUrl: options.redisUrl }),
+      playheadStateStore: new PlayheadStateStore({ redisUrl: options.redisUrl })
     };
 
     if (options && options.staticDirectory) {
@@ -140,12 +140,12 @@ class ChannelEngine {
 
   async _monitorAsync(session) {
     const status = await session.getStatusAsync();
-    debug(`ASYNC MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
+    debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
     if (status.playhead.state === 'crashed') {
-      debug(`ASYNC [${status.sessionId}]: Playhead crashed, restarting`);
+      debug(`[${status.sessionId}]: Playhead crashed, restarting`);
       await session.restartPlayheadAsync();
     } else if (status.playhead.state === 'idle') {
-      debug(`ASYNC [${status.sessionId}]: Starting playhead`);       
+      debug(`[${status.sessionId}]: Starting playhead`);       
       await session.startPlayheadAsync();
     }
   }

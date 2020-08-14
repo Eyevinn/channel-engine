@@ -1,19 +1,17 @@
 const redis = require("redis");
 const debug = require("debug")("engine-state-store");
 
-const REDIS_URL = process.env.REDIS_URL;
-
 class SharedStateStore {
-  constructor(type, initData) {
+  constructor(type, opts, initData) {
     this.sharedStates = {};
     this.initData = initData;
     this.keyPrefix = `${type}:`;
     this.type = type;
 
     this.client = undefined;
-    if (REDIS_URL) {
-      debug(`Using REDIS for shared state store (${type})`);
-      this.client = redis.createClient(REDIS_URL);
+    if (opts.redisUrl) {
+      debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type})`);
+      this.client = redis.createClient(opts.redisUrl);
     }
   }
 
