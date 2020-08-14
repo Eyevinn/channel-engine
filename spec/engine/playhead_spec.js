@@ -2,6 +2,9 @@ const Session = require('../../engine/session.js');
 const m3u8 = require('@eyevinn/m3u8');
 const Readable = require('stream').Readable;
 
+const { SessionStateStore } = require('../../engine/session_state.js');
+const { PlayheadStateStore } = require('../../engine/playhead_state.js');
+
 class TestAssetManager {
   constructor(opts, assets) {
     this.assets = [
@@ -40,7 +43,7 @@ const verificationLoop = async (session, increments) => {
   let remain = increments;
   let promiseFns = [];
   while (remain > 0) {
-    promiseFns.push(() => session.increment());
+    promiseFns.push(() => session.incrementAsync());
     remain--;
   }
   let lastUri = null;
@@ -102,14 +105,22 @@ const parseMediaManifest = async (manifest) => {
 };
 
 describe("Playhead consumer", () => {
+  let sessionStore = undefined;
+  beforeEach(() => {
+    sessionStore = {
+      sessionStateStore: new SessionStateStore(),
+      playheadStateStore: new PlayheadStateStore()
+    };  
+  });
+
   it("continously increases media sequence over two VOD switches", async (done) => {
     const assetMgr = new TestAssetManager();
-    const session = new Session(assetMgr, { sessionId: '1' });
+    const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
     const loop = async (increments) => {
       let remain = increments;
       let promiseFns = [];
       while (remain > 0) {
-        promiseFns.push(() => session.increment());
+        promiseFns.push(() => session.incrementAsync());
         remain--;
       }
       let expectedMseq = 1;
@@ -118,7 +129,7 @@ describe("Playhead consumer", () => {
         if (!manifest.match('#EXT-X-MEDIA-SEQUENCE:' + expectedMseq++)) {
           fail(manifest);
         }
-        currentMediaManifest = await session.getCurrentMediaManifest(180000);
+        currentMediaManifest = await session.getCurrentMediaManifestAsync(180000);
         expect(currentMediaManifest).toEqual(manifest);
       }
     };
@@ -128,14 +139,14 @@ describe("Playhead consumer", () => {
 
   it("never get the same top segment after media sequence is increased", async (done) => {
     const assetMgr = new TestAssetManager();
-    const session = new Session(assetMgr, { sessionId: '1' });
+    const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
     await verificationLoop(session, 10);
     done();
   });
 
   it("can handle three short VODs in a row", async (done) => {
     const assetMgr = new TestAssetManager(null, [{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
-    const session = new Session(assetMgr, { sessionId: '1' });
+    const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
     await verificationLoop(session, 10);
     done();
   });
@@ -147,8 +158,8 @@ describe("Playhead consumer", () => {
       { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
       { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
-    const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile });
-    const masterManifest = await session.getMasterManifest();
+    const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile }, sessionStore);
+    const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
     expect(profile[1].bw).toEqual(2323000);
@@ -157,24 +168,17 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            const bwMap = {
-              '6134000': '2000',
-              '2323000': '1000',
-              '1313000': '600'
-            };
-            session.increment()
-            .then(manifest => {
-              profile.map(p => {
-                session.getCurrentMediaManifest(p.bw)
-                .then(mediaManifest => {
-                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
-                });
-              });
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const bwMap = {
+            '6134000': '2000',
+            '2323000': '1000',
+            '1313000': '600'
+          };
+          const manifest = await session.incrementAsync();
+          await Promise.all(profile.map(async (p) => {
+            const mediaManifest = await session.getCurrentMediaManifestAsync(p.bw);
+            expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+          }));
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -190,8 +194,8 @@ describe("Playhead consumer", () => {
 
   it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
     const assetMgr = new TestAssetManager();
-    const session = new Session(assetMgr, { sessionId: '1' });
-    const masterManifest = await session.getMasterManifest();
+    const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
     expect(profile[1].bw).toEqual(2323000);
@@ -200,24 +204,17 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            const bwMap = {
-              '6134000': '2000',
-              '2323000': '1000',
-              '1313000': '600'
-            };
-            session.increment()
-            .then(manifest => {
-              profile.map(p => {
-                session.getCurrentMediaManifest(p.bw)
-                .then(mediaManifest => {
-                  expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
-                });
-              });
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const bwMap = {
+            '6134000': '2000',
+            '2323000': '1000',
+            '1313000': '600'
+          };
+          const manifest = await session.incrementAsync();
+          await Promise.all(profile.map(async (p) => {
+            const mediaManifest = await session.getCurrentMediaManifestAsync(p.bw);
+            expect(mediaManifest.match(`${bwMap[p.bw]}/${bwMap[p.bw]}-.*\.ts$`));
+          }));
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -233,7 +230,7 @@ describe("Playhead consumer", () => {
 
   it("plays all segments of a VOD before the next one", async (done) => {
     const assetMgr = new TestAssetManager();
-    const session = new Session(assetMgr, { sessionId: '1' });
+    const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
     const expectedLastSegment = "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/2000/2000-00091.ts";
     let found = false;
 
@@ -241,21 +238,14 @@ describe("Playhead consumer", () => {
       let remain = increments;
       let verificationFns = [];
       while(remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(async (manifest) => {
-              const m3u = await parseMediaManifest(manifest);
-              const playlistItems = m3u.items.PlaylistItem;
-              if (playlistItems[playlistItems.length - 1].get('uri') === expectedLastSegment) {
-                found = true;
-              }
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          const manifest = await session.incrementAsync();
+          const mediaManifest = await session.getCurrentMediaManifestAsync(6134000);
+          const m3u = await parseMediaManifest(mediaManifest);
+          const playlistItems = m3u.items.PlaylistItem;
+          if (playlistItems[playlistItems.length - 1].get('uri') === expectedLastSegment) {
+            found = true;
+          }
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -272,23 +262,16 @@ describe("Playhead consumer", () => {
 
   it("inserts a slate when asset manager fails to return an initial VOD", async (done) => {
     const assetMgr = new TestAssetManager({ fail: true });
-    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
+    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' }, sessionStore);
     let slateManifest;
     const loop = async (increments) => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(manifest => {
-              slateManifest = manifest;
-              resolve();
-            });
-          });
+        const verificationFn = async () => {
+          await session.incrementAsync();
+          const manifest = await session.getCurrentMediaManifestAsync(6134000);
+          slateManifest = manifest;
         };
         verificationFns.push(verificationFn);
         remain--;
@@ -306,24 +289,16 @@ describe("Playhead consumer", () => {
 
   it("inserts a slate when asset manager fails to return a next VOD", async (done) => {
     const assetMgr = new TestAssetManager({failOnIndex: 1});
-    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' });
+    const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' }, sessionStore);
     let slateManifest;
     const loop = async (increments) => {
       let remain = increments;
       let verificationFns = [];
       while (remain > 0) {
-        const verificationFn = () => {
-          return new Promise((resolve, reject) => {
-            session.increment()
-            .then(async (manifest) => {
-              return session.getCurrentMediaManifest(6134000);
-            })
-            .then(manifest => {
-              slateManifest = manifest;
-              resolve();
-            })
-            .catch(reject);
-          });
+        const verificationFn = async () => {
+          await session.incrementAsync();
+          const manifest = await session.getCurrentMediaManifestAsync(6134000);
+          slateManifest = manifest;
         };
         verificationFns.push(verificationFn);
         remain--;

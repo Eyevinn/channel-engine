@@ -5,11 +5,15 @@ const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
 const EventStream = require('./event_stream.js');
 
+const { SessionStateStore } = require('./session_state.js');
+const { PlayheadStateStore } = require('./playhead_state.js');
+
 const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
   constructor(assetMgr, options) {
+    this.options = options;
     if (options && options.adCopyMgrUri) {
       this.adCopyMgrUri = options.adCopyMgrUri;
     }
@@ -29,7 +33,12 @@ class ChannelEngine {
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
-    
+
+    this.sessionStore = {
+      sessionStateStore: new SessionStateStore({ redisUrl: options.redisUrl }),
+      playheadStateStore: new PlayheadStateStore({ redisUrl: options.redisUrl })
+    };
+
     if (options && options.staticDirectory) {
       this.server.get('/', restify.plugins.serveStatic({
         directory: options.staticDirectory,
@@ -40,19 +49,19 @@ class ChannelEngine {
     if (options && options.averageSegmentDuration) {
       this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
     }
-    this.server.get('/live/:file', (req, res, next) => {
+    this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
       if (req.params.file.match(/master.m3u8/)) {
-        this._handleMasterManifest(req, res, next);
+        await this._handleMasterManifest(req, res, next);
       } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        this._handleMediaManifest(req, res, next);
+        await this._handleMediaManifest(req, res, next);
       } else if (m = req.params.file.match(/master-(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        this._handleAudioManifest(req, res, next);
+        await this._handleAudioManifest(req, res, next);
       }
     });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
@@ -64,15 +73,14 @@ class ChannelEngine {
     }
 
     if (options && options.channelManager) {
-      this.updateChannels(options.channelManager, options);
-      setInterval(() => this.updateChannels(options.channelManager, options), 60 * 1000);
+      const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
   }
 
-  updateChannels(channelMgr, options) {
+  async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
-    newChannels.map(channel => {
+    const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
         sessionId: channel.id,
@@ -81,30 +89,39 @@ class ChannelEngine {
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
-      });
+      }, this.sessionStore);
+      await sessions[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
-        this.monitorTimer[channel.id] = setInterval(() => this._monitor(sessions[channel.id]), 5000);
+        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
       }
-    });
+      await sessions[channel.id].startPlayheadAsync();
+    };
+    await Promise.all(newChannels.map(channel => addAsync(channel)));
 
     debug(`Have any channels been removed?`);
     const removedChannels = Object.keys(sessions).filter(channelId => !channelMgr.getChannels().find(ch => ch.id == channelId));
-    removedChannels.map(channelId => {
+    const removeAsync = async (channelId) => {
       debug(`Removing channel with ID ${channelId}`);
       clearInterval(this.monitorTimer[channelId]);
-      sessions[channelId].stopPlayhead();
+      await sessions[channelId].stopPlayheadAsync();
       delete sessions[channelId];
-    });
+    };
+    await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
 
   start() {
-    Object.keys(sessions).map(channelId => {
+    const startAsync = async (channelId) => {
       const session = sessions[channelId];
       if (!this.monitorTimer[channelId]) {
-        this.monitorTimer[channel.id] = setInterval(() => this._monitor(session), 5000);
+        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session) }, 5000);
       }
-    });
-
+      await session.startPlayheadAsync();
+    };
+    (async () => {
+      debug("Starting engine");
+      await this.updateChannelsAsync(this.options.channelManager, this.options);
+      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)));
+    })();
   }
 
   listen(port) {
@@ -113,25 +130,24 @@ class ChannelEngine {
     });
   }
 
-  getStatusForSession(sessionId) {
-    return sessions[sessionId].getStatus();
+  async getStatusForSessionAsync(sessionId) {
+    return await sessions[sessionId].getStatusAsync();
   }
 
   getSessionCount() {
     return Object.keys(sessions).length;
   }
 
-  _monitor(session) {
-    session.getStatus().then(status => {
-      debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
-      if (status.playhead.state === 'crashed') {
-        debug(`[${status.sessionId}]: Playhead crashed, restarting`);
-        session.restartPlayhead();
-      } else if (status.playhead.state === 'idle') {
-        debug(`[${status.sessionId}]: Starting playhead`);       
-        session.startPlayhead();
-      }
-    });
+  async _monitorAsync(session) {
+    const status = await session.getStatusAsync();
+    debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
+    if (status.playhead.state === 'crashed') {
+      debug(`[${status.sessionId}]: Playhead crashed, restarting`);
+      await session.restartPlayheadAsync();
+    } else if (status.playhead.state === 'idle') {
+      debug(`[${status.sessionId}]: Starting playhead`);       
+      await session.startPlayheadAsync();
+    }
   }
 
   _handleHeartbeat(req, res, next) {
@@ -140,7 +156,7 @@ class ChannelEngine {
     next();
   }
 
-  _handleMasterManifest(req, res, next) {
+  async _handleMasterManifest(req, res, next) {
     debug('req.url=' + req.url);
     debug(req.query);
     let session;
@@ -161,7 +177,7 @@ class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
-      session = new Session(this.assetMgr, options);
+      session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
     if (req.query['startWithId']) {
@@ -172,7 +188,8 @@ class ChannelEngine {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
 
-      session.getMasterManifest().then(body => {
+      try {
+        const body = await session.getMasterManifestAsync();
         res.sendRaw(200, body, { 
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
@@ -182,19 +199,20 @@ class ChannelEngine {
           "X-Session-Id": session.sessionId,
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._errorHandler(err));
-      });
+      }
     } else {
       next(this._gracefulErrorHandler("Could not find a valid session"));
     } 
   }
 
-  _handleAudioManifest(req, res, next) {
+  async _handleAudioManifest(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getCurrentAudioManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+      try {
+        const body = await session.getCurrentAudioManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, body, {
@@ -203,21 +221,22 @@ class ChannelEngine {
           "Cache-Control": "max-age=4",
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._gracefulErrorHandler(err));
-      });
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
   }
 
-  _handleMediaManifest(req, res, next) {
+  async _handleMediaManifest(req, res, next) {
     debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     if (session) {
-      session.getCurrentMediaManifest(req.params[0], req.headers["x-playback-session-id"]).then(body => {
+      try {
+        const body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, body, { 
@@ -226,9 +245,9 @@ class ChannelEngine {
           "Cache-Control": "max-age=4",
         });
         next();
-      }).catch(err => {
+      } catch (err) {
         next(this._gracefulErrorHandler(err));
-      })
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
@@ -261,31 +280,29 @@ class ChannelEngine {
     } 
   }
 
-  _handleStatus(req, res, next) {
+  async _handleStatus(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params.sessionId];
     if (session) {
-      session.getStatus().then(body => {
-        res.send(200, body);
-        next();
-      });
+      const body = await session.getStatusAsync();
+      res.send(200, body);
+      next();
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
   }
 
-  _handleSessionHealth(req, res, next) {
+  async _handleSessionHealth(req, res, next) {
     debug(`req.url=${req.url}`);
     const session = sessions[req.params.sessionId];
     if (session) {
-      session.getStatus().then(status => {
-        if (status.playhead && status.playhead.state === "running") {
-          res.send(200, { "health": "ok" });
-        } else {
-          res.send(503, { "health": "unhealthy" });
-        }
-      });
+      const status = await session.getStatusAsync();
+      if (status.playhead && status.playhead.state === "running") {
+        res.send(200, { "health": "ok" });
+      } else {
+        res.send(503, { "health": "unhealthy" });
+      }
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
