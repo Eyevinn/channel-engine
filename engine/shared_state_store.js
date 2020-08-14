@@ -9,7 +9,7 @@ class SharedStateStore {
     this.type = type;
 
     this.client = undefined;
-    if (opts.redisUrl) {
+    if (opts && opts.redisUrl) {
       debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type})`);
       this.client = redis.createClient(opts.redisUrl);
     }
