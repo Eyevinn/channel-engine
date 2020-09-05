@@ -52,11 +52,11 @@ Available options when constructing the Channel Engine object are:
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
 
-## Commercial Alternative
+## Demo
 
-Eyevinn offers a commercial alternative based on this module called `Consuo`. `Consuo` is a software component (Docker container) that can be plugged into your online video platform to provide you with unlimited thematic, regional or personal linear TV channels based on an existing VOD library.
+Visit [Consuo](https://consuo.tv/) for a demonstration of this concept. A demo and proof-of-concept built on top of this library.
 
-Contact sales@eyevinn.se if you want to know more.
+If you want help to get started to build a service of your own based on this library you can hire an [Eyevinn Video-Dev Team](https://video-dev.team) to help you out.
 
 ## About Eyevinn Technology
 
