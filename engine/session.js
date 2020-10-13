@@ -372,6 +372,7 @@ class Session {
 
     let sessionState = await this._sessionStateStore.get(this._sessionId);
     let currentVod = this.getCurrentVod(sessionState);
+    let vodResponse;
 
     switch(sessionState.state) {
       case SessionState.VOD_INIT:
@@ -385,7 +386,7 @@ class Session {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
           }
-          const vodResponse = await nextVodPromise;
+          vodResponse = await nextVodPromise;
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
@@ -420,6 +421,9 @@ class Session {
           return;
         } catch (err) {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
+          if (this._assetManager.handleError) {
+            this._assetManager.handleError(new Error("Failed to init first VOD"), vodResponse);
+          }
           debug(err);
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
@@ -443,7 +447,7 @@ class Session {
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
           sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INITIATING);
           let vodPromise = this._getNextVod();
-          const vodResponse = await vodPromise;
+          vodResponse = await vodPromise;
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
@@ -486,6 +490,9 @@ class Session {
         } catch(err) {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
           debug(err);
+          if (this._assetManager.handleError) {
+            this._assetManager.handleError(new Error("Failed to init next VOD"), vodResponse);
+          }
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
