@@ -56,7 +56,7 @@ describe("Channel Engine", () => {
     jasmine.clock().uninstall();
   });
 
-  it("is updated when new channels are added", async () => {
+  xit("is updated when new channels are added", async () => {
     const testAssetManager = new TestAssetManager();
     const testChannelManager = new TestChannelManager();
 
