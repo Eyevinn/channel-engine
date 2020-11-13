@@ -29,6 +29,20 @@ const filterQueryParser = (filterQuery) => {
   return filter;
 };
 
+const applyFilter = (profiles, filter) => {
+  return profiles.filter(profile => {
+    if (filter.video && filter.video.systemBitrate) {
+      return (profile.bw >= filter.video.systemBitrate.low && 
+        profile.bw <= filter.video.systemBitrate.high);
+    } else if (filter.video && filter.video.height) {
+      return (profile.resolution[1] >= filter.video.height.low &&
+        profile.resolution[1] <= filter.video.height.high);
+    }
+    return true;
+  });
+};
+
 module.exports = {
-  filterQueryParser
+  filterQueryParser,
+  applyFilter
 }
