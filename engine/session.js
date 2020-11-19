@@ -8,6 +8,8 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
+const { applyFilter } = require('./util.js');
+
 const AVERAGE_SEGMENT_DURATION = 3000;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
@@ -295,7 +297,7 @@ class Session {
     return m3u8;
   }
 
-  async getMasterManifestAsync() {
+  async getMasterManifestAsync(filter) {
     await this._tickAsync();
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
@@ -316,7 +318,8 @@ class Session {
       }
     }
     if (this._sessionProfile) {
-      this._sessionProfile.forEach(profile => {
+      const sessionProfile = filter ? applyFilter(this._sessionProfile, filter) : this._sessionProfile;
+      sessionProfile.forEach(profile => {
         m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + '\n';
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });

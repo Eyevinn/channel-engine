@@ -7,6 +7,7 @@ const EventStream = require('./event_stream.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
+const { filterQueryParser } = require('./util.js');
 
 const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
@@ -188,8 +189,14 @@ class ChannelEngine {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
 
+      let filter;
+      if (req.query['filter']) {
+        debug(`Applying filter on master manifest ${req.query['filter']}`);
+        filter = filterQueryParser(req.query['filter']);
+      }
+
       try {
-        const body = await session.getMasterManifestAsync();
+        const body = await session.getMasterManifestAsync(filter);
         res.sendRaw(200, body, { 
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
