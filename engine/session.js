@@ -394,6 +394,11 @@ class Session {
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
             newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
+            if (vodResponse.timedMetadata) {
+              Object.keys(vodResponse.timedMetadata).map(k => {
+                newVod.addMetadata(k, vodResponse.timedMetadata[k]);
+              })
+            }
             currentVod = newVod;
             loadPromise = currentVod.load();
           } else {
@@ -455,6 +460,11 @@ class Session {
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
             newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000);
+            if (vodResponse.timedMetadata) {
+              Object.keys(vodResponse.timedMetadata).map(k => {
+                newVod.addMetadata(k, vodResponse.timedMetadata[k]);
+              })
+            }
             this.produceEvent({
               type: 'NEXT_VOD_SELECTED',
               data: {

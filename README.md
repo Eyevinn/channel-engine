@@ -36,7 +36,7 @@ where `myAssetManager` and `myChannelManager` are classes implementing the inter
 
 ```
 class MyAssetManager {
-  getNextVod({ sessionId, category, playlistId }) -> { id, title, uri, offset }
+  getNextVod({ sessionId, category, playlistId }) -> { id, title, uri, offset, timedMetadata? }
   handleError(err, vodResponse)
 }
 
