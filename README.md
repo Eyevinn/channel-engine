@@ -56,6 +56,7 @@ Available options when constructing the Channel Engine object are:
 - `redisUrl`: A Redis DB URL for storing states that can be shared between nodes.
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
+- `cacheTTL`: Sets the cache-control header TTL. Default is 4 sec.
 
 ## Demo
 
