@@ -50,6 +50,9 @@ class ChannelEngine {
     if (options && options.averageSegmentDuration) {
       this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
     }
+    if (options && options.cacheTTL) {
+      this.streamerOpts.cacheTTL = options.cacheTTL;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -225,7 +228,7 @@ class ChannelEngine {
         res.sendRaw(200, body, {
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "max-age=4",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         });
         next();
       } catch (err) {
@@ -249,7 +252,7 @@ class ChannelEngine {
         res.sendRaw(200, body, { 
           "Content-Type": "application/x-mpegURL",
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "max-age=4",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         });
         next();
       } catch (err) {
