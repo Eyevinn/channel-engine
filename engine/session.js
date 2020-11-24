@@ -97,7 +97,9 @@ class Session {
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
       try {
+        debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) BEFORE INCREMENT`);
         const manifest = await this.incrementAsync();
+        debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) AFTER INCREMENT`);
         const sessionState = await this._sessionStateStore.get(this._sessionId);
         playheadState = await this._playheadStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
