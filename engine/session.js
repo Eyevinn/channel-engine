@@ -101,14 +101,16 @@ class Session {
         const sessionState = await this._sessionStateStore.get(this._sessionId);
         playheadState = await this._playheadStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
-
+          const firstDuration = await this._getFirstDuration(manifest);
+          debug(`[${this._sessionId}]: Updated tick interval to ${firstDuration}`);
+          this._playheadStateStore.set(this._sessionId, "tickInterval", firstDuration);
         } else if (playheadState.state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
-          const firstDuration = await this._getFirstDuration(manifest);
-          debug(`[${this._sessionId}]: Next tick in ${firstDuration} seconds`)
-          await timer((firstDuration * 1000) - 50);
+          const tickInterval = playheadState.tickInterval || 3;
+          debug(`[${this._sessionId}]: Next tick in ${tickInterval} seconds`)
+          await timer((tickInterval * 1000) - 50);
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
