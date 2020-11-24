@@ -102,14 +102,15 @@ class Session {
         playheadState = await this._playheadStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
-          debug(`[${this._sessionId}]: Updated tick interval to ${firstDuration}`);
-          this._playheadStateStore.set(this._sessionId, "tickInterval", firstDuration);
+          const tickInterval = firstDuration < 3 ? 3 : firstDuration;
+          debug(`[${this._sessionId}]: Updated tick interval to ${tickInterval} sec`);
+          this._playheadStateStore.set(this._sessionId, "tickInterval", tickInterval);
         } else if (playheadState.state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
           const tickInterval = playheadState.tickInterval || 3;
-          debug(`[${this._sessionId}]: Next tick in ${tickInterval} seconds`)
+          debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
         }
       } catch (err) {
