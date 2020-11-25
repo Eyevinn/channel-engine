@@ -120,6 +120,7 @@ class Session {
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
           await this._playheadStateStore.set(this._sessionId, "tickMs", (tsTickEnd - tsIncrementBegin))
+          debug(`{ event: 'tickInterval', channel: '${this._sessionId}', tickTimeMs: ${(tsTickEnd - tsIncrementBegin)} }`);
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
