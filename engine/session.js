@@ -34,6 +34,8 @@ class Session {
     this._events = [];
     this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
     this.use_demuxed_audio = false;
+    this.cloudWatchLogging = false;
+
     if (config) { 
       if (config.sessionId) {
         this._sessionId = config.sessionId;
@@ -61,6 +63,9 @@ class Session {
         this.slateUri = config.slateUri;
         this.slateRepetitions = config.slateRepetitions || 10;
         debug(`Will use slate URI ${this.slateUri} (${this.slateRepetitions})`);
+      }
+      if (config.cloudWatchMetrics) {
+        this.cloudWatchLogging = true;
       }
     } else {
       this._sessionStateStore.create(this._sessionId);
@@ -119,8 +124,17 @@ class Session {
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
-          await this._playheadStateStore.set(this._sessionId, "tickMs", (tsTickEnd - tsIncrementBegin))
-          debug(`{ event: 'tickInterval', channel: '${this._sessionId}', tickTimeMs: ${(tsTickEnd - tsIncrementBegin)} }`);
+          await this._playheadStateStore.set(this._sessionId, "tickMs", (tsTickEnd - tsIncrementBegin));
+          if (this.cloudWatchLogging) {
+            const log = {
+              type: 'engine-session',
+              time: (new Date()).toISOString(),
+              event: 'tickInterval',
+              channel: this._sessionId,
+              tickTimeMs: (tsTickEnd - tsIncrementBegin),
+            };
+            console.log(JSON.stringify(log));
+          }
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);

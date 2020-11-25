@@ -53,6 +53,10 @@ class ChannelEngine {
     if (options && options.cacheTTL) {
       this.streamerOpts.cacheTTL = options.cacheTTL;
     }
+    this.logCloudWatchMetrics = false;
+    if (options && options.cloudWatchMetrics) {
+      this.logCloudWatchMetrics = true;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -93,6 +97,7 @@ class ChannelEngine {
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
+        cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
       await sessions[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
