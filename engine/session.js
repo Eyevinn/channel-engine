@@ -97,9 +97,9 @@ class Session {
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
       try {
-        debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) BEFORE INCREMENT`);
+        const tsIncrementBegin = Date.now();
         const manifest = await this.incrementAsync();
-        debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) AFTER INCREMENT`);
+        const tsIncrementEnd = Date.now();
         const sessionState = await this._sessionStateStore.get(this._sessionId);
         playheadState = await this._playheadStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
@@ -111,9 +111,15 @@ class Session {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
-          const tickInterval = playheadState.tickInterval || 3;
-          debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) Next tick in ${tickInterval} seconds`)
+          const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
+          let tickInterval = (playheadState.tickInterval || 3) - timeSpentInIncrement;
+          if (tickInterval < 0) {
+            tickInterval = 0.5;
+          }
+          debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
+          const tsTickEnd = Date.now();
+          await this._playheadStateStore.set(this._sessionId, "tickMs", (tsTickEnd - tsIncrementBegin))
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
@@ -146,7 +152,8 @@ class Session {
     const status = {
       sessionId: this._sessionId,
       playhead: {
-        state: playheadStateMap[playheadState.state]
+        state: playheadStateMap[playheadState.state],
+        tickMs: playheadState.tickMs,
       }
     };
     return status;

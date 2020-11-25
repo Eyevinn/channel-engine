@@ -309,7 +309,7 @@ class ChannelEngine {
     if (session) {
       const status = await session.getStatusAsync();
       if (status.playhead && status.playhead.state === "running") {
-        res.send(200, { "health": "ok" });
+        res.send(200, { "health": "ok", "tick": status.playhead.tickMs });
       } else {
         res.send(503, { "health": "unhealthy" });
       }
