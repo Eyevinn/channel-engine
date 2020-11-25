@@ -414,7 +414,10 @@ class Session {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
           }
+          const nextVodStart = Date.now();
           vodResponse = await nextVodPromise;
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
@@ -483,7 +486,10 @@ class Session {
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
           sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INITIATING);
           let vodPromise = this._getNextVod();
+          const nextVodStart = Date.now();
           vodResponse = await vodPromise;
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
@@ -562,7 +568,6 @@ class Session {
             id: nextVod.id,
             title: nextVod.title || '',
           };
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'gotNextVod', channel: this._sessionId });
           resolve(nextVod);
         } else if (nextVod && nextVod.type === 'gap') {
           this.currentMetadata = {
