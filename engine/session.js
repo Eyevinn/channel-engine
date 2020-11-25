@@ -86,14 +86,22 @@ class Session {
 
   getCurrentVod(sessionState) {
     if (sessionState.currentVod) {
-      let hlsVod = new HLSVod();
-      hlsVod.fromJSON(sessionState.currentVod);
-      return hlsVod;
+      if (this._sessionStateStore.isShared()) {
+        let hlsVod = new HLSVod();
+        hlsVod.fromJSON(sessionState.currentVod);
+        return hlsVod;
+      } else {
+        return sessionState.currentVod;
+      }
     }
   }
 
   async setCurrentVod(hlsVod) {
-    return await this._sessionStateStore.set(this._sessionId, "currentVod", hlsVod.toJSON());
+    if (this._sessionStateStore.isShared()) {
+      return await this._sessionStateStore.set(this._sessionId, "currentVod", hlsVod.toJSON());
+    } else {
+      return await this._sessionStateStore.set(this._sessionId, "currentVod", hlsVod);
+    }
   }
 
   async startPlayheadAsync() {

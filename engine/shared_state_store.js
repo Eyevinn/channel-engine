@@ -15,6 +15,10 @@ class SharedStateStore {
     }
   }
 
+  isShared() {
+    return (this.client !== undefined);
+  }
+
   async redisGetAsync(id) {
     const storeKey = "" + this.keyPrefix + id;
     const getAsync = new Promise((resolve, reject) => {
