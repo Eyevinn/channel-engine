@@ -42,7 +42,16 @@ const applyFilter = (profiles, filter) => {
   });
 };
 
+const cloudWatchLog = (silent, type, logEntry) => {
+  if (!silent) {
+    logEntry.type = type;
+    logEntry.time = (new Date()).toISOString();
+    console.log(JSON.stringify(logEntry));
+  }
+};
+
 module.exports = {
   filterQueryParser,
-  applyFilter
+  applyFilter,
+  cloudWatchLog,
 }

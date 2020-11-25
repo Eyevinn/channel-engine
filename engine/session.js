@@ -8,7 +8,7 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter } = require('./util.js');
+const { applyFilter, cloudWatchLog } = require('./util.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 
@@ -111,6 +111,9 @@ class Session {
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 3 ? 3 : firstDuration;
           debug(`[${this._sessionId}]: Updated tick interval to ${tickInterval} sec`);
+
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+            { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: tickInterval });
           this._playheadStateStore.set(this._sessionId, "tickInterval", tickInterval);
         } else if (playheadState.state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
@@ -125,16 +128,8 @@ class Session {
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
           await this._playheadStateStore.set(this._sessionId, "tickMs", (tsTickEnd - tsIncrementBegin));
-          if (this.cloudWatchLogging) {
-            const log = {
-              type: 'engine-session',
-              time: (new Date()).toISOString(),
-              event: 'tickInterval',
-              channel: this._sessionId,
-              tickTimeMs: (tsTickEnd - tsIncrementBegin),
-            };
-            console.log(JSON.stringify(log));
-          }
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+            { event: 'tickInterval', channel: this._sessionId, tickTimeMs: (tsTickEnd - tsIncrementBegin) });
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
@@ -391,6 +386,9 @@ class Session {
       await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
       await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
       await this.setCurrentVod(slateVod);
+
+      cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
+
       return slateVod;
     } else {
       return null;
@@ -439,7 +437,10 @@ class Session {
               });
             }
           }
+          const loadStart = Date.now();
           await loadPromise;
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
           debug(`[${this._sessionId}]: first VOD loaded`);
           //debug(newVod);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
@@ -510,7 +511,10 @@ class Session {
               }).catch(reject);
             });
           }
+          const loadStart = Date.now();
           await loadPromise;
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
           debug(`[${this._sessionId}]: next VOD loaded`);
           currentVod = newVod;
           debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
@@ -558,6 +562,7 @@ class Session {
             id: nextVod.id,
             title: nextVod.title || '',
           };
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'gotNextVod', channel: this._sessionId });
           resolve(nextVod);
         } else if (nextVod && nextVod.type === 'gap') {
           this.currentMetadata = {
