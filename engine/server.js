@@ -28,6 +28,7 @@ class ChannelEngine {
     if (options && options.defaultSlateUri) {
       this.defaultSlateUri = options.defaultSlateUri;
       this.slateRepetitions = options.slateRepetitions || 10;
+      this.slateDuration = options.slateDuration || 4000;
     }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
@@ -97,6 +98,7 @@ class ChannelEngine {
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
+        slateDuration: this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
       await sessions[channel.id].initAsync();

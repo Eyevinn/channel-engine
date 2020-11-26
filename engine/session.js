@@ -62,7 +62,8 @@ class Session {
       if (config.slateUri) {
         this.slateUri = config.slateUri;
         this.slateRepetitions = config.slateRepetitions || 10;
-        debug(`Will use slate URI ${this.slateUri} (${this.slateRepetitions})`);
+        this.slateDuration = config.slateDuration || 4000;
+        debug(`Will use slate URI ${this.slateUri} (${this.slateRepetitions} ${this.slateDuration}ms)`);
       }
       if (config.cloudWatchMetrics) {
         this.cloudWatchLogging = true;
@@ -628,7 +629,7 @@ class Session {
 
   _fillGap(afterVod, desiredDuration) {
     return new Promise((resolve, reject) => {
-      const reps = Math.floor(desiredDuration / 4000);
+      const reps = Math.floor(desiredDuration / this.slateDuration);
       debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
       this._loadSlate(afterVod, reps).then(hlsVod => {
         resolve(hlsVod);
