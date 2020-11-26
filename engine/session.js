@@ -129,10 +129,12 @@ class Session {
         } else {
           const firstDuration = await this._getFirstDuration(manifest);
           const reqTickInterval = firstDuration < 2 ? 2 : firstDuration;
-          debug(`[${this._sessionId}]: Updated tick interval to ${reqTickInterval} sec`);
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
-            { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: reqTickInterval });
-          this._playheadStateStore.set(this._sessionId, "tickInterval", reqTickInterval);
+          if (reqTickInterval != playheadState.tickInterval) {
+            debug(`[${this._sessionId}]: Updated tick interval to ${reqTickInterval} sec`);
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+              { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: reqTickInterval });
+            this._playheadStateStore.set(this._sessionId, "tickInterval", reqTickInterval);
+          }
 
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
           let tickInterval = (reqTickInterval) - timeSpentInIncrement;
