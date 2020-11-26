@@ -118,9 +118,8 @@ class Session {
         playheadState = await this._playheadStateStore.get(this._sessionId);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
-          const tickInterval = firstDuration < 3 ? 3 : firstDuration;
+          const tickInterval = firstDuration < 2 ? 2 : firstDuration;
           debug(`[${this._sessionId}]: Updated tick interval to ${tickInterval} sec`);
-
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
             { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: tickInterval });
           this._playheadStateStore.set(this._sessionId, "tickInterval", tickInterval);
@@ -128,8 +127,15 @@ class Session {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
+          const firstDuration = await this._getFirstDuration(manifest);
+          const reqTickInterval = firstDuration < 2 ? 2 : firstDuration;
+          debug(`[${this._sessionId}]: Updated tick interval to ${reqTickInterval} sec`);
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+            { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: reqTickInterval });
+          this._playheadStateStore.set(this._sessionId, "tickInterval", reqTickInterval);
+
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
-          let tickInterval = (playheadState.tickInterval || 3) - timeSpentInIncrement;
+          let tickInterval = (reqTickInterval) - timeSpentInIncrement;
           if (tickInterval < 0) {
             tickInterval = 0.5;
           }
