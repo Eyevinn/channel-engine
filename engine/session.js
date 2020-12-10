@@ -640,6 +640,8 @@ class Session {
       const reps = Math.floor(desiredDuration / this.slateDuration);
       debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
       this._loadSlate(afterVod, reps).then(hlsVod => {
+        cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+          { event: 'filler', channel: this._sessionId, durationMs: (reps || this.slateRepetitions) * this.slateDuration });
         resolve(hlsVod);
       }).catch(reject);
     });
