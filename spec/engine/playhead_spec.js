@@ -310,7 +310,7 @@ describe("Playhead consumer", () => {
 
     await loop(85);
     //console.log('slateManifest', slateManifest);
-    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/720p_000.ts\n');
+    let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/1080p_000.ts\n');
     expect(m).not.toBeNull();
     done();
   });
