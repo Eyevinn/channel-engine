@@ -48,6 +48,7 @@ const verificationLoop = async (session, increments) => {
   }
   let lastUri = null;
   let lastManifest = null;
+  let lastMediaSeq = null;
   for (let promiseFn of promiseFns) {
     manifest = await promiseFn();
     const parser = m3u8.createStream();
@@ -59,12 +60,13 @@ const verificationLoop = async (session, increments) => {
       manifestStream.pipe(parser);
       parser.on('m3u', m3u => {
         const firstItem = m3u.items.PlaylistItem[0];
-        if (lastUri && firstItem.get('uri') === lastUri) {
+        if (lastUri && firstItem.get('uri') === lastUri && lastMediaSeq && lastMediaSeq != m3u.get('mediaSequence')) {
           console.log(lastManifest);
           console.log(manifest);
-          fail(`${m3u.get('mediaSequence')}:${firstItem.get('uri')} was included in last media sequence (${lastUri})`);
+          fail(`${lastMediaSeq}:${m3u.get('mediaSequence')}:${firstItem.get('uri')} was included in last media sequence (${lastUri})`);
         }
         lastUri = firstItem.get('uri');
+        lastMediaSeq = m3u.get('mediaSequence');
         resolve();
       });
     });
@@ -123,14 +125,20 @@ describe("Playhead consumer", () => {
         promiseFns.push(() => session.incrementAsync());
         remain--;
       }
-      let expectedMseq = 1;
+      let lastMseqNo;
       for (let promiseFn of promiseFns) {
         manifest = await promiseFn();
-        if (!manifest.match('#EXT-X-MEDIA-SEQUENCE:' + expectedMseq++)) {
-          fail(manifest);
+        const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
+        let mseqNo;
+        if (m) {
+          mseqNo = Number(m[1]);
+        }
+        if (mseqNo < lastMseqNo) {
+          fail(`expected ${mseqNo} to be greater than ${lastMseqNo}:\n${manifest}`);
         }
         currentMediaManifest = await session.getCurrentMediaManifestAsync(180000);
         expect(currentMediaManifest).toEqual(manifest);
+        lastMseqNo = mseqNo;
       }
     };
     await loop(100);
@@ -308,7 +316,7 @@ describe("Playhead consumer", () => {
       }
     };
 
-    await loop(85);
+    await loop(86);
     //console.log('slateManifest', slateManifest);
     let m = slateManifest.match('http://testcontent.eyevinn.technology/slates/ottera/1080p_000.ts\n');
     expect(m).not.toBeNull();
