@@ -138,6 +138,11 @@ class Session {
 
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
           let tickInterval = (reqTickInterval) - timeSpentInIncrement;
+          const delta = this._getCurrentDeltaTime(sessionState);
+          if (delta != 0) {
+            debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval`);
+            tickInterval += delta;
+          }
           if (tickInterval < 0) {
             tickInterval = 0.5;
           }
@@ -223,7 +228,7 @@ class Session {
       sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo + 1);
       sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio + 1);
     }
-    if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
+    if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount()) {
       sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
@@ -538,7 +543,7 @@ class Session {
           await loadPromise;
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
-          debug(`[${this._sessionId}]: next VOD loaded`);
+          debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
           currentVod = newVod;
           debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
@@ -685,6 +690,16 @@ class Session {
         reject(err);
       }
     });
+  }
+
+  _getCurrentDeltaTime(sessionState) {
+    const currentVod = this.getCurrentVod(sessionState);
+    const deltaTimes = currentVod.getDeltaTimes();
+    debug(`[${this._sessionId}]: Current delta time (${sessionState.vodMediaSeqVideo}): ${deltaTimes[sessionState.vodMediaSeqVideo]}`);
+    if (deltaTimes[sessionState.vodMediaSeqVideo]) {
+      return deltaTimes[sessionState.vodMediaSeqVideo];
+    }
+    return 0;
   }
 }
 
