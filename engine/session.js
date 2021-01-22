@@ -107,6 +107,7 @@ class Session {
 
   async startPlayheadAsync() {
     debug(`[${this._sessionId}]: Playhead consumer started`);
+
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
@@ -142,6 +143,16 @@ class Session {
           if (delta != 0) {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval`);
             tickInterval += delta;
+          } else {
+            const position = this._getCurrentPlayheadPosition(sessionState) * 1000;
+            const timePosition = Date.now() - playheadState.playheadRef;
+            const diff = position - timePosition;
+            debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+              { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
+            if (diff > 1000) {
+              tickInterval += ((diff / 1000));
+            }
           }
           if (tickInterval < 0) {
             tickInterval = 0.5;
@@ -467,9 +478,12 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
           debug(`[${this._sessionId}]: first VOD loaded`);
+          debug(`[${this._sessionId}]: ${newVod.getDeltaTimes()}`);
+          debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
           //debug(newVod);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
+          await this._playheadStateStore.set(this._sessionId, "playheadRef", Date.now());
           this.produceEvent({
             type: 'NOW_PLAYING',
             data: {
@@ -544,6 +558,7 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
           debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
+          debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
           currentVod = newVod;
           debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
@@ -551,6 +566,7 @@ class Session {
           sessionState = await this._sessionStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq + length);
           sessionState = await this._sessionStateStore.set(this._sessionId, "discSeq", sessionState.discSeq + lastDiscontinuity);
           sessionState = await this.setCurrentVod(currentVod);
+          await this._playheadStateStore.set(this._sessionId, "playheadRef", Date.now());
           this.produceEvent({
             type: 'NOW_PLAYING',
             data: {
@@ -700,6 +716,13 @@ class Session {
       return deltaTimes[sessionState.vodMediaSeqVideo];
     }
     return 0;
+  }
+
+  _getCurrentPlayheadPosition(sessionState) {
+    const currentVod = this.getCurrentVod(sessionState);
+    const playheadPositions = currentVod.getPlayheadPositions();
+    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${playheadPositions[sessionState.vodMediaSeqVideo]}`);
+    return playheadPositions[sessionState.vodMediaSeqVideo];
   }
 }
 
