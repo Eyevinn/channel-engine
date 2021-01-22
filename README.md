@@ -57,6 +57,7 @@ Available options when constructing the Channel Engine object are:
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
 - `cacheTTL`: Sets the cache-control header TTL. Default is 4 sec.
+- `playheadDiffThreshold`: Sets the threshold when starting to adjust tick interval to compensate for playhead drift.
 - `cloudWatchMetrics`: Output CloudWatch JSON metrics on console log. Default is false.
 
 ## Demo

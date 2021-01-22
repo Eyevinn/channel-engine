@@ -11,6 +11,7 @@ const { PlayheadState } = require('./playhead_state.js');
 const { applyFilter, cloudWatchLog } = require('./util.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
+const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -35,6 +36,7 @@ class Session {
     this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
     this.use_demuxed_audio = false;
     this.cloudWatchLogging = false;
+    this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
 
     if (config) { 
       if (config.sessionId) {
@@ -67,6 +69,9 @@ class Session {
       }
       if (config.cloudWatchMetrics) {
         this.cloudWatchLogging = true;
+      }
+      if (config.playheadDiffThreshold) {
+        this.playheadDiffThreshold = config.playheadDiffThreshold;
       }
     } else {
       this._sessionStateStore.create(this._sessionId);
@@ -106,7 +111,7 @@ class Session {
   }
 
   async startPlayheadAsync() {
-    debug(`[${this._sessionId}]: Playhead consumer started`);
+    debug(`[${this._sessionId}]: Playhead consumer started (diffThreshold=${this.playheadDiffThreshold})`);
 
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
@@ -150,9 +155,9 @@ class Session {
             debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
               { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
-            if (diff > 1000) {
+            if (diff > this.playheadDiffThreshold) {
               tickInterval += ((diff / 1000));
-            } else if (diff < -1000) {
+            } else if (diff < -this.playheadDiffThreshold) {
               tickInterval += ((diff / 1000));
             }
           }

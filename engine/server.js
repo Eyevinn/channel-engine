@@ -58,6 +58,9 @@ class ChannelEngine {
     if (options && options.cloudWatchMetrics) {
       this.logCloudWatchMetrics = true;
     }
+    if (options && options.playheadDiffThreshold) {
+      this.streamerOpts.playheadDiffThreshold = options.playheadDiffThreshold;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -93,8 +96,9 @@ class ChannelEngine {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
         sessionId: channel.id,
-        averageSegmentDuration: options.averageSegmentDuration,
+        averageSegmentDuration: this.streamerOpts.averageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
+        playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
@@ -188,6 +192,7 @@ class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
+      options.playheadDiffThreshold = this.streamerOpts.playheadDiffThreshold;
       session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
