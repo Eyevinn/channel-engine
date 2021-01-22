@@ -152,6 +152,8 @@ class Session {
               { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
             if (diff > 1000) {
               tickInterval += ((diff / 1000));
+            } else if (diff < -1000) {
+              tickInterval += ((diff / 1000));
             }
           }
           if (tickInterval < 0) {
