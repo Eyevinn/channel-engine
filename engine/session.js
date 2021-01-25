@@ -161,7 +161,7 @@ class Session {
               tickInterval += ((diff / 1000));
             }
           }
-          if (tickInterval < 0) {
+          if (tickInterval <= 0) {
             tickInterval = 0.5;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
@@ -485,8 +485,8 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
           debug(`[${this._sessionId}]: first VOD loaded`);
-          debug(`[${this._sessionId}]: ${newVod.getDeltaTimes()}`);
-          debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
+          debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
+          debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
           //debug(newVod);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
           sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
