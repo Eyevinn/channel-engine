@@ -163,6 +163,8 @@ class Session {
           }
           if (tickInterval <= 0) {
             tickInterval = 0.5;
+          } else if (tickInterval > 10) {
+            tickInterval = 10;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
