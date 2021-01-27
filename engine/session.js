@@ -12,6 +12,7 @@ const { applyFilter, cloudWatchLog } = require('./util.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
+const DEFAULT_MAX_TICK_INTERVAL = 10000;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -37,6 +38,7 @@ class Session {
     this.use_demuxed_audio = false;
     this.cloudWatchLogging = false;
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
+    this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
 
     if (config) { 
       if (config.sessionId) {
@@ -72,6 +74,9 @@ class Session {
       }
       if (config.playheadDiffThreshold) {
         this.playheadDiffThreshold = config.playheadDiffThreshold;
+      }
+      if (config.maxTickInterval) {
+        this.maxTickInterval = config.maxTickInterval;
       }
     } else {
       this._sessionStateStore.create(this._sessionId);
@@ -111,7 +116,9 @@ class Session {
   }
 
   async startPlayheadAsync() {
-    debug(`[${this._sessionId}]: Playhead consumer started (diffThreshold=${this.playheadDiffThreshold})`);
+    debug(`[${this._sessionId}]: Playhead consumer started:`); 
+    debug(`[${this._sessionId}]:   diffThreshold=${this.playheadDiffThreshold}`);
+    debug(`[${this._sessionId}]:   maxTickInterval=${this.maxTickInterval}`);
 
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
@@ -163,8 +170,8 @@ class Session {
           }
           if (tickInterval <= 0) {
             tickInterval = 0.5;
-          } else if (tickInterval > 10) {
-            tickInterval = 10;
+          } else if (tickInterval > this.maxTickInterval) {
+            tickInterval = this.maxTickInterval;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);

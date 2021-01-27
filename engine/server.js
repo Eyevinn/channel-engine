@@ -61,6 +61,9 @@ class ChannelEngine {
     if (options && options.playheadDiffThreshold) {
       this.streamerOpts.playheadDiffThreshold = options.playheadDiffThreshold;
     }
+    if (options && options.maxTickInterval) {
+      this.streamerOpts.maxTickInterval = options.maxTickInterval;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -99,6 +102,7 @@ class ChannelEngine {
         averageSegmentDuration: this.streamerOpts.averageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
         playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
+        maxTickInterval: this.streamerOpts.maxTickInterval,
         profile: channel.profile,
         slateUri: this.defaultSlateUri,
         slateRepetitions: this.slateRepetitions,
@@ -193,6 +197,7 @@ class ChannelEngine {
       options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
       options.playheadDiffThreshold = this.streamerOpts.playheadDiffThreshold;
+      options.maxTickInterval = this.streamerOpts.maxTickInterval;
       session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
