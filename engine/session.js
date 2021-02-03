@@ -183,6 +183,8 @@ class Session {
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
         console.error(`[${this._sessionId}]: ${err.message}`);
+        cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+          { event: 'error', on: 'playhead', channel: this._sessionId, err: err });
         debug(err);
         playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
       }
@@ -515,6 +517,8 @@ class Session {
           if (this._assetManager.handleError) {
             this._assetManager.handleError(new Error("Failed to init first VOD"), vodResponse);
           }
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'error', on: 'firstvod', channel: this._sessionId, err: err, vod: vodResponse });
           debug(err);
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
@@ -597,6 +601,8 @@ class Session {
           if (this._assetManager.handleError) {
             this._assetManager.handleError(new Error("Failed to init next VOD"), vodResponse);
           }
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
