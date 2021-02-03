@@ -593,7 +593,7 @@ class Session {
           return;
         } catch(err) {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
-          debug(err);
+          debug(`[${this._sessionId}]: ${err}`);
           if (this._assetManager.handleError) {
             this._assetManager.handleError(new Error("Failed to init next VOD"), vodResponse);
           }
