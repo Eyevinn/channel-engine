@@ -217,8 +217,8 @@ class ChannelEngine {
 
       try {
         const body = await session.getMasterManifestAsync(filter);
-        res.sendRaw(200, body, { 
-          "Content-Type": "application/x-mpegURL",
+        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+          "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
           "Access-Control-Expose-Headers": "X-Session-Id",
@@ -242,8 +242,8 @@ class ChannelEngine {
         const body = await session.getCurrentAudioManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
-        res.sendRaw(200, body, {
-          "Content-Type": "application/x-mpegURL",
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+          "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         });
@@ -266,8 +266,8 @@ class ChannelEngine {
         const body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
-        res.sendRaw(200, body, { 
-          "Content-Type": "application/x-mpegURL",
+        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+          "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         });
