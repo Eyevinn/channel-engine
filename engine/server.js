@@ -104,9 +104,9 @@ class ChannelEngine {
         playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
         maxTickInterval: this.streamerOpts.maxTickInterval,
         profile: channel.profile,
-        slateUri: this.defaultSlateUri,
-        slateRepetitions: this.slateRepetitions,
-        slateDuration: this.slateDuration,
+        slateUri: channel.channel.defaultSlateUri ? channel.channel.defaultSlateUri : this.defaultSlateUri,
+        slateRepetitions: channel.channel.slateRepetitions ? channel.channel.slateRepetitions : this.slateRepetitions,
+        slateDuration: channel.channel.slateDuration ? channel.channel.slateDuration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
       await sessions[channel.id].initAsync();
