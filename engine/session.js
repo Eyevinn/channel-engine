@@ -170,8 +170,8 @@ class Session {
           }
           if (tickInterval <= 0) {
             tickInterval = 0.5;
-          } else if (tickInterval > this.maxTickInterval) {
-            tickInterval = this.maxTickInterval;
+          } else if (tickInterval > (this.maxTickInterval / 1000)) {
+            tickInterval = this.maxTickInterval / 1000;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
