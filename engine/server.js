@@ -104,9 +104,9 @@ class ChannelEngine {
         playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
         maxTickInterval: this.streamerOpts.maxTickInterval,
         profile: channel.profile,
-        slateUri: channel.channel.defaultSlateUri ? channel.channel.defaultSlateUri : this.defaultSlateUri,
-        slateRepetitions: channel.channel.slateRepetitions ? channel.channel.slateRepetitions : this.slateRepetitions,
-        slateDuration: channel.channel.slateDuration ? channel.channel.slateDuration : this.slateDuration,
+        slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
+        slateRepetitions: channel.slate && chanel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
+        slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
       await sessions[channel.id].initAsync();
@@ -198,6 +198,18 @@ class ChannelEngine {
       options.useDemuxedAudio = this.useDemuxedAudio;
       options.playheadDiffThreshold = this.streamerOpts.playheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.maxTickInterval;
+      // if we are initiating a master manifest
+      // outside of specific Channel context,
+      // if slate options are set at the ChannelEngine level, then set these here
+      if (this.defaultSlateUri) {
+        options.slateUri = this.defaultSlateUri;
+      }
+      if (this.slateRepetitions) {
+        options.slateRepetitions = this.slateRepetitions;
+      }
+      if (this.slateDuration) {
+        options.slateDuration = this.slateDuration;
+      }
       session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
