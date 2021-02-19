@@ -41,7 +41,7 @@ class MyAssetManager {
 }
 
 class MyChannelManager {
-  getChannels() -> [ { id, name, profile? } ]
+  getChannels() -> [ { id, name, slate?, profile? } ]
 }
 ```
 
