@@ -105,7 +105,7 @@ class ChannelEngine {
         maxTickInterval: this.streamerOpts.maxTickInterval,
         profile: channel.profile,
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
-        slateRepetitions: channel.slate && chanel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
+        slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
