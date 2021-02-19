@@ -155,18 +155,17 @@ class Session {
           if (delta != 0) {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval`);
             tickInterval += delta;
-          } else {
-            const position = this._getCurrentPlayheadPosition(sessionState) * 1000;
-            const timePosition = Date.now() - playheadState.playheadRef;
-            const diff = position - timePosition;
-            debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
-            cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
-              { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
-            if (diff > this.playheadDiffThreshold) {
-              tickInterval += ((diff / 1000));
-            } else if (diff < -this.playheadDiffThreshold) {
-              tickInterval += ((diff / 1000));
-            }
+          }
+          const position = this._getCurrentPlayheadPosition(sessionState) * 1000;
+          const timePosition = Date.now() - playheadState.playheadRef;
+          const diff = position - timePosition;
+          debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
+            { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
+          if (diff > this.playheadDiffThreshold) {
+            tickInterval += ((diff / 1000));
+          } else if (diff < -this.playheadDiffThreshold) {
+            tickInterval += ((diff / 1000));
           }
           if (tickInterval <= 0) {
             tickInterval = 0.5;
