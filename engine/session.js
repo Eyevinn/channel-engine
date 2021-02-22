@@ -731,7 +731,7 @@ class Session {
         durationMs = (reps || this.slateRepetitions) * this.slateDuration;
       } else {
         debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds by truncating filler slate (${this.slateDuration})`);
-        loadSlatePromise = this._truncateSlate(afterVod, desiredDuration);
+        loadSlatePromise = this._truncateSlate(afterVod, desiredDuration / 1000);
         durationMs = desiredDuration;
       }
       loadSlatePromise.then(hlsVod => {
