@@ -63,6 +63,9 @@ class Session {
       if (config.profile) {
         this._sessionProfile = config.profile;
       }
+      if (config.closedCaptions) {
+        this._closedCaptions = config.closedCaptions;
+      }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
         this.slateRepetitions = config.slateRepetitions || 10;
@@ -379,6 +382,11 @@ class Session {
     const currentVod = this.getCurrentVod(sessionState);
     let audioGroupIds = currentVod.getAudioGroups();
     let defaultAudioGroupId;
+    if (this._closedCaptions && this._closedCaptions.length > 0) {
+      this._closedCaptions.forEach(cc => {
+        m3u8 += `#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",LANGUAGE="${cc.lang}",NAME="${cc.name}",DEFAULT=${cc.default ? "YES" : "NO" },AUTOSELECT=${cc.auto ? "YES" : "NO" },INSTREAM-ID="${cc.id}"\n`;
+      });
+    }
     if (this.use_demuxed_audio === true) {
       if (audioGroupIds.length > 0) {
         m3u8 += "# AUDIO groups\n";
