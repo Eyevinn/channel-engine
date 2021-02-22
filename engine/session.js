@@ -724,7 +724,7 @@ class Session {
     return new Promise((resolve, reject) => {
       let loadSlatePromise;
       let durationMs;
-      if (this.slateDuration <= 4000) {
+      if (desiredDuration > this.slateDuration) {
         const reps = Math.floor(desiredDuration / this.slateDuration);
         debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
         loadSlatePromise = this._loadSlate(afterVod, reps);
