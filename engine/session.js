@@ -171,6 +171,7 @@ class Session {
           } else if (diff < -this.playheadDiffThreshold) {
             tickInterval += ((diff / 1000));
           }
+          debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
           if (tickInterval <= 0) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
