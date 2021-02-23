@@ -662,6 +662,9 @@ class Session {
         slateVod.load()
         .then(() => {
           hlsVod = new HLSVod(this.slateUri);
+          const timestamp = Date.now();
+          hlsVod.addMetadata('id', `slate-${timestamp}`);
+          hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
           const slateMediaManifestLoader = (bw) => {
             let mediaManifestStream = new Readable();
             mediaManifestStream.push(slateVod.getMediaManifest(bw));
@@ -696,6 +699,9 @@ class Session {
         slateVod.load()
         .then(() => {
           hlsVod = new HLSVod(this.slateUri);
+          const timestamp = Date.now();
+          hlsVod.addMetadata('id', `slate-${timestamp}`);
+          hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
           const slateMediaManifestLoader = (bw) => {
             let mediaManifestStream = new Readable();
             mediaManifestStream.push(slateVod.getMediaManifest(bw));
