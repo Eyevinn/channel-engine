@@ -3,6 +3,7 @@ const debug = require('debug')('engine-session');
 const HLSVod = require('@eyevinn/hls-vodtolive');
 const m3u8 = require('@eyevinn/m3u8');
 const HLSRepeatVod = require('@eyevinn/hls-repeat');
+const HLSTruncateVod = require('@eyevinn/hls-truncate');
 const Readable = require('stream').Readable;
 
 const { SessionState } = require('./session_state.js');
@@ -170,6 +171,7 @@ class Session {
           } else if (diff < -this.playheadDiffThreshold) {
             tickInterval += ((diff / 1000));
           }
+          debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
           if (tickInterval <= 0) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
@@ -661,6 +663,9 @@ class Session {
         slateVod.load()
         .then(() => {
           hlsVod = new HLSVod(this.slateUri);
+          const timestamp = Date.now();
+          hlsVod.addMetadata('id', `slate-${timestamp}`);
+          hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
           const slateMediaManifestLoader = (bw) => {
             let mediaManifestStream = new Readable();
             mediaManifestStream.push(slateVod.getMediaManifest(bw));
@@ -686,13 +691,60 @@ class Session {
     });
   }
 
+  _truncateSlate(afterVod, requestedDuration) {
+    return new Promise((resolve, reject) => {
+      try {
+        const slateVod = new HLSTruncateVod(this.slateUri, requestedDuration);
+        let hlsVod;
+
+        slateVod.load()
+        .then(() => {
+          hlsVod = new HLSVod(this.slateUri);
+          const timestamp = Date.now();
+          hlsVod.addMetadata('id', `slate-${timestamp}`);
+          hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
+          const slateMediaManifestLoader = (bw) => {
+            let mediaManifestStream = new Readable();
+            mediaManifestStream.push(slateVod.getMediaManifest(bw));
+            mediaManifestStream.push(null);
+            return mediaManifestStream;
+          };
+          if (afterVod) {
+            return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+          } else {
+            return hlsVod.load(null, slateMediaManifestLoader);
+          }
+        })
+        .then(() => {
+          resolve(hlsVod);
+        })
+        .catch(err => {
+          debug(err);
+          reject(err);
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   _fillGap(afterVod, desiredDuration) {
     return new Promise((resolve, reject) => {
-      const reps = Math.floor(desiredDuration / this.slateDuration);
-      debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
-      this._loadSlate(afterVod, reps).then(hlsVod => {
+      let loadSlatePromise;
+      let durationMs;
+      if (desiredDuration > this.slateDuration) {
+        const reps = Math.floor(desiredDuration / this.slateDuration);
+        debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
+        loadSlatePromise = this._loadSlate(afterVod, reps);
+        durationMs = (reps || this.slateRepetitions) * this.slateDuration;
+      } else {
+        debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds by truncating filler slate (${this.slateDuration})`);
+        loadSlatePromise = this._truncateSlate(afterVod, desiredDuration / 1000);
+        durationMs = desiredDuration;
+      }
+      loadSlatePromise.then(hlsVod => {
         cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-          { event: 'filler', channel: this._sessionId, durationMs: (reps || this.slateRepetitions) * this.slateDuration });
+          { event: 'filler', channel: this._sessionId, durationMs: durationMs });
         resolve(hlsVod);
       }).catch(reject);
     });
