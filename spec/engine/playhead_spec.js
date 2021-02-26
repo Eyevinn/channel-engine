@@ -167,6 +167,7 @@ describe("Playhead consumer", () => {
       { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
     const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile }, sessionStore);
+    await session.incrementAsync();
     const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
@@ -203,6 +204,7 @@ describe("Playhead consumer", () => {
   it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.incrementAsync();
     const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
     expect(profile[0].bw).toEqual(6134000);
