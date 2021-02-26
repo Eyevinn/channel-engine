@@ -275,12 +275,14 @@ class Session {
   }
 
   async getMediaManifestAsync(bw, opts) {
-    await this._tickAsync();
     const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId).tsLastRequestVideo;
     let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
 
     let sessionState = await this._sessionStateStore.get(this._sessionId);
     const currentVod = this.getCurrentVod(sessionState);
+    if (!currentVod) {
+      throw new Error('Session not ready');
+    }
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
       sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
     } else {
@@ -375,13 +377,15 @@ class Session {
   }
 
   async getMasterManifestAsync(filter) {
-    await this._tickAsync();
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
     const sessionState = await this._sessionStateStore.get(this._sessionId);
     const currentVod = this.getCurrentVod(sessionState);
+    if (!currentVod) {
+      throw new Error('Session not ready');
+    }
     let audioGroupIds = currentVod.getAudioGroups();
     let defaultAudioGroupId;
     let hasClosedCaptions = this._closedCaptions && this._closedCaptions.length > 0;
