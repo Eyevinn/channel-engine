@@ -1,3 +1,5 @@
+const { version } = require('../package.json');
+
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
@@ -50,8 +52,16 @@ const cloudWatchLog = (silent, type, logEntry) => {
   }
 };
 
+const m3u8Header = () => {
+  let m3u8 = "";
+  m3u8 += `## Created with Eyevinn Channel Engine library (version=${version})\n`;
+  m3u8 += "##    https://www.npmjs.com/package/eyevinn-channel-engine\n";
+  return m3u8;
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
   cloudWatchLog,
+  m3u8Header,
 }

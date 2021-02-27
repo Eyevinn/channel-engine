@@ -9,7 +9,7 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog } = require('./util.js');
+const { applyFilter, cloudWatchLog, m3u8Header } = require('./util.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -275,6 +275,7 @@ class Session {
   }
 
   async getMediaManifestAsync(bw, opts) {
+    await this._tickAsync();
     const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId).tsLastRequestVideo;
     let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
 
@@ -379,6 +380,7 @@ class Session {
   async getMasterManifestAsync(filter) {
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
+    m3u8 += m3u8Header();
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
     const sessionState = await this._sessionStateStore.get(this._sessionId);
@@ -486,7 +488,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000);
+            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header());
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -563,7 +565,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000);
+            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header());
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -670,6 +672,7 @@ class Session {
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
+          hlsVod.addMetadata('planned-duration', ((reps || this.slateRepetitions) * this.slateDuration) / 1000);
           const slateMediaManifestLoader = (bw) => {
             let mediaManifestStream = new Readable();
             mediaManifestStream.push(slateVod.getMediaManifest(bw));
@@ -707,6 +710,7 @@ class Session {
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
+          hlsVod.addMetadata('planned-duration', requestedDuration);
           const slateMediaManifestLoader = (bw) => {
             let mediaManifestStream = new Readable();
             mediaManifestStream.push(slateVod.getMediaManifest(bw));

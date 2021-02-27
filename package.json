@@ -14,7 +14,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@eyevinn/hls-repeat": "^0.1.1",
-    "@eyevinn/hls-vodtolive": "^1.9.0",
+    "@eyevinn/hls-vodtolive": "^1.10.2",
     "@eyevinn/hls-truncate": "^0.1.0",
     "@eyevinn/m3u8": "^0.3.3",
     "debug": "^3.1.0",
