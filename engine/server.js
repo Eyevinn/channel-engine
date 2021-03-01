@@ -49,7 +49,7 @@ class ChannelEngine {
     }
     this.streamerOpts = {};
     if (options && options.averageSegmentDuration) {
-      this.streamerOpts.averageSegmentDuration = options.averageSegmentDuration;
+      this.streamerOpts.defaultAverageSegmentDuration = options.averageSegmentDuration;
     }
     if (options && options.cacheTTL) {
       this.streamerOpts.cacheTTL = options.cacheTTL;
@@ -99,7 +99,7 @@ class ChannelEngine {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
         sessionId: channel.id,
-        averageSegmentDuration: this.streamerOpts.averageSegmentDuration,
+        averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
         playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
         maxTickInterval: this.streamerOpts.maxTickInterval,
@@ -195,7 +195,7 @@ class ChannelEngine {
     } else {
       options.adCopyMgrUri = this.adCopyMgrUri;
       options.adXchangeUri = this.adXchangeUri;
-      options.averageSegmentDuration = this.streamerOpts.averageSegmentDuration;
+      options.averageSegmentDuration = this.streamerOpts.defaultAverageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
       options.playheadDiffThreshold = this.streamerOpts.playheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.maxTickInterval;
