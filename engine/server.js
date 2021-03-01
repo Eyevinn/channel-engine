@@ -59,10 +59,10 @@ class ChannelEngine {
       this.logCloudWatchMetrics = true;
     }
     if (options && options.playheadDiffThreshold) {
-      this.streamerOpts.playheadDiffThreshold = options.playheadDiffThreshold;
+      this.streamerOpts.defaultPlayheadDiffThreshold = options.playheadDiffThreshold;
     }
     if (options && options.maxTickInterval) {
-      this.streamerOpts.maxTickInterval = options.maxTickInterval;
+      this.streamerOpts.defaultMaxTickInterval = options.maxTickInterval;
     }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
@@ -101,8 +101,8 @@ class ChannelEngine {
         sessionId: channel.id,
         averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
         demuxedAudio: options.demuxedAudio,
-        playheadDiffThreshold: this.streamerOpts.playheadDiffThreshold,
-        maxTickInterval: this.streamerOpts.maxTickInterval,
+        playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
+        maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         profile: channel.profile,
         closedCaptions: channel.closedCaptions,
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
@@ -197,8 +197,8 @@ class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.defaultAverageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
-      options.playheadDiffThreshold = this.streamerOpts.playheadDiffThreshold;
-      options.maxTickInterval = this.streamerOpts.maxTickInterval;
+      options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
+      options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
       // if we are initiating a master manifest
       // outside of specific Channel context,
       // if slate options are set at the ChannelEngine level, then set these here
