@@ -269,7 +269,7 @@ class Session {
     playheadState = await this._playheadStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq);
     playheadState = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
     playheadState = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
-    debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio})`);
+    debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()})`);
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     return m3u8;
   }
@@ -558,6 +558,12 @@ class Session {
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
           sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INITIATING);
           let vodPromise = this._getNextVod();
+          if (length === 1) {
+            // Add a grace period for very short VODs before calling nextVod
+            const gracePeriod = (this.averageSegmentDuration / 2);
+            debug(`[${this._sessionId}]: adding a grace period before calling nextVod: ${gracePeriod}ms`);
+            await timer(gracePeriod);
+          }
           const nextVodStart = Date.now();
           vodResponse = await vodPromise;
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
