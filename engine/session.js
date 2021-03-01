@@ -123,6 +123,7 @@ class Session {
     debug(`[${this._sessionId}]: Playhead consumer started:`); 
     debug(`[${this._sessionId}]:   diffThreshold=${this.playheadDiffThreshold}`);
     debug(`[${this._sessionId}]:   maxTickInterval=${this.maxTickInterval}`);
+    debug(`[${this._sessionId}]:   averageSegmentDuration=${this.averageSegmentDuration}`);  
 
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
