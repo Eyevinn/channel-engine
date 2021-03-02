@@ -145,15 +145,7 @@ class Session {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
-          const firstDuration = await this._getFirstDuration(manifest);
-          const reqTickInterval = firstDuration < 2 ? 2 : firstDuration;
-          if (reqTickInterval != playheadState.tickInterval) {
-            debug(`[${this._sessionId}]: Updated tick interval to ${reqTickInterval} sec`);
-            cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
-              { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: reqTickInterval });
-            this._playheadStateStore.set(this._sessionId, "tickInterval", reqTickInterval);
-          }
-
+          const reqTickInterval = playheadState.tickInterval;
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
           let tickInterval = (reqTickInterval) - timeSpentInIncrement;
           const delta = this._getCurrentDeltaTime(sessionState);
@@ -168,9 +160,9 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
             { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
           if (diff > this.playheadDiffThreshold) {
-            tickInterval += ((diff / 1000));
+            tickInterval += ((diff / 1000)) - (this.playheadDiffThreshold / 1000);
           } else if (diff < -this.playheadDiffThreshold) {
-            tickInterval += ((diff / 1000));
+            tickInterval += ((diff / 1000)) + (this.playheadDiffThreshold / 1000);
           }
           debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
           if (tickInterval <= 0) {
