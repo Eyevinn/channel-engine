@@ -10,6 +10,11 @@
     "start": "node server.js"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
+  "contributors": [
+    "Jonas Rydholm Birmé <jonas.birme@eyevinn.se> (Eyevinn Technology AB)",
+    "Alan Allard <alan.allard@eyevinn.se> (Eyevinn Technology AB)",
+    "Craig McEldowney <craig@ottera.tv>"
+  ],
   "repository": "https://github.com/Eyevinn/channel-engine",
   "license": "Apache-2.0",
   "dependencies": {
