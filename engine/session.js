@@ -40,6 +40,7 @@ class Session {
     this.cloudWatchLogging = false;
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
+    this.diffCompensation = null;
 
     if (config) { 
       if (config.sessionId) {
@@ -163,6 +164,12 @@ class Session {
             tickInterval += ((diff / 1000)) - (this.playheadDiffThreshold / 1000);
           } else if (diff < -this.playheadDiffThreshold) {
             tickInterval += ((diff / 1000)) + (this.playheadDiffThreshold / 1000);
+          }
+          if (this.diffCompensation && this.diffCompensation > 0) {
+            const DIFF_COMPENSATION = 2000;
+            debug(`[${this._sessionId}]: Adding ${DIFF_COMPENSATION}msec to tickInterval to compensate for schedule diff (current=${this.diffCompensation}msec)`);
+            tickInterval += (DIFF_COMPENSATION / 1000);
+            this.diffCompensation -= DIFF_COMPENSATION;
           }
           debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
           if (tickInterval <= 0) {
@@ -578,7 +585,10 @@ class Session {
                 title: this.currentMetadata.title || '',
               }
             });
-            loadPromise = newVod.loadAfter(currentVod);          
+            loadPromise = newVod.loadAfter(currentVod);
+            if (vodResponse.diffMs) {
+              this.diffCompensation = vodResponse.diffMs;
+            }
           } else {
             loadPromise = new Promise((resolve, reject) => {
               this._fillGap(currentVod, vodResponse.desiredDuration)
