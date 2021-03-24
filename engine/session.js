@@ -83,6 +83,9 @@ class Session {
       if (config.maxTickInterval) {
         this.maxTickInterval = config.maxTickInterval;
       }
+      if (config.disabledPlayhead) {
+        this.disabledPlayhead = true;
+      }
     } else {
       this._sessionStateStore.create(this._sessionId);
       this._playheadStateStore.create(this._sessionId);
@@ -124,7 +127,9 @@ class Session {
     debug(`[${this._sessionId}]: Playhead consumer started:`); 
     debug(`[${this._sessionId}]:   diffThreshold=${this.playheadDiffThreshold}`);
     debug(`[${this._sessionId}]:   maxTickInterval=${this.maxTickInterval}`);
-    debug(`[${this._sessionId}]:   averageSegmentDuration=${this.averageSegmentDuration}`);  
+    debug(`[${this._sessionId}]:   averageSegmentDuration=${this.averageSegmentDuration}`);
+
+    this.disabledPlayhead = false;
 
     let playheadState = await this._playheadStateStore.get(this._sessionId);
     playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
@@ -207,21 +212,29 @@ class Session {
   }
 
   async getStatusAsync() {
-    const playheadState = await this._playheadStateStore.get(this._sessionId);
-    const playheadStateMap = {};
-    playheadStateMap[PlayheadState.IDLE] = 'idle';
-    playheadStateMap[PlayheadState.RUNNING] = 'running';
-    playheadStateMap[PlayheadState.CRASHED] = 'crashed';
-    playheadStateMap[PlayheadState.STOPPED] = 'stopped';
-
-    const status = {
-      sessionId: this._sessionId,
-      playhead: {
-        state: playheadStateMap[playheadState.state],
-        tickMs: playheadState.tickMs,
+    if (this.disabledPlayhead) {
+      return {
+        sessionId: this._sessionId,
       }
-    };
-    return status;
+    } else {
+      const playheadState = await this._playheadStateStore.get(this._sessionId);
+      const sessionState = await this._sessionStateStore.get(this._sessionId);
+      const playheadStateMap = {};
+      playheadStateMap[PlayheadState.IDLE] = 'idle';
+      playheadStateMap[PlayheadState.RUNNING] = 'running';
+      playheadStateMap[PlayheadState.CRASHED] = 'crashed';
+      playheadStateMap[PlayheadState.STOPPED] = 'stopped';
+
+      const status = {
+        sessionId: this._sessionId,
+        playhead: {
+          state: playheadStateMap[playheadState.state],
+          tickMs: playheadState.tickMs,
+        },
+        slateInserted: sessionState.slateCount,
+      };
+      return status;
+    }
   }
 
   async getCurrentMediaManifestAsync(bw, playbackSessionId) {
@@ -444,15 +457,21 @@ class Session {
     this._events.push(event);
   }
 
+  hasPlayhead() {
+    return !this.disabledPlayhead;
+  }
+
   async _insertSlate(currentVod) {
     if(this.slateUri) {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
+      const sessionState = await this._sessionStateStore.get(this._sessionId);
       await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
       await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
       await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
       await this.setCurrentVod(slateVod);
+      await this._sessionStateStore.set(this._sessionId, "slateCount", sessionState.slateCount + 1);
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
 

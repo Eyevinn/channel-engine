@@ -81,6 +81,7 @@ class ChannelEngine {
     });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
+    this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
 
     if (options && options.heartbeat) {
@@ -158,6 +159,10 @@ class ChannelEngine {
     return Object.keys(sessions).length;
   }
 
+  getPlayheadCount() {
+    return Object.keys(sessions).filter(sessionId => sessions[sessionId].hasPlayhead()).length;
+  }
+
   async _monitorAsync(session) {
     const status = await session.getStatusAsync();
     debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
@@ -211,6 +216,7 @@ class ChannelEngine {
       if (this.slateDuration) {
         options.slateDuration = this.slateDuration;
       }
+      options.disabledPlayhead = true; // disable playhead for personalized streams
       session = new Session(this.assetMgr, options, this.sessionStore);
       sessions[session.sessionId] = session;
     }
@@ -330,6 +336,31 @@ class ChannelEngine {
     } else {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
+    }
+  }
+
+  async _handleAggregatedSessionHealth(req, res, next) {
+    debug(`req.url=${req.url}`);
+    let failingSessions = [];
+    let endpoints = [];
+    for (const sessionId of Object.keys(sessions)) {
+      const session = sessions[sessionId];
+      if (session && session.hasPlayhead()) {
+        const status = await session.getStatusAsync();
+        if (status.playhead && status.playhead.state !== "running") {
+          failingSessions.push(status);
+        }
+        endpoints.push({
+          health: '/health/' + sessionId,
+          status: '/status/' + sessionId,
+          playback: '/live/master.m3u8?channel=' + sessionId,
+        });
+      }
+    }
+    if (failingSessions.length === 0) {
+      res.send(200, { "health": "ok", "count": endpoints.length, "sessionEndpoints": endpoints } );
+    } else {
+      res.send(502, { "health": "not ok", "failed": failingSessions });
     }
   }
 
