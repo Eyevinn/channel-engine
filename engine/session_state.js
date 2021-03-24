@@ -20,6 +20,7 @@ class SessionStateStore extends SharedStateStore {
       tsLastRequestMaster: null,
       tsLastRequestAudio: null,
       currentVod: null,
+      slateCount: 0,
     });
   }
 
