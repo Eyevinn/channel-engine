@@ -7,7 +7,8 @@ const EventStream = require('./event_stream.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
-const { filterQueryParser } = require('./util.js');
+const { filterQueryParser, toHHMMSS } = require('./util.js');
+const { version } = require('../package.json');
 
 const sessions = {}; // Should be a persistent store...
 const eventStreams = {};
@@ -35,6 +36,7 @@ class ChannelEngine {
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
+    this.serverStartTime = Date.now();
 
     this.sessionStore = {
       sessionStateStore: new SessionStateStore({ redisUrl: options.redisUrl }),
@@ -357,10 +359,15 @@ class ChannelEngine {
         });
       }
     }
+    const engineStatus = {
+      startTime: new Date(this.serverStartTime).toISOString(),
+      uptime: toHHMMSS((Date.now() - this.serverStartTime) / 1000),
+      version: version,
+    };
     if (failingSessions.length === 0) {
-      res.send(200, { "health": "ok", "count": endpoints.length, "sessionEndpoints": endpoints } );
+      res.send(200, { "health": "ok", "engine": engineStatus, "count": endpoints.length, "sessionEndpoints": endpoints } );
     } else {
-      res.send(503, { "health": "not ok", "failed": failingSessions });
+      res.send(503, { "health": "unhealthy", "engine": engineStatus, "failed": failingSessions });
     }
   }
 
