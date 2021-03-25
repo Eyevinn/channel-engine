@@ -360,7 +360,7 @@ class ChannelEngine {
     if (failingSessions.length === 0) {
       res.send(200, { "health": "ok", "count": endpoints.length, "sessionEndpoints": endpoints } );
     } else {
-      res.send(502, { "health": "not ok", "failed": failingSessions });
+      res.send(503, { "health": "not ok", "failed": failingSessions });
     }
   }
 
