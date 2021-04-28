@@ -23,7 +23,7 @@ class ChannelEngine {
       this.adXchangeUri = options.adXchangeUri;
     }
     this.useDemuxedAudio = false;
-    if (options && options.demuxedAudio === true) {
+    if (options && options.useDemuxedAudio === true) {
       this.useDemuxedAudio = true;
     }
     if (options && options.defaultSlateUri) {
@@ -103,7 +103,7 @@ class ChannelEngine {
       sessions[channel.id] = new Session(this.assetMgr, {
         sessionId: channel.id,
         averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
-        demuxedAudio: options.demuxedAudio,
+        useDemuxedAudio: options.useDemuxedAudio,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         profile: channel.profile,
