@@ -9,7 +9,7 @@ class SharedStateStore {
     this.initData = initData;
     this.type = type;
     this.cache = {};
-    this.cacheTTL = opts.cacheTTL || 1000;
+    this.cacheTTL = opts && opts.cacheTTL ? opts.cacheTTL : 1000;
 
     this.shared = false;
     if (opts && opts.redisUrl) {
