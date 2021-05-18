@@ -4,7 +4,7 @@ const debug = require("debug")("memcached-state-store");
 class MemcachedStateStore {
   constructor(keyPrefix, opts) {
     this.keyPrefix = keyPrefix;
-    this.client = new MemcacheClient({ server: opts.memcachedUrl });
+    this.client = new MemcacheClient({ server: opts.memcachedUrl, cmdTimeout: 10000 });
   }
 
   async initAsync(id, initData) {
