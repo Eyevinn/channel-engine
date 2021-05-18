@@ -54,6 +54,8 @@ Available options when constructing the Channel Engine object are:
 - `defaultSlateUri`: URI to an HLS VOD that can be inserted when a VOD for some reason cannot be loaded.
 - `slateRepetitions`: Number of times the slate should be repeated.
 - `redisUrl`: A Redis DB URL for storing states that can be shared between nodes.
+- `memcachedUrl`: A Memcached URL for storing states that can be shared between nodes.
+- `sharedStoreCacheTTL`: How long should data be cached in memory before writing to shared store. Default is 1000 ms.
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
 - `cacheTTL`: Sets the cache-control header TTL. Default is 4 sec.

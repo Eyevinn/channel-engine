@@ -1,6 +1,7 @@
 const debug = require("debug")("engine-state-store");
 
 const RedisStateStore = require("./redis_state_store.js");
+const MemcachedStateStore = require("./memcached_state_store.js");
 const MemoryStateStore = require("./memory_state_store.js");
 
 class SharedStateStore {
@@ -14,6 +15,10 @@ class SharedStateStore {
     if (opts && opts.redisUrl) {
       debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
       this.store = new RedisStateStore(`${type}:`, opts);
+      this.shared = true;
+    } else if (opts && opts.memcachedUrl) {
+      debug(`Using MEMCACHED (${opts.memcachedUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
+      this.store = new MemcachedStateStore(`${type}:`, opts);
       this.shared = true;
     } else {
       debug(`Using MEMORY for non-shared state store (${type}, cacheTTL=${this.cacheTTL})`);
@@ -69,8 +74,6 @@ class SharedStateStore {
       }
     }
     data[key] = value;
-//    debug(`${this.type}:${id} Writing to shared store`);
-//    await this.store.setAsync(id, data);
     this.cache[id] = data;
     return data;
   }
