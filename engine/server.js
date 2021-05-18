@@ -39,8 +39,14 @@ class ChannelEngine {
     this.serverStartTime = Date.now();
 
     this.sessionStore = {
-      sessionStateStore: new SessionStateStore({ redisUrl: options.redisUrl }),
-      playheadStateStore: new PlayheadStateStore({ redisUrl: options.redisUrl })
+      sessionStateStore: new SessionStateStore({ 
+        redisUrl: options.redisUrl, 
+        memcachedUrl: options.memcachedUrl, 
+        cacheTTL: options.sharedStoreCacheTTL }),
+      playheadStateStore: new PlayheadStateStore({ 
+        redisUrl: options.redisUrl, 
+        memcachedUrl: options.memcachedUrl, 
+        cacheTTL: options.sharedStoreCacheTTL })
     };
 
     if (options && options.staticDirectory) {
