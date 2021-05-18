@@ -1,92 +1,80 @@
-const redis = require("redis");
 const debug = require("debug")("engine-state-store");
+
+const RedisStateStore = require("./redis_state_store.js");
+const MemcachedStateStore = require("./memcached_state_store.js");
+const MemoryStateStore = require("./memory_state_store.js");
 
 class SharedStateStore {
   constructor(type, opts, initData) {
-    this.sharedStates = {};
     this.initData = initData;
-    this.keyPrefix = `${type}:`;
     this.type = type;
+    this.cache = {};
+    this.cacheTTL = opts && opts.cacheTTL ? opts.cacheTTL : 1000;
 
-    this.client = undefined;
+    this.shared = false;
     if (opts && opts.redisUrl) {
-      debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type})`);
-      this.client = redis.createClient(opts.redisUrl);
+      debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
+      this.store = new RedisStateStore(`${type}:`, opts);
+      this.shared = true;
+    } else if (opts && opts.memcachedUrl) {
+      debug(`Using MEMCACHED (${opts.memcachedUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
+      this.store = new MemcachedStateStore(`${type}:`, opts);
+      this.shared = true;
+    } else {
+      debug(`Using MEMORY for non-shared state store (${type}, cacheTTL=${this.cacheTTL})`);
+      this.store = new MemoryStateStore(`${type}:`, opts);
+    }
+
+    if (this.shared) {
+      this.cacheInvalidator = setInterval(async () => {
+        debug(`${this.type}: Invalidating shared store cache and writing to shared store`);
+        const ids = Object.keys(this.cache);
+        for (let id of ids) {
+          debug(`${this.type}:${id} Writing to shared store`);
+          const data = this.cache[id];
+          await this.store.setAsync(id, data);
+        }
+        this.cache = {};
+      }, this.cacheTTL);
     }
   }
 
   isShared() {
-    return (this.client !== undefined);
-  }
-
-  async redisGetAsync(id) {
-    const storeKey = "" + this.keyPrefix + id;
-    const getAsync = new Promise((resolve, reject) => {
-      this.client.get(storeKey, (err, reply) => {
-        //debug(`REDIS get ${storeKey}:${reply}`);
-        if (!err) {
-          resolve(JSON.parse(reply));
-        } else {
-          reject(err);
-        }
-        });
-    });
-    const data = await getAsync;
-    return data;
-  }
-
-  async redisSetAsync(id, data) {
-    const storeKey = "" + this.keyPrefix + id;
-    const setAsync = new Promise((resolve, reject) => {
-      this.client.set(storeKey, JSON.stringify(data), (err, res) => {
-        //debug(`REDIS set ${storeKey}:${JSON.stringify(data)}`);
-        if (!err) {
-          resolve(data);
-        } else {
-          reject(err);
-        }
-      });
-    });
-    return await setAsync;
+    return this.shared;
   }
 
   async init(id) {
-    if (!this.client) {
-      if (!this.sharedStates[id]) {
-        this.sharedStates[id] = {};
-        Object.keys(this.initData).forEach(key => {
-          this.sharedStates[id][key] = this.initData[key];
-        });
-      }
-      return this.sharedStates[id];
-    } else {
-      let data = await this.redisGetAsync(id);
-      if (data === null) {
-        data = await this.redisSetAsync(id, this.initData);
-      }
-      return data;
-    }
+    this.cache[id] = await this.store.initAsync(id, this.initData);
   }
 
   async get(id) {
-    let data = this.client ? await this.redisGetAsync(id) : this.sharedStates[id];
+    let data;
+    if (this.cache[id]) {
+      data = this.cache[id];
+    } else {
+      debug(`${this.type}:${id} Reading from shared store`);
+      data = await this.store.getAsync(id);
+    }
     if (!data) {
       data = await this.init(id);
     }
+    this.cache[id] = data;
     return data;
   }
 
   async set(id, key, value) {
-    let data = this.client ? await this.redisGetAsync(id) : this.sharedStates[id];
-    if (!data) {
-      data = await this.init(id);
+    let data;
+    if (this.cache[id]) {
+      data = this.cache[id];
+    } else {
+      debug(`${this.type}:${id} Reading from shared store`);
+      data = await this.store.getAsync(id);
+      if (!data) {
+        data = await this.init(id);
+      }
     }
     data[key] = value;
-    if (!this.client) {
-      this.sharedStates[id] = data;
-    } else {
-      await this.redisSetAsync(id, data);
-    }
+    this.cache[id] = data;
     return data;
   }
 }
