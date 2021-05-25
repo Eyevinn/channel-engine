@@ -8,15 +8,16 @@ class RedisStateStore {
   }
 
   async initAsync(id, initData) {
-    let data = await this.getAsync(id);
-    if (data === null) {
-      data = await this.setAsync(id, initData);
+    let data = {};
+    for(const key of Object.keys(initData)) {
+      debug(`${this.keyPrefix} Initiating key ${key} with init data`);
+      data[key] = await this.setAsync(id, key, initData[key]);
     }
     return data;
   }
 
-  async getAsync(id) {
-    const storeKey = "" + this.keyPrefix + id;
+  async getAsync(id, key) {
+    const storeKey = "" + this.keyPrefix + id + key;
     const getAsync = new Promise((resolve, reject) => {
       this.client.get(storeKey, (err, reply) => {
         //debug(`REDIS get ${storeKey}:${reply}`);
@@ -31,13 +32,13 @@ class RedisStateStore {
     return data;
   }
 
-  async setAsync(id, data) {
-    const storeKey = "" + this.keyPrefix + id;
+  async setAsync(id, key, value) {
+    const storeKey = "" + this.keyPrefix + id + key;
     const setAsync = new Promise((resolve, reject) => {
-      this.client.set(storeKey, JSON.stringify(data), (err, res) => {
+      this.client.set(storeKey, JSON.stringify(value), (err, res) => {
         //debug(`REDIS set ${storeKey}:${JSON.stringify(data)}`);
         if (!err) {
-          resolve(data);
+          resolve(value);
         } else {
           reject(err);
         }

@@ -21,11 +21,12 @@ class SessionStateStore extends SharedStateStore {
       tsLastRequestAudio: null,
       currentVod: null,
       slateCount: 0,
+      assetId: ""
     });
   }
 
-  create(sessionId) {
-    return this.init(sessionId);
+  async create(sessionId) {
+    await this.init(sessionId);
   }
 }
 

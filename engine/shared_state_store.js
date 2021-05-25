@@ -24,19 +24,6 @@ class SharedStateStore {
       debug(`Using MEMORY for non-shared state store (${type}, cacheTTL=${this.cacheTTL})`);
       this.store = new MemoryStateStore(`${type}:`, opts);
     }
-
-    if (this.shared) {
-      this.cacheInvalidator = setInterval(async () => {
-        debug(`${this.type}: Invalidating shared store cache and writing to shared store`);
-        const ids = Object.keys(this.cache);
-        for (let id of ids) {
-          debug(`${this.type}:${id} Writing to shared store`);
-          const data = this.cache[id];
-          await this.store.setAsync(id, data);
-        }
-        this.cache = {};
-      }, this.cacheTTL);
-    }
   }
 
   isShared() {
@@ -44,37 +31,27 @@ class SharedStateStore {
   }
 
   async init(id) {
-    this.cache[id] = await this.store.initAsync(id, this.initData);
+    await this.store.initAsync(id, this.initData);
   }
 
-  async get(id) {
-    let data;
-    if (this.cache[id]) {
-      data = this.cache[id];
-    } else {
-      debug(`${this.type}:${id} Reading from shared store`);
-      data = await this.store.getAsync(id);
-    }
-    if (!data) {
-      data = await this.init(id);
-    }
-    this.cache[id] = data;
+  async get(id, key) {
+    //debug(`${this.type}:${id}:${key} Reading from shared store`);
+    let data = await this.store.getAsync(id, key);
+    //debug(key !== "currentVod" ? data : (data ? "not null" : "null" ));
     return data;
   }
 
   async set(id, key, value) {
-    let data;
-    if (this.cache[id]) {
-      data = this.cache[id];
-    } else {
-      debug(`${this.type}:${id} Reading from shared store`);
-      data = await this.store.getAsync(id);
-      if (!data) {
-        data = await this.init(id);
-      }
+    //debug(`${this.type}:${id}:${key} Writing to shared store`);
+    const data = await this.store.setAsync(id, key, value);
+    return data;
+  }
+
+  async getValues(id, keys) {
+    let data = {};
+    for(const key of keys) {
+      data[key] = await this.get(id, key);
     }
-    data[key] = value;
-    this.cache[id] = data;
     return data;
   }
 }

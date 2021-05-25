@@ -118,6 +118,7 @@ describe("Playhead consumer", () => {
   it("continously increases media sequence over two VOD switches", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.initAsync();
     const loop = async (increments) => {
       let remain = increments;
       let promiseFns = [];
@@ -148,6 +149,7 @@ describe("Playhead consumer", () => {
   it("never get the same top segment after media sequence is increased", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.initAsync();
     await verificationLoop(session, 10);
     done();
   });
@@ -155,6 +157,7 @@ describe("Playhead consumer", () => {
   it("can handle three short VODs in a row", async (done) => {
     const assetMgr = new TestAssetManager(null, [{ id: 1, title: "Short", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }]);
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.initAsync();
     await verificationLoop(session, 10);
     done();
   });
@@ -167,6 +170,7 @@ describe("Playhead consumer", () => {
       { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
     const session = new Session(assetMgr, { sessionId: '1', profile: channelProfile }, sessionStore);
+    await session.initAsync();
     await session.incrementAsync();
     const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
@@ -204,6 +208,7 @@ describe("Playhead consumer", () => {
   it("provides all available bitrates for all media sequences without provided channel profile", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.initAsync();
     await session.incrementAsync();
     const masterManifest = await session.getMasterManifestAsync();
     const profile = await parseMasterManifest(masterManifest);
@@ -241,6 +246,7 @@ describe("Playhead consumer", () => {
   it("plays all segments of a VOD before the next one", async (done) => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
+    await session.initAsync();
     const expectedLastSegment = "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/2000/2000-00091.ts";
     let found = false;
 
@@ -273,6 +279,7 @@ describe("Playhead consumer", () => {
   it("inserts a slate when asset manager fails to return an initial VOD", async (done) => {
     const assetMgr = new TestAssetManager({ fail: true });
     const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' }, sessionStore);
+    await session.initAsync();
     let slateManifest;
     const loop = async (increments) => {
       let remain = increments;
@@ -300,6 +307,7 @@ describe("Playhead consumer", () => {
   it("inserts a slate when asset manager fails to return a next VOD", async (done) => {
     const assetMgr = new TestAssetManager({failOnIndex: 1});
     const session = new Session(assetMgr, { sessionId: '1', slateUri: 'http://testcontent.eyevinn.technology/slates/ottera/playlist.m3u8' }, sessionStore);
+    await session.initAsync();
     let slateManifest;
     const loop = async (increments) => {
       let remain = increments;
