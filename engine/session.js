@@ -249,7 +249,7 @@ class Session {
     const currentVod = await this.getCurrentVod();
     if (currentVod) {
       const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq);
-      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}] Current media manifest for ${bw} requested`);
+      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
       return m3u8;
     } else {
       return "Engine not ready";
@@ -274,7 +274,7 @@ class Session {
   async incrementAsync() {
     await this._tickAsync();
     //let sessionState = await this._sessionStateStore.get(this._sessionId);
-    let sessionState = await this._sessionStateStore.getValues(this._sessionId, ["state", "mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+    let sessionState = await this._sessionStateStore.getValues(this._sessionId, ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     //let playheadState = await this._playheadStateStore.get(this._sessionId);
     let playheadState = await this._playheadStateStore.getValues(this._sessionId, ["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     const currentVod = await this.getCurrentVod();

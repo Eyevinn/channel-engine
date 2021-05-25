@@ -226,6 +226,7 @@ class ChannelEngine {
       }
       options.disabledPlayhead = true; // disable playhead for personalized streams
       session = new Session(this.assetMgr, options, this.sessionStore);
+      await session.initAsync();
       sessions[session.sessionId] = session;
     }
     if (req.query['startWithId']) {
