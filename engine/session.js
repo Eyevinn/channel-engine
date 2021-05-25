@@ -102,7 +102,7 @@ class Session {
 
   async getCurrentVod() {
     const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["currentVod"]);
-    debug(`[${this._sessionId}]: ` + sessionState.currentVod ? "currentVod is defined" : "currentVod is null");
+    //debug(`[${this._sessionId}]: ` + sessionState.currentVod ? "currentVod is defined" : "currentVod is null");
     if (sessionState.currentVod) {
       if (this._sessionStateStore.isShared()) {
         let hlsVod = new HLSVod();0
