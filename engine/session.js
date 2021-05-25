@@ -46,9 +46,6 @@ class Session {
       if (config.sessionId) {
         this._sessionId = config.sessionId;
       }
-
-      this._sessionStateStore.create(this._sessionId);
-      this._playheadStateStore.create(this._sessionId);
  
       if (config.category) {
         this._category = config.category;
@@ -86,13 +83,13 @@ class Session {
       if (config.disabledPlayhead) {
         this.disabledPlayhead = true;
       }
-    } else {
-      this._sessionStateStore.create(this._sessionId);
-      this._playheadStateStore.create(this._sessionId);
     }
   }
 
   async initAsync() {
+    await this._sessionStateStore.create(this._sessionId);
+    await this._playheadStateStore.create(this._sessionId);
+
     if (this.startWithId) {
       await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_INIT_BY_ID);
       await this._sessionStateStore.set(this._sessionId, "assetId", this.startWithId);  
@@ -105,10 +102,10 @@ class Session {
 
   async getCurrentVod() {
     const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["currentVod"]);
-
+    debug(`[${this._sessionId}]: ` + sessionState.currentVod ? "currentVod is defined" : "currentVod is null");
     if (sessionState.currentVod) {
       if (this._sessionStateStore.isShared()) {
-        let hlsVod = new HLSVod();
+        let hlsVod = new HLSVod();0
         hlsVod.fromJSON(sessionState.currentVod);
         return hlsVod;
       } else {
@@ -404,8 +401,8 @@ class Session {
     }
     let lastM3u8 = sessionState.lastM3u8;
     lastM3u8[audioGroupId] = m3u8;
-    sessionState = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
-    sessionState = await this._sessionStateStore.set(this._sessionId, "tsLastRequestAudio", Date.now());
+    sessionState.lastM3u8 = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
+    sessionState.tsLastRequestAudio = await this._sessionStateStore.set(this._sessionId, "tsLastRequestAudio", Date.now());
     return m3u8;
   }
 

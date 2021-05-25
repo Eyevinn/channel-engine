@@ -35,13 +35,14 @@ class SharedStateStore {
   }
 
   async get(id, key) {
-    debug(`${this.type}:${id}:${key} Reading from shared store`);
-    const data = await this.store.getAsync(id, key);
+    //debug(`${this.type}:${id}:${key} Reading from shared store`);
+    let data = await this.store.getAsync(id, key);
+    //debug(key !== "currentVod" ? data : (data ? "not null" : "null" ));
     return data;
   }
 
   async set(id, key, value) {
-    debug(`${this.type}:${id}:${key} Writing to shared store`);
+    //debug(`${this.type}:${id}:${key} Writing to shared store`);
     const data = await this.store.setAsync(id, key, value);
     return data;
   }

@@ -9,13 +9,17 @@ const PlayheadState = Object.freeze({
 
 class PlayheadStateStore extends SharedStateStore {
   constructor(opts) {
-    super("playhead", opts, { state: PlayheadState.IDLE, tickInterval: 3 });
+    super("playhead", opts, { 
+      state: PlayheadState.IDLE, 
+      tickInterval: 3, 
+      mediaSeq: 0,
+      vodMediaSeqVideo: 0,
+      vodMediaSeqAudio: 0, 
+    });
   }
   
-  create(sessionId) {
-    (async () => {
-      await this.init(sessionId);
-    })();
+  async create(sessionId) {
+    await this.init(sessionId);
   }
 }
 
