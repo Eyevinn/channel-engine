@@ -103,7 +103,9 @@ class Session {
     return this._sessionId;
   }
 
-  getCurrentVod(sessionState) {
+  async getCurrentVod() {
+    const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["currentVod"]);
+
     if (sessionState.currentVod) {
       if (this._sessionStateStore.isShared()) {
         let hlsVod = new HLSVod();
@@ -131,15 +133,18 @@ class Session {
 
     this.disabledPlayhead = false;
 
-    let playheadState = await this._playheadStateStore.get(this._sessionId);
-    playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
+    //let playheadState = await this._playheadStateStore.get(this._sessionId);
+    let playheadState = await this._playheadStateStore.getValues(this._sessionId, ["state"]);
+    playheadState.state = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.RUNNING);
     while (playheadState.state !== PlayheadState.CRASHED) {
       try {
         const tsIncrementBegin = Date.now();
         const manifest = await this.incrementAsync();
         const tsIncrementEnd = Date.now();
-        const sessionState = await this._sessionStateStore.get(this._sessionId);
-        playheadState = await this._playheadStateStore.get(this._sessionId);
+        //const sessionState = await this._sessionStateStore.get(this._sessionId);
+        const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["state"]);
+        //playheadState = await this._playheadStateStore.get(this._sessionId);
+        playheadState = await this._playheadStateStore.getValues(this._sessionId, ["state", "tickInterval", "playheadRef", "tickMs"]);
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 2 ? 2 : firstDuration;
@@ -154,12 +159,12 @@ class Session {
           const reqTickInterval = playheadState.tickInterval;
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
           let tickInterval = (reqTickInterval) - timeSpentInIncrement;
-          const delta = this._getCurrentDeltaTime(sessionState);
+          const delta = await this._getCurrentDeltaTime();
           if (delta != 0) {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval`);
             tickInterval += delta;
           }
-          const position = this._getCurrentPlayheadPosition(sessionState) * 1000;
+          const position = await this._getCurrentPlayheadPosition() * 1000;
           const timePosition = Date.now() - playheadState.playheadRef;
           const diff = position - timePosition;
           debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
@@ -195,7 +200,7 @@ class Session {
         cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
           { event: 'error', on: 'playhead', channel: this._sessionId, err: err });
         debug(err);
-        playheadState = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
+        playheadState.state = await this._playheadStateStore.set(this._sessionId, "state", PlayheadState.CRASHED);
       }
     }
   }
@@ -217,8 +222,10 @@ class Session {
         sessionId: this._sessionId,
       }
     } else {
-      const playheadState = await this._playheadStateStore.get(this._sessionId);
-      const sessionState = await this._sessionStateStore.get(this._sessionId);
+      //const playheadState = await this._playheadStateStore.get(this._sessionId);
+      //const sessionState = await this._sessionStateStore.get(this._sessionId);
+      const playheadState = await this._playheadStateStore.getValues(this._sessionId, ["state", "tickMs"]);
+      const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["slateCount"]);
       const playheadStateMap = {};
       playheadStateMap[PlayheadState.IDLE] = 'idle';
       playheadStateMap[PlayheadState.RUNNING] = 'running';
@@ -238,9 +245,11 @@ class Session {
   }
 
   async getCurrentMediaManifestAsync(bw, playbackSessionId) {
-    const sessionState = await this._sessionStateStore.get(this._sessionId);
-    const playheadState = await this._playheadStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+    //const sessionState = await this._sessionStateStore.get(this._sessionId);
+    const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["discSeq"]);
+    //const playheadState = await this._playheadStateStore.get(this._sessionId);
+    const playheadState = await this._playheadStateStore.getValues(this._sessionId, ["mediaSeq", "vodMediaSeqVideo"]);
+    const currentVod = await this.getCurrentVod();
     if (currentVod) {
       const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq);
       debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}] Current media manifest for ${bw} requested`);
@@ -251,9 +260,11 @@ class Session {
   }
 
   async getCurrentAudioManifestAsync(audioGroupId, playbackSessionId) {
-    const sessionState = await this._sessionStateStore.get(this._sessionId);
-    const playheadState = await this._playheadStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+    //const sessionState = await this._sessionStateStore.get(this._sessionId);
+    const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["discSeq"]);
+    //const playheadState = await this._playheadStateStore.get(this._sessionId);
+    const playheadState = await this._playheadStateStore.getValues(this._sessionId, ["mediaSeq", "vodMediaSeqAudio"]);
+    const currentVod = await this.getCurrentVod();
     if (currentVod) {
       const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, playheadState.vodMediaSeqAudio, sessionState.discSeq);
       debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId} requested`);
@@ -265,23 +276,25 @@ class Session {
 
   async incrementAsync() {
     await this._tickAsync();
-    let sessionState = await this._sessionStateStore.get(this._sessionId);
-    let playheadState = await this._playheadStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+    //let sessionState = await this._sessionStateStore.get(this._sessionId);
+    let sessionState = await this._sessionStateStore.getValues(this._sessionId, ["state", "mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+    //let playheadState = await this._playheadStateStore.get(this._sessionId);
+    let playheadState = await this._playheadStateStore.getValues(this._sessionId, ["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+    const currentVod = await this.getCurrentVod();
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
-      sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
+      sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
     } else {
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo + 1);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio + 1);
+      sessionState.vodMediaSeqVideo = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo + 1);
+      sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio + 1);
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
+      sessionState.vodMediaSeqVideo = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
+      sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
+      sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
     }
-    playheadState = await this._playheadStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq);
-    playheadState = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
-    playheadState = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
+    playheadState.mediaSeq = await this._playheadStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq);
+    playheadState.vodMediaSeqVideo = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
+    playheadState.vodMediaSeqAudio = await this._playheadStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
     debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()})`);
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     return m3u8;
@@ -289,23 +302,26 @@ class Session {
 
   async getMediaManifestAsync(bw, opts) {
     await this._tickAsync();
-    const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId).tsLastRequestVideo;
+    const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId, "tsLastRequestVideo");
     let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
+    let sessionState = await this._sessionStateStore.getValues(this._sessionId, 
+      ["state", "vodMediaSeqVideo", "mediaSeq", "discSeq", "lastM3u8"]);
 
-    let sessionState = await this._sessionStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+
+    //let sessionState = await this._sessionStateStore.get(this._sessionId);
+    const currentVod = await this.getCurrentVod();
     if (!currentVod) {
       throw new Error('Session not ready');
     }
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
-      sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
+      sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
     } else {
       let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo + sequencesToIncrement);
+      sessionState.state = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", sessionState.vodMediaSeqVideo + sequencesToIncrement);
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
-      sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
+      sessionState.vodMediaSeqVideo = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
+      sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INIT);
     }
 
     debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} (${this.averageSegmentDuration}) bandwidth=${bw} vodMediaSeq=(${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio})`);
@@ -321,18 +337,19 @@ class Session {
     }
     let lastM3u8 = sessionState.lastM3u8;
     lastM3u8[bw] = m3u8;
-    sessionState = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
-    sessionState = await this._sessionStateStore.set(this._sessionId, "lastServedM3u8", m3u8);
-    sessionState = await this._sessionStateStore.set(this._sessionId, "tsLastRequestVideo", Date.now());
+    sessionState.lastM3u8 = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
+    sessionState.lastServedM3u8 = await this._sessionStateStore.set(this._sessionId, "lastServedM3u8", m3u8);
+    sessionState.tsLastRequestVideo = await this._sessionStateStore.set(this._sessionId, "tsLastRequestVideo", Date.now());
 
     if (sessionState.state === SessionState.VOD_NEXT_INIT) {
       await this._tickAsync();
-      const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId).tsLastRequestVideo;
+      const tsLastRequestVideo = await this._sessionStateStore.get(this._sessionId, "tsLastRequestVideo");
       let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
 
-      let sessionState = await this._sessionStateStore.get(this._sessionId);
+      let sessionState = await this._sessionStateStore.getValues(this._sessionId, 
+        ["state", "vodMediaSeqVideo", "mediaSeq", "discSeq", "lastM3u8"]);
       if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
-        sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
+        sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
       }
       debug(`[${this._sessionId}]: VIDEO ${timeSinceLastRequest} (${this.averageSegmentDuration}) bandwidth=${bw} vodMediaSeq=(${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio})`);
       try {
@@ -346,9 +363,9 @@ class Session {
       }
       let lastM3u8 = sessionState.lastM3u8;
       lastM3u8[bw] = m3u8;
-      sessionState = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "lastServedM3u8", m3u8);
-      sessionState = await this._sessionStateStore.set(this._sessionId, "tsLastRequestVideo", Date.now());
+      sessionState.lastM3u8 = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
+      sessionState.lastServedM3u8 = await this._sessionStateStore.set(this._sessionId, "lastServedM3u8", m3u8);
+      sessionState.tsLastRequestVideo = await this._sessionStateStore.set(this._sessionId, "tsLastRequestVideo", Date.now());
       return m3u8;
     } else {
       return m3u8;
@@ -356,18 +373,20 @@ class Session {
   }
 
   async getAudioManifestAsync(audioGroupId, opts) {
-    const tsLastRequestAudio = await this._sessionStateStore.get(this._sessionId).tsLastRequestAudio;
+    const tsLastRequestAudio = await this._sessionStateStore.get(this._sessionId, "tsLastRequestAudio");
     let timeSinceLastRequest = (tsLastRequestAudio === null) ? 0 : Date.now() - tsLastRequestAudio;
 
-    let sessionState = await this._sessionStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+    //let sessionState = await this._sessionStateStore.get(this._sessionId);
+    let sessionState = await this._sessionStateStore.getValues(this._sessionId, 
+      ["state", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq", "lastM3u8"]);
+    const currentVod = await this.getCurrentVod();
     if (sessionState.state !== SessionState.VOD_NEXT_INITIATING) {
       let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
   
       if (sessionState.vodMediaSeqAudio < sessionState.vodMediaSeqVideo) {
-        sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState,vodMediaSeqAudio + sequencesToIncrement);
+        sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", sessionState.vodMediaSeqAudio + sequencesToIncrement);
         if (sessionState.vodMediaSeqAudio >= currentVod.getLiveMediaSequencesCount() - 1) {
-          sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
+          sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
         }
       }
     }
@@ -396,8 +415,7 @@ class Session {
     m3u8 += m3u8Header();
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
-    const sessionState = await this._sessionStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+    const currentVod = await this.getCurrentVod();
     if (!currentVod) {
       throw new Error('Session not ready');
     }
@@ -466,7 +484,8 @@ class Session {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
-      const sessionState = await this._sessionStateStore.get(this._sessionId);
+      //const sessionState = await this._sessionStateStore.get(this._sessionId);
+      const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["slateCount"]);
       await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
       await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
       await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
@@ -484,8 +503,11 @@ class Session {
   async _tickAsync() {
     let newVod;
 
-    let sessionState = await this._sessionStateStore.get(this._sessionId);
-    let currentVod = this.getCurrentVod(sessionState);
+    //let sessionState = await this._sessionStateStore.get(this._sessionId);
+    let sessionState = await this._sessionStateStore.getValues(this._sessionId, 
+      ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq"]);
+
+    let currentVod = await this.getCurrentVod();
     let vodResponse;
 
     switch(sessionState.state) {
@@ -534,8 +556,8 @@ class Session {
           debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
           debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
           //debug(newVod);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
+          sessionState.vodMediaSeqVideo = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
+          sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
           await this._playheadStateStore.set(this._sessionId, "playheadRef", Date.now());
           this.produceEvent({
             type: 'NOW_PLAYING',
@@ -544,8 +566,8 @@ class Session {
               title: this.currentMetadata.title,
             }
           });
-          sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
-          sessionState = await this.setCurrentVod(currentVod);
+          sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_PLAYING);
+          sessionState.currentVod = await this.setCurrentVod(currentVod);
           return;
         } catch (err) {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
@@ -575,7 +597,7 @@ class Session {
           }
           const length = currentVod.getLiveMediaSequencesCount();
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
-          sessionState = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INITIATING);
+          sessionState.state = await this._sessionStateStore.set(this._sessionId, "state", SessionState.VOD_NEXT_INITIATING);
           let vodPromise = this._getNextVod();
           if (length === 1) {
             // Add a grace period for very short VODs before calling nextVod
@@ -625,11 +647,11 @@ class Session {
           debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
           currentVod = newVod;
           debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq + length);
-          sessionState = await this._sessionStateStore.set(this._sessionId, "discSeq", sessionState.discSeq + lastDiscontinuity);
-          sessionState = await this.setCurrentVod(currentVod);
+          sessionState.vodMediaSeqVideo = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqVideo", 0);
+          sessionState.vodMediaSeqAudio = await this._sessionStateStore.set(this._sessionId, "vodMediaSeqAudio", 0);
+          sessionState.mediaSeq = await this._sessionStateStore.set(this._sessionId, "mediaSeq", sessionState.mediaSeq + length);
+          sessionState.discSeq = await this._sessionStateStore.set(this._sessionId, "discSeq", sessionState.discSeq + lastDiscontinuity);
+          sessionState.currentVod = await this.setCurrentVod(currentVod);
           await this._playheadStateStore.set(this._sessionId, "playheadRef", Date.now());
           this.produceEvent({
             type: 'NOW_PLAYING',
@@ -826,8 +848,9 @@ class Session {
     });
   }
 
-  _getCurrentDeltaTime(sessionState) {
-    const currentVod = this.getCurrentVod(sessionState);
+  async _getCurrentDeltaTime() {
+    const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["vodMediaSeqVideo"]);
+    const currentVod = await this.getCurrentVod();
     const deltaTimes = currentVod.getDeltaTimes();
     debug(`[${this._sessionId}]: Current delta time (${sessionState.vodMediaSeqVideo}): ${deltaTimes[sessionState.vodMediaSeqVideo]}`);
     if (deltaTimes[sessionState.vodMediaSeqVideo]) {
@@ -836,8 +859,9 @@ class Session {
     return 0;
   }
 
-  _getCurrentPlayheadPosition(sessionState) {
-    const currentVod = this.getCurrentVod(sessionState);
+  async _getCurrentPlayheadPosition() {
+    const sessionState = await this._sessionStateStore.getValues(this._sessionId, ["vodMediaSeqVideo"]);
+    const currentVod = await this.getCurrentVod();
     const playheadPositions = currentVod.getPlayheadPositions();
     debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${playheadPositions[sessionState.vodMediaSeqVideo]}`);
     return playheadPositions[sessionState.vodMediaSeqVideo];

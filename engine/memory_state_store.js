@@ -16,13 +16,14 @@ class MemoryStateStore {
     return this.sharedStates[id];
   }
 
-  async getAsync(id) {
-    let data = this.sharedStates[id];
-    return data;
+  async getAsync(id, key) {
+    let value = this.sharedStates[id][key];
+    return value;
   }
 
-  async setAsync(id, data) {
-    this.sharedStates[id] = data;
+  async setAsync(id, key, value) {
+    this.sharedStates[id][key] = value;
+    return this.sharedStates[id][key];
   }
 }
 
