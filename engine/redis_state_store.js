@@ -8,10 +8,20 @@ class RedisStateStore {
   }
 
   async initAsync(id, initData) {
+    const isInitiated = await this.getAsync(id, "_initiated");
     let data = {};
-    for(const key of Object.keys(initData)) {
-      debug(`${this.keyPrefix} Initiating key ${key} with init data`);
-      data[key] = await this.setAsync(id, key, initData[key]);
+    if (!isInitiated) {
+      for(const key of Object.keys(initData)) {
+        debug(`${this.keyPrefix} Initiating key ${key} with init data`);
+        data[key] = await this.setAsync(id, key, initData[key]);
+      }
+      await this.setAsync(id, "_initiated", true);
+    } else {
+      debug(`${this.keyPrefix} Already initiated, not initiating with init data`);
+      for(const key of Object.keys(initData)) {
+        debug(`${this.keyPrefix} Initiating key ${key} with data from store`);
+        data[key] = await this.getAsync(id, key);
+      }
     }
     return data;
   }
