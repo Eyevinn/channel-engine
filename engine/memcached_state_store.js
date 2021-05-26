@@ -4,6 +4,11 @@ const debug = require("debug")("memcached-state-store");
 class MemcachedStateStore {
   constructor(keyPrefix, opts) {
     this.keyPrefix = keyPrefix;
+    if (opts.version) {
+      const prependPrefix = opts.version.replace(/\./g, "X");
+      this.keyPrefix = prependPrefix + this.keyPrefix;
+      debug(`Prepending keyprefix with ${prependPrefix} => ${this.keyPrefix}`);
+    }
     this.client = new MemcacheClient({ server: opts.memcachedUrl, cmdTimeout: 10000 });
   }
 
@@ -12,14 +17,14 @@ class MemcachedStateStore {
     let data = {};
     if (!isInitiated) {
       for(const key of Object.keys(initData)) {
-        debug(`${this.keyPrefix} Initiating key ${key} with init data`);
+        debug(`${this.keyPrefix}:${id}: Initiating key ${key} with init data`);
         data[key] = await this.setAsync(id, key, initData[key]);
       }
       await this.setAsync(id, "_initiated", true);
     } else {
-      debug(`${this.keyPrefix} Already initiated, not initiating with init data`);
+      debug(`${this.keyPrefix}:${id}: Already initiated, not initiating with init data`);
       for(const key of Object.keys(initData)) {
-        debug(`${this.keyPrefix} Initiating key ${key} with data from store`);
+        debug(`${this.keyPrefix}:${id}: Initiating key ${key} with data from store`);
         data[key] = await this.getAsync(id, key);
       }
     }

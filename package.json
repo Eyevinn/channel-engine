@@ -26,7 +26,8 @@
     "memcache-client": "^0.10.1",
     "redis": "^3.0.2",
     "request": ">=2.88.0",
-    "restify": ">=8.5.1"
+    "restify": ">=8.5.1",
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "jasmine": "^3.1.0"

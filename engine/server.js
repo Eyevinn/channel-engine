@@ -1,5 +1,6 @@
 const restify = require('restify');
 const errs = require('restify-errors');
+const { v4: uuidv4 } = require('uuid');
 const debug = require('debug')('engine-server');
 const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
@@ -37,16 +38,19 @@ class ChannelEngine {
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
     this.serverStartTime = Date.now();
+    this.instanceId = uuidv4();
 
     this.sessionStore = {
       sessionStateStore: new SessionStateStore({ 
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
-        cacheTTL: options.sharedStoreCacheTTL }),
+        cacheTTL: options.sharedStoreCacheTTL,
+        version: version }),
       playheadStateStore: new PlayheadStateStore({ 
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
-        cacheTTL: options.sharedStoreCacheTTL })
+        cacheTTL: options.sharedStoreCacheTTL,
+        version: version })
     };
 
     if (options && options.staticDirectory) {
@@ -252,6 +256,7 @@ class ChannelEngine {
           "Access-Control-Expose-Headers": "X-Session-Id",
           "Cache-Control": "no-cache",
           "X-Session-Id": session.sessionId,
+          "X-Instance-Id": this.instanceId,
         });
         next();
       } catch (err) {
@@ -274,6 +279,7 @@ class ChannelEngine {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId,
         });
         next();
       } catch (err) {
@@ -298,6 +304,7 @@ class ChannelEngine {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId,
         });
         next();
       } catch (err) {
@@ -370,6 +377,7 @@ class ChannelEngine {
       startTime: new Date(this.serverStartTime).toISOString(),
       uptime: toHHMMSS((Date.now() - this.serverStartTime) / 1000),
       version: version,
+      instanceId: this.instanceId,
     };
     if (failingSessions.length === 0) {
       res.send(200, { "health": "ok", "engine": engineStatus, "count": endpoints.length, "sessionEndpoints": endpoints } );
