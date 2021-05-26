@@ -48,6 +48,7 @@ class SharedSessionState {
       }
     }
     this.cache.currentVod.ts = Date.now();
+    this.cache.currentVod.value = hlsVod;
     return hlsVod;
   }
 
@@ -73,7 +74,9 @@ class SharedSessionState {
   }
 
   async getValues(keys) {
-    return await this.store.getValues(this.sessionId, keys);
+    const values = await this.store.getValues(this.sessionId, keys);
+    //debug(values);
+    return values;
   }
 
   async set(key, value) {
