@@ -7,6 +7,25 @@ const PlayheadState = Object.freeze({
   IDLE: 4
 });
 
+class SharedPlayheadState {
+  constructor(store, sessionId, opts) {
+    this.sessionId = sessionId;
+    this.store = store;
+  }
+
+  async get(key) {
+    return await this.store.get(this.sessionId, key);
+  }
+
+  async getValues(keys) {
+    return await this.store.getValues(this.sessionId, keys);
+  }
+
+  async set(key, value) {
+    return await this.store.set(this.sessionId, key, value);
+  }  
+}
+
 class PlayheadStateStore extends SharedStateStore {
   constructor(opts) {
     super("playhead", opts, { 
@@ -20,6 +39,7 @@ class PlayheadStateStore extends SharedStateStore {
   
   async create(sessionId) {
     await this.init(sessionId);
+    return new SharedPlayheadState(this, sessionId);
   }
 }
 
