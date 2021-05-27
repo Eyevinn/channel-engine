@@ -95,6 +95,7 @@ class ChannelEngine {
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
+    this.server.get('/reset', this._handleSessionReset.bind(this));
 
     if (options && options.heartbeat) {
       this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
@@ -400,6 +401,22 @@ class ChannelEngine {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
+  }
+
+  async _handleSessionReset(req, res, next) {
+    debug(`req.url=${req.url}`);
+    let sessionResets = [];
+    for (const sessionId of Object.keys(sessions)) {
+      const session = sessions[sessionId];
+      if (session) {
+        await session.resetAsync();
+        sessionResets.push(sessionId);
+      } else {
+        const err = new errs.NotFoundError('Invalid session');
+        next(err);  
+      }
+    }
+    res.send(200, { "status": "ok", "instanceId": this.instanceId, "resets": sessionResets });
   }
 
   _gracefulErrorHandler(errMsg) {
