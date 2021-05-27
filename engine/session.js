@@ -214,7 +214,15 @@ class Session {
     }
   }
 
+  async resetAsync() {
+    await this._sessionStateStore.reset(this._sessionId);
+    await this._playheadStateStore.reset(this._sessionId);
+  }
+
   async getCurrentMediaManifestAsync(bw, playbackSessionId) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
@@ -228,6 +236,9 @@ class Session {
   }
 
   async getCurrentAudioManifestAsync(audioGroupId, playbackSessionId) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();

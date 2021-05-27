@@ -34,6 +34,10 @@ class SharedStateStore {
     await this.store.initAsync(id, this.initData);
   }
 
+  async reset(id) {
+    await this.store.resetAsync(id, this.initData);
+  }
+
   async get(id, key) {
     //debug(`${this.type}:${id}:${key} Reading from shared store`);
     let data = await this.store.getAsync(id, key);
