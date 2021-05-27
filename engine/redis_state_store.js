@@ -31,6 +31,11 @@ class RedisStateStore {
     return data;
   }
 
+  async resetAsync(id, initData) {
+    await this.setAsync(id, "_initiated", false);
+    await this.initAsync(id, initData);
+  }
+
   async getAsync(id, key) {
     const storeKey = "" + this.keyPrefix + id + key;
     const getAsync = new Promise((resolve, reject) => {
