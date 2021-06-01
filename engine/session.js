@@ -1,6 +1,8 @@
 const crypto = require('crypto');
 const debug = require('debug')('engine-session');
-const HLSVod = require('@eyevinn/hls-vodtolive');
+//const HLSVod = require('@eyevinn/hls-vodtolive');
+const HLSVod = require('../../../hls-vodtolive');
+
 const m3u8 = require('@eyevinn/m3u8');
 const HLSRepeatVod = require('@eyevinn/hls-repeat');
 const HLSTruncateVod = require('@eyevinn/hls-truncate');
@@ -256,6 +258,8 @@ class Session {
       // # Case: current VOD fails creating manifest for selected track.
       if (!m3u8) {
         // # Handle by fetching a different track?
+        debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}:${audioLanguage} request`);
+     
       }
       debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId} requested`);
       return m3u8;
