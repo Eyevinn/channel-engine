@@ -1,8 +1,6 @@
 const crypto = require('crypto');
 const debug = require('debug')('engine-session');
-//const HLSVod = require('@eyevinn/hls-vodtolive');
-const HLSVod = require('../../../hls-vodtolive');
-
+const HLSVod = require('@eyevinn/hls-vodtolive');
 const m3u8 = require('@eyevinn/m3u8');
 const HLSRepeatVod = require('@eyevinn/hls-repeat');
 const HLSTruncateVod = require('@eyevinn/hls-truncate');
@@ -244,24 +242,18 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionStateStore.get(this._sessionId);
-    const playheadState = await this._playheadStateStore.get(this._sessionId);
-    const currentVod = this.getCurrentVod(sessionState);
+
+    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqAudio"]);
+    const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
-      let m3u8 = currentVod.getLiveMediaAudioSequences(
-        playheadState.mediaSeq,
-        audioGroupId,
-        audioLanguage,
-        playheadState.vodMediaSeqAudio,
-        sessionState.discSeq
-      );
-      // # Case: current VOD fails creating manifest for selected track.
+      const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq);
+      // # Case: current VOD does not have the selected track.
       if (!m3u8) {
-        // # Handle by fetching a different track?
-        debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}:${audioLanguage} request`);
-     
+      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failer for current audio manifest for ${audioGroupId}-${audioLanguage}`);
       }
-      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId} requested`);
+      
+      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
       return m3u8;
     } else {
       return "Engine not ready";
@@ -382,28 +374,22 @@ class Session {
       }
     }
 
-    debug(`[${this._sessionId}]: AUDIO ${timeSinceLastRequest} (${this.averageSegmentDuration}) audioGroupId=${audioGroupId} vodMediaSeq=(${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio})`);
+    debug(`[${this._sessionId}]: AUDIO ${timeSinceLastRequest} (${this.averageSegmentDuration}) audioGroupId=${audioGroupId} audioLanguage=${audioLanguage} vodMediaSeq=(${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio})`);
     let m3u8;
     try {
-      m3u8 = currentVod.getLiveMediaAudioSequences(
-        sessionState.mediaSeq,
-        audioGroupId,
-        audioLanguage,
-        sessionState.vodMediaSeqAudio,
-        sessionState.discSeq
-      );
+      m3u8 = currentVod.getLiveMediaAudioSequences(sessionState.mediaSeq, audioGroupId, audioLanguage, sessionState.vodMediaSeqAudio, sessionState.discSeq);
     } catch (exc) {
       if (sessionState.lastM3u8[audioGroupId][audioLanguage]) {
         m3u8 = sessionState.lastM3u8[audioGroupId][audioLanguage];
       } else {
-        throw new Error("Failed to generate audio manifest");
+        throw new Error('Failed to generate audio manifest');
       }
     }
     let lastM3u8 = sessionState.lastM3u8;
     lastM3u8[audioGroupId] = {};
     lastM3u8[audioGroupId][audioLanguage] = m3u8;
-    sessionState = await this._sessionStateStore.set(this._sessionId, "lastM3u8", lastM3u8);
-    sessionState = await this._sessionStateStore.set(this._sessionId, "tsLastRequestAudio", Date.now());
+    sessionState.lastM3u8 = await this._sessionState.set("lastM3u8", lastM3u8);
+    sessionState.tsLastRequestAudio = await this._sessionState.set("tsLastRequestAudio", Date.now());
     return m3u8;
   }
 
@@ -456,9 +442,7 @@ class Session {
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     }
-    //#This part makes back-up uri in StreamItem. In case above audio tracks are missing uri attribute.
     if (this.use_demuxed_audio === true) {
-      m3u8 += "# AUDIO stream items with uri\n";
       for (let i = 0; i < audioGroupIds.length; i++) {
         let audioGroupId = audioGroupIds[i];
         for (let j = 0; j < this._audioTracks.length; j++) {

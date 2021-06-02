@@ -272,7 +272,7 @@ class ChannelEngine {
 
   async _handleAudioManifest(req, res, next) {
     debug(`req.url=${req.url}`);
-    const session = sessions[req.params[1]];
+    const session = sessions[req.params[2]];
     if (session) {
       try {
         const body = await session.getCurrentAudioManifestAsync(

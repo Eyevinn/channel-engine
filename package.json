@@ -7,7 +7,8 @@
     "debug-server": "DEBUG=engine-*,vod-to-live node server.js",
     "test": "$(npm bin)/jasmine",
     "postversion": "git push && git push --tags",
-    "start": "node server.js"
+    "start": "node server.js",
+    "start-demux": "node server-demux.js"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "contributors": [
