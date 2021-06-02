@@ -47,8 +47,8 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
-//    return [ { id: '1', profile: this._getProfile() } ];
+    //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
+    return [ { id: '1', profile: this._getProfile() } ];
 }
 
   _getProfile() {

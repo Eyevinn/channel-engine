@@ -1,5 +1,5 @@
 /*
- * Reference implementation of Channel Engine library using demuxed assets.
+ * Reference implementation of Channel Engine library using demuxed VOD assets.
  */
 
 const ChannelEngine = require("./index.js");
