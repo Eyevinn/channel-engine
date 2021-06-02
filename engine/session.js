@@ -411,7 +411,7 @@ class Session {
         m3u8 += `#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",LANGUAGE="${cc.lang}",NAME="${cc.name}",DEFAULT=${cc.default ? "YES" : "NO" },AUTOSELECT=${cc.auto ? "YES" : "NO" },INSTREAM-ID="${cc.id}"\n`;
       });
     }
-    if (this.use_demuxed_audio === true) {
+    if (this.use_demuxed_audio === true && this._audioTracks) {
       if (audioGroupIds.length > 0) {
         m3u8 += "# AUDIO groups\n";
         for (let i = 0; i < audioGroupIds.length; i++) {
@@ -442,7 +442,7 @@ class Session {
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     }
-    if (this.use_demuxed_audio === true) {
+    if (this.use_demuxed_audio === true && this._audioTracks) {
       for (let i = 0; i < audioGroupIds.length; i++) {
         let audioGroupId = audioGroupIds[i];
         for (let j = 0; j < this._audioTracks.length; j++) {

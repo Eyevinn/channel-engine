@@ -57,7 +57,6 @@ class RefChannelManager {
       {
         id: "1",
         profile: this._getProfile(),
-        audioTracks: this._getAudioTracks(),
       },
     ];
   }
