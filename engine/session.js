@@ -356,7 +356,7 @@ class Session {
     }
   }
 
-  async getAudioManifestAsync(audioGroupId, opts) {
+  async getAudioManifestAsync(audioGroupId, audioLanguage, opts) {
     const tsLastRequestAudio = await this._sessionState.get("tsLastRequestAudio");
     let timeSinceLastRequest = (tsLastRequestAudio === null) ? 0 : Date.now() - tsLastRequestAudio;
 

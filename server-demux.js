@@ -53,12 +53,7 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [
-      {
-        id: "1",
-        profile: this._getProfile(),
-      },
-    ];
+    return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), }, ];
   }
 
   _getProfile() {
