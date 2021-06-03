@@ -51,6 +51,10 @@ class MemcachedStateStore {
     return value;
   }
 
+  async setVolatileAsync(id, key, value) {
+    throw new Error("memcached: setVolatileAsync not implemented yet");
+  }
+
   async removeAsync(id, key) {
     throw new Error("memcached: removeAsync not implemented yet");
   }  

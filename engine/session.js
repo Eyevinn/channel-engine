@@ -31,6 +31,7 @@ class Session {
 
     this._sessionStateStore = sessionStore.sessionStateStore;
     this._playheadStateStore = sessionStore.playheadStateStore;
+    this._instanceId = sessionStore.instanceId;
 
     //this.currentVod;
     this.currentMetadata = {};
@@ -90,7 +91,7 @@ class Session {
   }
 
   async initAsync() {
-    this._sessionState = await this._sessionStateStore.create(this._sessionId);
+    this._sessionState = await this._sessionStateStore.create(this._sessionId, this._instanceId);
     this._playheadState = await this._playheadStateStore.create(this._sessionId);
 
     if (this.startWithId) {
@@ -269,8 +270,9 @@ class Session {
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
     } else {
-      sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo + 1);
-      sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio + 1);
+      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
+      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio");
+        
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
@@ -573,6 +575,7 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'firstvod', channel: this._sessionId, err: err, vod: vodResponse });
           debug(err);
+          await this._sessionState.remove("nextVod");
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
@@ -667,7 +670,8 @@ class Session {
           }
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
-          currentVod = await this._insertSlate(currentVod);
+            await this._sessionState.remove("nextVod");
+            currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;

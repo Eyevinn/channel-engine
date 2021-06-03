@@ -51,6 +51,11 @@ class SharedStateStore {
     return data;
   }
 
+  async setVolatile(id, key, value) {
+    const data = await this.store.setVolatileAsync(id, key, value);
+    return data;
+  }
+
   async getValues(id, keys) {
     let data = {};
     for(const key of keys) {
