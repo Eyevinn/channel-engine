@@ -85,9 +85,10 @@ class ChannelEngine {
         req.params[0] = m[1];
         req.params[1] = m[2];
         await this._handleMediaManifest(req, res, next);
-      } else if (m = req.params.file.match(/master-(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
+        req.params[2] = m[3];
         await this._handleAudioManifest(req, res, next);
       }
     });
@@ -118,6 +119,7 @@ class ChannelEngine {
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         profile: channel.profile,
+        audioTracks: channel.audioTracks,
         closedCaptions: channel.closedCaptions,
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
@@ -270,12 +272,14 @@ class ChannelEngine {
 
   async _handleAudioManifest(req, res, next) {
     debug(`req.url=${req.url}`);
-    const session = sessions[req.params[1]];
+    const session = sessions[req.params[2]];
     if (session) {
       try {
-        const body = await session.getCurrentAudioManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
-        //verbose(`[${session.sessionId}] body=`);
-        //verbose(body);
+        const body = await session.getCurrentAudioManifestAsync(
+          req.params[0],
+          req.params[1],
+          req.headers["x-playback-session-id"]
+        );
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",

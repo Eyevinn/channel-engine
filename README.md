@@ -8,11 +8,18 @@ To use this library in your NodeJS project download and install the library in y
 $ npm install --save eyevinn-channel-engine
 ```
 
-And to run the basic reference implementation included in this repository you run:
+To run the basic reference implementation included in this repository you run:
 
 ```
 $ npm start
 ```
+
+And to run the basic reference implementation for using demuxed VODs you run:
+
+```
+$ npm run start-demux
+```
+
 
 Then point your HLS video player to `http://localhost:8000/live/master.m3u8?channel=1` to start playing the linear live stream.
 
@@ -41,11 +48,35 @@ class MyAssetManager {
 }
 
 class MyChannelManager {
-  getChannels() -> [ { id, name, slate?, closedCaptions?, profile?, options? } ]
+  getChannels() -> [ { id, name, slate?, closedCaptions?, profile?, audioTracks?, options? } ]
 }
 ```
 
 Find a simplistic reference implementation for guidance in `./server.js`.
+
+
+### Enabling Demuxed Audio
+**LIMITATIONS:** At the moment, only supported for assets with matching audio track GROUP-IDs. Assets with different GROUP-IDs on their tracks will not be loaded correctly when transitioning between them, resulting in buffer errors. (This will be fixed).
+
+To support playing assets with multiple audio tracks, a list of supported languages needs to be pre-defined. 
+Assign to the `audioTracks` property,
+in the return object for the channel manager class's `getChannels()` function, a list of objects in the following format
+
+```
+{
+  language: { type: string } ,
+  name:  { type: string },
+  default: { type: bool } // optional
+}
+```
+Example value for `audioTracks`:
+``` 
+audioTracks = [ { language: "en", name: "English", default: true }, { language: "es", name: "Español" } ];
+```
+**NOTE:** In the case where an asset does not have a track in a language found in the pre-defined list, then the asset's default track will be played in its place.
+
+Find a simplistic reference implementation for guidance about using demuxed VODs in `./server-demux.js`.
+
 
 ### Options
 
@@ -62,6 +93,7 @@ Available options when constructing the Channel Engine object are:
 - `playheadDiffThreshold`: Sets the threshold when starting to adjust tick interval to compensate for playhead drift.
 - `maxTickInterval`: The maximum interval for playhead tick interval. Default is 10000 ms.
 - `cloudWatchMetrics`: Output CloudWatch JSON metrics on console log. Default is false.
+- `useDemuxedAudio`: Enable playing VODs with multiple audio tracks. Default is false.
 
 ## Demo
 

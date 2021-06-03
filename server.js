@@ -47,8 +47,8 @@ class RefAssetManager {
 
 class RefChannelManager {
   getChannels() {
-    return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
-//    return [ { id: '1', profile: this._getProfile() } ];
+    //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
+    return [ { id: '1', profile: this._getProfile() } ];
 }
 
   _getProfile() {
@@ -75,4 +75,3 @@ const engineOptions = {
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
 engine.listen(process.env.port || 8000);
-
