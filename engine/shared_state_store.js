@@ -58,6 +58,10 @@ class SharedStateStore {
     }
     return data;
   }
+
+  async remove(id, key) {
+    await this.store.removeAsync(id, key);
+  }
 }
 
 module.exports = SharedStateStore;

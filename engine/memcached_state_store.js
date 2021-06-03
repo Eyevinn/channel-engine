@@ -50,6 +50,10 @@ class MemcachedStateStore {
     await this.client.set(storeKey, JSON.stringify(value));
     return value;
   }
+
+  async removeAsync(id, key) {
+    throw new Error("memcached: removeAsync not implemented yet");
+  }  
 }
 
 module.exports = MemcachedStateStore;

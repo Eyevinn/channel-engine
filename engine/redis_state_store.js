@@ -65,7 +65,21 @@ class RedisStateStore {
       });
     });
     return await setAsync;
-  }  
+  }
+
+  async removeAsync(id, key) {
+    const storeKey = "" + this.keyPrefix + id + key;
+    const delAsync = new Promise((resolve, reject) => {
+      this.client.del(storeKey, (err, res) => {
+        if (!err) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+    await delAsync;
+  }
 }
 
 module.exports = RedisStateStore;

@@ -82,6 +82,10 @@ class SharedSessionState {
   async set(key, value) {
     return await this.store.set(this.sessionId, key, value);
   }
+  
+  async remove(key) {
+    await this.store.remove(this.sessionId, key);
+  }
 }
 
 class SessionStateStore extends SharedStateStore {
