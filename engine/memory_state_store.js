@@ -25,6 +25,10 @@ class MemoryStateStore {
     this.sharedStates[id][key] = value;
     return this.sharedStates[id][key];
   }
+
+  async removeAsync(id, key) {
+    delete this.sharedStates[id][key];
+  }  
 }
 
 module.exports = MemoryStateStore;
