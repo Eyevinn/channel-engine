@@ -303,7 +303,7 @@ class Session {
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
     } else {
       let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-      sessionState.state = await this._sessionState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo + sequencesToIncrement);
+      sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo + sequencesToIncrement);
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
