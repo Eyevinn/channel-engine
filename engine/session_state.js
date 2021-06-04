@@ -10,8 +10,9 @@ const SessionState = Object.freeze({
 });
 
 class SharedSessionState {
-  constructor(store, sessionId, opts) {
+  constructor(store, sessionId, instanceId, opts) {
     this.sessionId = sessionId;
+    this.instanceId = instanceId;
     this.cache = {
       currentVod: {
         ts: 0,
@@ -82,6 +83,26 @@ class SharedSessionState {
   async set(key, value) {
     return await this.store.set(this.sessionId, key, value);
   }
+  
+  async remove(key) {
+    await this.store.remove(this.sessionId, key);
+  }
+
+  async increment(key) {
+    let incrementer = await this.store.get(this.sessionId, "incrementer");
+    if (!incrementer) {
+      incrementer = this.instanceId;
+      await this.store.setVolatile(this.sessionId, "incrementer", this.instanceId);
+    }
+    let value = await this.get(key);
+    if (incrementer === this.instanceId) {
+      debug(`[${this.sessionId}]: I am incrementing key ${key}`);
+      value += 1;
+      return await this.set(key, value);
+    } else {
+      return value;
+    }
+  }
 }
 
 class SessionStateStore extends SharedStateStore {
@@ -105,9 +126,9 @@ class SessionStateStore extends SharedStateStore {
     }
   }
 
-  async create(sessionId) {
+  async create(sessionId, instanceId) {
     await this.init(sessionId);
-    return new SharedSessionState(this, sessionId, { cacheTTL: this.cacheTTL || 5000 });
+    return new SharedSessionState(this, sessionId, instanceId, { cacheTTL: this.cacheTTL || 5000 });
   }
 }
 

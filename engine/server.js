@@ -50,7 +50,8 @@ class ChannelEngine {
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
-        version: version })
+        version: version }),
+      instanceId: this.instanceId,
     };
 
     if (options && options.staticDirectory) {

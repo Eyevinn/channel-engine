@@ -31,6 +31,7 @@ class Session {
 
     this._sessionStateStore = sessionStore.sessionStateStore;
     this._playheadStateStore = sessionStore.playheadStateStore;
+    this._instanceId = sessionStore.instanceId;
 
     //this.currentVod;
     this.currentMetadata = {};
@@ -90,7 +91,7 @@ class Session {
   }
 
   async initAsync() {
-    this._sessionState = await this._sessionStateStore.create(this._sessionId);
+    this._sessionState = await this._sessionStateStore.create(this._sessionId, this._instanceId);
     this._playheadState = await this._playheadStateStore.create(this._sessionId);
 
     if (this.startWithId) {
@@ -269,8 +270,9 @@ class Session {
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
     } else {
-      sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo + 1);
-      sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio + 1);
+      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
+      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio");
+        
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
@@ -499,7 +501,7 @@ class Session {
     let newVod;
 
     let sessionState = await this._sessionState.getValues( 
-      ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq"]);
+      ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq", "nextVod"]);
 
     let currentVod = await this._sessionState.getCurrentVod();
     let vodResponse;
@@ -511,13 +513,14 @@ class Session {
           let nextVodPromise;
           if (sessionState.state === SessionState.VOD_INIT) {
             debug(`[${this._sessionId}]: state=VOD_INIT`);
-            nextVodPromise = this._getNextVod();
+            nextVodPromise = this._getNextVod(sessionState);
           } else if (sessionState.state === SessionState.VOD_INIT_BY_ID) {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
           }
           const nextVodStart = Date.now();
           vodResponse = await nextVodPromise;
+          sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
           let loadPromise;
@@ -562,6 +565,7 @@ class Session {
           });
           sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
           sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
+          await this._sessionState.remove("nextVod");
           return;
         } catch (err) {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
@@ -571,6 +575,7 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'firstvod', channel: this._sessionId, err: err, vod: vodResponse });
           debug(err);
+          await this._sessionState.remove("nextVod");
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
@@ -592,7 +597,7 @@ class Session {
           const length = currentVod.getLiveMediaSequencesCount();
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
           sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
-          let vodPromise = this._getNextVod();
+          let vodPromise = this._getNextVod(sessionState);
           if (length === 1) {
             // Add a grace period for very short VODs before calling nextVod
             const gracePeriod = (this.averageSegmentDuration / 2);
@@ -601,6 +606,7 @@ class Session {
           }
           const nextVodStart = Date.now();
           vodResponse = await vodPromise;
+          sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
           let loadPromise;
@@ -645,6 +651,7 @@ class Session {
           sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
           sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
           sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
+          await this._sessionState.remove("nextVod");
           sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
           await this._playheadState.set("playheadRef", Date.now());
           this.produceEvent({
@@ -663,7 +670,8 @@ class Session {
           }
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
-          currentVod = await this._insertSlate(currentVod);
+            await this._sessionState.remove("nextVod");
+            currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;
@@ -675,14 +683,24 @@ class Session {
     }
   }
 
-  _getNextVod() {
+  _getNextVod(sessionState) {
     return new Promise((resolve, reject) => {
-      this._assetManager.getNextVod({ 
-        sessionId: this._sessionId, 
-        category: this._category, 
-        playlistId: this._sessionId
-      })
-      .then(nextVod => {
+      let nextVodPromise;
+
+      if (!sessionState.nextVod) {
+        nextVodPromise = this._assetManager.getNextVod({ 
+          sessionId: this._sessionId, 
+          category: this._category, 
+          playlistId: this._sessionId
+        });
+      } else {
+        nextVodPromise = new Promise((success, fail) => {
+          debug(`[${this._sessionId}]: Reading nextVod response from session store`);
+          success(sessionState.nextVod);
+        });
+      }
+
+      nextVodPromise.then(nextVod => {
         if (nextVod && nextVod.uri) {
           this.currentMetadata = {
             id: nextVod.id,

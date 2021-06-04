@@ -65,7 +65,37 @@ class RedisStateStore {
       });
     });
     return await setAsync;
-  }  
+  }
+
+  async setVolatileAsync(id, key, value) {
+    const data = await this.setAsync(id, key, value);
+    const storeKey = "" + this.keyPrefix + id + key;
+    const expireAsync = new Promise((resolve, reject) => {
+      this.client.expire(storeKey, 5, (err, res) => {
+        if (!err) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+    await expireAsync;
+    return data;
+  }
+
+  async removeAsync(id, key) {
+    const storeKey = "" + this.keyPrefix + id + key;
+    const delAsync = new Promise((resolve, reject) => {
+      this.client.del(storeKey, (err, res) => {
+        if (!err) {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+    await delAsync;
+  }
 }
 
 module.exports = RedisStateStore;
