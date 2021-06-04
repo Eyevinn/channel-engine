@@ -45,12 +45,12 @@ class ChannelEngine {
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
-        version: version }),
+      }),
       playheadStateStore: new PlayheadStateStore({ 
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
-        version: version }),
+      }),
       instanceId: this.instanceId,
     };
 
