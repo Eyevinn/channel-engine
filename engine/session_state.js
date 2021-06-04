@@ -81,14 +81,23 @@ class SharedSessionState {
   }
 
   async set(key, value) {
-    return await this.store.set(this.sessionId, key, value);
+    let leader = await this.store.get(this.sessionId, "leader");
+    if (!leader) {
+      leader = this.instanceId;
+      await this.store.setVolatile(this.sessionId, "leader", this.instanceId);
+    }
+    if (leader === this.instanceId) {
+      return await this.store.set(this.sessionId, key, value);
+    } else {
+      return await this.store.get(this.sessionId, key);
+    }
   }
   
   async remove(key) {
     await this.store.remove(this.sessionId, key);
   }
 
-  async increment(key) {
+  async increment(key, inc) {
     let incrementer = await this.store.get(this.sessionId, "incrementer");
     if (!incrementer) {
       incrementer = this.instanceId;
@@ -96,9 +105,10 @@ class SharedSessionState {
     }
     let value = await this.get(key);
     if (incrementer === this.instanceId) {
-      debug(`[${this.sessionId}]: I am incrementing key ${key}`);
-      value += 1;
-      return await this.set(key, value);
+      let valueToIncrement = inc || 1;
+      debug(`[${this.sessionId}]: I am incrementing key ${key} with ${valueToIncrement}`);
+      value += valueToIncrement;
+      return await this.store.set(this.sessionId, key, value);
     } else {
       return value;
     }
