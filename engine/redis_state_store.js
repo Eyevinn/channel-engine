@@ -1,6 +1,8 @@
 const redis = require("redis");
 const debug = require("debug")("redis-state-store");
 
+const VOLATILE_KEY_TTL = 2; // seconds
+
 class RedisStateStore {
   constructor(keyPrefix, opts) {
     this.keyPrefix = keyPrefix;
@@ -71,7 +73,7 @@ class RedisStateStore {
     const data = await this.setAsync(id, key, value);
     const storeKey = "" + this.keyPrefix + id + key;
     const expireAsync = new Promise((resolve, reject) => {
-      this.client.expire(storeKey, 5, (err, res) => {
+      this.client.expire(storeKey, VOLATILE_KEY_TTL, (err, res) => {
         if (!err) {
           resolve();
         } else {

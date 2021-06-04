@@ -303,7 +303,7 @@ class Session {
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
     } else {
       let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
-      sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo + sequencesToIncrement);
+      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo", sequencesToIncrement);
     }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
@@ -369,7 +369,7 @@ class Session {
       let sequencesToIncrement = Math.ceil(timeSinceLastRequest / this.averageSegmentDuration);
   
       if (sessionState.vodMediaSeqAudio < sessionState.vodMediaSeqVideo) {
-        sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio + sequencesToIncrement);
+        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", sequencesToIncrement);
         if (sessionState.vodMediaSeqAudio >= currentVod.getLiveMediaSequencesCount() - 1) {
           sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
         }
