@@ -32,7 +32,7 @@ class SharedSessionState {
       throw new Error("shared session state store has not been initialized");
     }
 
-    if (Date.now() < this.cache.currentVod.ts + this.cacheTTL) {
+    if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + this.cacheTTL) {
       debug(`${this.sessionId}: reading 'currentVod' from cache`);
       return this.cache.currentVod.value;
     }
