@@ -353,7 +353,11 @@ class ChannelEngine {
     const session = sessions[req.params.sessionId];
     if (session) {
       const body = await session.getStatusAsync();
-      res.send(200, body);
+      res.sendRaw(200, JSON.stringify(body), {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
       next();
     } else {
       const err = new errs.NotFoundError('Invalid session');
@@ -386,9 +390,20 @@ class ChannelEngine {
       instanceId: this.instanceId,
     };
     if (failingSessions.length === 0) {
-      res.send(200, { "health": "ok", "engine": engineStatus, "count": endpoints.length, "sessionEndpoints": endpoints } );
+      res.sendRaw(200, 
+        JSON.stringify({ "health": "ok", "engine": engineStatus, "count": endpoints.length, "sessionEndpoints": endpoints }),
+        {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache",  
+        });
     } else {
-      res.send(503, { "health": "unhealthy", "engine": engineStatus, "failed": failingSessions });
+      res.sendRaw(503, JSON.stringify({ "health": "unhealthy", "engine": engineStatus, "failed": failingSessions }),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
     }
   }
 
@@ -398,9 +413,19 @@ class ChannelEngine {
     if (session) {
       const status = await session.getStatusAsync();
       if (status.playhead && status.playhead.state === "running") {
-        res.send(200, { "health": "ok", "tick": status.playhead.tickMs });
+        res.sendRaw(200, JSON.stringify({ "health": "ok", "tick": status.playhead.tickMs }),
+        {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache",  
+        });
       } else {
-        res.send(503, { "health": "unhealthy" });
+        res.sendRaw(503, JSON.stringify({ "health": "unhealthy" }),
+        {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache",            
+        });
       }
     } else {
       const err = new errs.NotFoundError('Invalid session');
@@ -421,7 +446,12 @@ class ChannelEngine {
         next(err);  
       }
     }
-    res.send(200, { "status": "ok", "instanceId": this.instanceId, "resets": sessionResets });
+    res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
+    {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache",
+    });
   }
 
   _gracefulErrorHandler(errMsg) {
