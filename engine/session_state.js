@@ -81,12 +81,7 @@ class SharedSessionState {
   }
 
   async set(key, value) {
-    let leader = await this.store.get(this.sessionId, "leader");
-    if (!leader) {
-      leader = this.instanceId;
-      await this.store.setVolatile(this.sessionId, "leader", this.instanceId);
-    }
-    if (leader === this.instanceId) {
+    if (await this.isLeader()) {
       return await this.store.set(this.sessionId, key, value);
     } else {
       return await this.store.get(this.sessionId, key);
@@ -98,13 +93,8 @@ class SharedSessionState {
   }
 
   async increment(key, inc) {
-    let incrementer = await this.store.get(this.sessionId, "incrementer");
-    if (!incrementer) {
-      incrementer = this.instanceId;
-      await this.store.setVolatile(this.sessionId, "incrementer", this.instanceId);
-    }
     let value = await this.get(key);
-    if (incrementer === this.instanceId) {
+    if (await this.isLeader()) {
       let valueToIncrement = inc || 1;
       debug(`[${this.sessionId}]: I am incrementing key ${key} with ${valueToIncrement}`);
       value += valueToIncrement;
@@ -112,6 +102,27 @@ class SharedSessionState {
     } else {
       return value;
     }
+  }
+
+  async ping() {
+    await this.store.setVolatile(this.sessionId, this.instanceId, Date.now());
+  }
+
+  async isLeader() {
+    let leader = await this.store.get(this.sessionId, "leader");
+    if (!leader) {      
+      leader = this.instanceId;
+      debug(`[${this.sessionId}]: We have a new leader! ${this.instanceId}`)
+      await this.store.set(this.sessionId, "leader", this.instanceId);
+    }
+    // Check whether leader is actually alive
+    const lastSeen = await this.store.get(this.sessionId, leader);
+    if (!lastSeen) {
+      leader = this.instanceId;
+      debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${this.instanceId}`);
+      await this.store.set(this.sessionId, "leader", this.instanceId);
+    }
+    return leader === this.instanceId;
   }
 }
 

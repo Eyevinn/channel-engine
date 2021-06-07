@@ -260,7 +260,7 @@ class ChannelEngine {
           "Access-Control-Expose-Headers": "X-Session-Id",
           "Cache-Control": "no-cache",
           "X-Session-Id": session.sessionId,
-          "X-Instance-Id": this.instanceId,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
         });
         next();
       } catch (err) {
@@ -285,7 +285,7 @@ class ChannelEngine {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
-          "X-Instance-Id": this.instanceId,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
         });
         next();
       } catch (err) {
@@ -310,7 +310,7 @@ class ChannelEngine {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
-          "X-Instance-Id": this.instanceId,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
         });
         next();
       } catch (err) {

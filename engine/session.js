@@ -227,12 +227,13 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
+    await this._sessionState.ping();
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq);
-      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
+      debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
       return m3u8;
     } else {
       return "Engine not ready";
@@ -244,6 +245,7 @@ class Session {
       throw new Error('Session not ready');
     }
 
+    await this._sessionState.ping();
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();
@@ -251,10 +253,10 @@ class Session {
       const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq);
       // # Case: current VOD does not have the selected track.
       if (!m3u8) {
-      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
       }
       
-      debug(`[${playbackSessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
+      debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
       return m3u8;
     } else {
       return "Engine not ready";
@@ -398,7 +400,7 @@ class Session {
   async getMasterManifestAsync(filter) {
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
-    m3u8 += m3u8Header();
+    m3u8 += m3u8Header(this._instanceId);
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
     const currentVod = await this._sessionState.getCurrentVod();
@@ -500,8 +502,12 @@ class Session {
   async _tickAsync() {
     let newVod;
 
+    await this._sessionState.ping();
+
     let sessionState = await this._sessionState.getValues( 
       ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq", "nextVod"]);
+
+    let isLeader = await this._sessionState.isLeader();
 
     let currentVod = await this._sessionState.getCurrentVod();
     let vodResponse;
@@ -513,7 +519,7 @@ class Session {
           let nextVodPromise;
           if (sessionState.state === SessionState.VOD_INIT) {
             debug(`[${this._sessionId}]: state=VOD_INIT`);
-            nextVodPromise = this._getNextVod(sessionState);
+            nextVodPromise = this._getNextVod(sessionState, isLeader);
           } else if (sessionState.state === SessionState.VOD_INIT_BY_ID) {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
@@ -526,7 +532,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header());
+            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -597,7 +603,7 @@ class Session {
           const length = currentVod.getLiveMediaSequencesCount();
           const lastDiscontinuity = currentVod.getLastDiscontinuity();
           sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
-          let vodPromise = this._getNextVod(sessionState);
+          let vodPromise = this._getNextVod(sessionState, isLeader);
           if (length === 1) {
             // Add a grace period for very short VODs before calling nextVod
             const gracePeriod = (this.averageSegmentDuration / 2);
@@ -612,7 +618,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header());
+            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -683,11 +689,11 @@ class Session {
     }
   }
 
-  _getNextVod(sessionState) {
+  _getNextVod(sessionState, isLeader) {
     return new Promise((resolve, reject) => {
       let nextVodPromise;
 
-      if (!sessionState.nextVod) {
+      if (isLeader) {
         nextVodPromise = this._assetManager.getNextVod({ 
           sessionId: this._sessionId, 
           category: this._category, 
@@ -695,7 +701,7 @@ class Session {
         });
       } else {
         nextVodPromise = new Promise((success, fail) => {
-          debug(`[${this._sessionId}]: Reading nextVod response from session store`);
+          debug(`[${this._sessionId}]: Not a leader so reading nextVod response from session store`);
           success(sessionState.nextVod);
         });
       }
@@ -730,7 +736,7 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri);
+          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
@@ -768,7 +774,7 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri);
+          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());

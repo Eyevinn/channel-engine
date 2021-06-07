@@ -1,7 +1,7 @@
 const redis = require("redis");
 const debug = require("debug")("redis-state-store");
 
-const VOLATILE_KEY_TTL = 2; // seconds
+const VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
@@ -34,8 +34,17 @@ class RedisStateStore {
   }
 
   async resetAsync(id, initData) {
-    await this.setAsync(id, "_initiated", false);
-    await this.initAsync(id, initData);
+    const resetAsync = new Promise((resolve, reject) => {
+      this.client.flushall((err, reply) => {        
+        if (!err) {
+          console.log("Flushed Redis db: ", reply);
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+    await resetAsync;
   }
 
   async getAsync(id, key) {
@@ -75,6 +84,7 @@ class RedisStateStore {
     const expireAsync = new Promise((resolve, reject) => {
       this.client.expire(storeKey, VOLATILE_KEY_TTL, (err, res) => {
         if (!err) {
+          debug(`REDIS expire ${storeKey} ${VOLATILE_KEY_TTL}s: ${res === 1 ? "OK" : "KEY DOES NOT EXIST"}`);
           resolve();
         } else {
           reject(err);
