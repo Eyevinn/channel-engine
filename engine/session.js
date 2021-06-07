@@ -519,60 +519,66 @@ class Session {
           let nextVodPromise;
           if (sessionState.state === SessionState.VOD_INIT) {
             debug(`[${this._sessionId}]: state=VOD_INIT`);
-            nextVodPromise = this._getNextVod(sessionState, isLeader);
+            nextVodPromise = this._getNextVod();
           } else if (sessionState.state === SessionState.VOD_INIT_BY_ID) {
             debug(`[${this._sessionId}]: state=VOD_INIT_BY_ID ${sessionState.assetId}`);
             nextVodPromise = this._getNextVodById(sessionState.assetId);
           }
-          const nextVodStart = Date.now();
-          vodResponse = await nextVodPromise;
-          sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
-          let loadPromise;
-          if (!vodResponse.type) {
-            debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
-            if (vodResponse.timedMetadata) {
-              Object.keys(vodResponse.timedMetadata).map(k => {
-                newVod.addMetadata(k, vodResponse.timedMetadata[k]);
-              })
+          if (isLeader) {
+            const nextVodStart = Date.now();
+            vodResponse = await nextVodPromise;
+            sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+              { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
+            let loadPromise;
+            if (!vodResponse.type) {
+              debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
+              newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
+              if (vodResponse.timedMetadata) {
+                Object.keys(vodResponse.timedMetadata).map(k => {
+                  newVod.addMetadata(k, vodResponse.timedMetadata[k]);
+                })
+              }
+              currentVod = newVod;
+              loadPromise = currentVod.load();
+            } else {
+              if (vodResponse.type === 'gap') {
+                loadPromise = new Promise((resolve, reject) => {
+                  this._fillGap(null, vodResponse.desiredDuration)
+                  .then(gapVod => {
+                    currentVod = gapVod;
+                    resolve(gapVod);
+                  }).catch(reject);
+                });
+              }
             }
-            currentVod = newVod;
-            loadPromise = currentVod.load();
+            const loadStart = Date.now();
+            await loadPromise;
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+              { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
+            debug(`[${this._sessionId}]: first VOD loaded`);
+            debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
+            debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
+            //debug(newVod);
+            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
+            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
+            await this._playheadState.set("playheadRef", Date.now());
+            this.produceEvent({
+              type: 'NOW_PLAYING',
+              data: {
+                id: this.currentMetadata.id,
+                title: this.currentMetadata.title,
+              }
+            });
+            sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
+            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
+            await this._sessionState.remove("nextVod");
+            return;
           } else {
-            if (vodResponse.type === 'gap') {
-              loadPromise = new Promise((resolve, reject) => {
-                this._fillGap(null, vodResponse.desiredDuration)
-                .then(gapVod => {
-                  currentVod = gapVod;
-                  resolve(gapVod);
-                }).catch(reject);
-              });
-            }
+            debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_PLAYING`);
+            sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
+            return;
           }
-          const loadStart = Date.now();
-          await loadPromise;
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
-          debug(`[${this._sessionId}]: first VOD loaded`);
-          debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
-          debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
-          //debug(newVod);
-          sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
-          sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
-          await this._playheadState.set("playheadRef", Date.now());
-          this.produceEvent({
-            type: 'NOW_PLAYING',
-            data: {
-              id: this.currentMetadata.id,
-              title: this.currentMetadata.title,
-            }
-          });
-          sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
-          sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
-          await this._sessionState.remove("nextVod");
-          return;
         } catch (err) {
           console.error(`[${this._sessionId}]: Failed to init first VOD`);
           if (this._assetManager.handleError) {
@@ -597,77 +603,82 @@ class Session {
       case SessionState.VOD_NEXT_INIT:
         try {
           debug(`[${this._sessionId}]: state=VOD_NEXT_INIT`);
-          if (!currentVod) {
-            throw new Error("No VOD to init");
-          }
-          const length = currentVod.getLiveMediaSequencesCount();
-          const lastDiscontinuity = currentVod.getLastDiscontinuity();
-          sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
-          let vodPromise = this._getNextVod(sessionState, isLeader);
-          if (length === 1) {
-            // Add a grace period for very short VODs before calling nextVod
-            const gracePeriod = (this.averageSegmentDuration / 2);
-            debug(`[${this._sessionId}]: adding a grace period before calling nextVod: ${gracePeriod}ms`);
-            await timer(gracePeriod);
-          }
-          const nextVodStart = Date.now();
-          vodResponse = await vodPromise;
-          sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
-          let loadPromise;
-          if (!vodResponse.type) {
-            debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
-            if (vodResponse.timedMetadata) {
-              Object.keys(vodResponse.timedMetadata).map(k => {
-                newVod.addMetadata(k, vodResponse.timedMetadata[k]);
-              })
+          if (isLeader) {
+            if (!currentVod) {
+              throw new Error("No VOD to init");
             }
+            const length = currentVod.getLiveMediaSequencesCount();
+            const lastDiscontinuity = currentVod.getLastDiscontinuity();
+            sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+            let vodPromise = this._getNextVod();
+            if (length === 1) {
+              // Add a grace period for very short VODs before calling nextVod
+              const gracePeriod = (this.averageSegmentDuration / 2);
+              debug(`[${this._sessionId}]: adding a grace period before calling nextVod: ${gracePeriod}ms`);
+              await timer(gracePeriod);
+            }
+            const nextVodStart = Date.now();
+            vodResponse = await vodPromise;
+            sessionState.nextVod = await this._sessionState.set("nextVod", vodResponse);
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+              { event: 'nextVod', channel: this._sessionId, reqTimeMs: Date.now() - nextVodStart });
+            let loadPromise;
+            if (!vodResponse.type) {
+              debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
+              newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
+              if (vodResponse.timedMetadata) {
+                Object.keys(vodResponse.timedMetadata).map(k => {
+                  newVod.addMetadata(k, vodResponse.timedMetadata[k]);
+                })
+              }
+              this.produceEvent({
+                type: 'NEXT_VOD_SELECTED',
+                data: {
+                  id: this.currentMetadata.id,
+                  uri: vodResponse.uri,
+                  title: this.currentMetadata.title || '',
+                }
+              });
+              loadPromise = newVod.loadAfter(currentVod);
+              if (vodResponse.diffMs) {
+                this.diffCompensation = vodResponse.diffMs;
+              }
+            } else {
+              loadPromise = new Promise((resolve, reject) => {
+                this._fillGap(currentVod, vodResponse.desiredDuration)
+                .then(gapVod => {
+                  newVod = gapVod;
+                  resolve(newVod);
+                }).catch(reject);
+              });
+            }
+            const loadStart = Date.now();
+            await loadPromise;
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+              { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
+            debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
+            debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
+            currentVod = newVod;
+            debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
+            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
+            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
+            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
+            sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
+            await this._sessionState.remove("nextVod");
+            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
+            await this._playheadState.set("playheadRef", Date.now());
             this.produceEvent({
-              type: 'NEXT_VOD_SELECTED',
+              type: 'NOW_PLAYING',
               data: {
                 id: this.currentMetadata.id,
-                uri: vodResponse.uri,
-                title: this.currentMetadata.title || '',
+                title: this.currentMetadata.title,
               }
             });
-            loadPromise = newVod.loadAfter(currentVod);
-            if (vodResponse.diffMs) {
-              this.diffCompensation = vodResponse.diffMs;
-            }
+            return;
           } else {
-            loadPromise = new Promise((resolve, reject) => {
-              this._fillGap(currentVod, vodResponse.desiredDuration)
-              .then(gapVod => {
-                newVod = gapVod;
-                resolve(newVod);
-              }).catch(reject);
-            });
+            debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
+            sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
           }
-          const loadStart = Date.now();
-          await loadPromise;
-          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
-          debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
-          debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
-          currentVod = newVod;
-          debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
-          sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
-          sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
-          sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
-          sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
-          await this._sessionState.remove("nextVod");
-          sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
-          await this._playheadState.set("playheadRef", Date.now());
-          this.produceEvent({
-            type: 'NOW_PLAYING',
-            data: {
-              id: this.currentMetadata.id,
-              title: this.currentMetadata.title,
-            }
-          });
-          return;
         } catch(err) {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
           debug(`[${this._sessionId}]: ${err}`);
@@ -689,22 +700,15 @@ class Session {
     }
   }
 
-  _getNextVod(sessionState, isLeader) {
+  _getNextVod() {
     return new Promise((resolve, reject) => {
       let nextVodPromise;
 
-      if (isLeader) {
-        nextVodPromise = this._assetManager.getNextVod({ 
-          sessionId: this._sessionId, 
-          category: this._category, 
-          playlistId: this._sessionId
-        });
-      } else {
-        nextVodPromise = new Promise((success, fail) => {
-          debug(`[${this._sessionId}]: Not a leader so reading nextVod response from session store`);
-          success(sessionState.nextVod);
-        });
-      }
+      nextVodPromise = this._assetManager.getNextVod({ 
+        sessionId: this._sessionId, 
+        category: this._category, 
+        playlistId: this._sessionId
+      });
 
       nextVodPromise.then(nextVod => {
         if (nextVod && nextVod.uri) {
