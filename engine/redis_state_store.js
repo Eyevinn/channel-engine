@@ -34,8 +34,17 @@ class RedisStateStore {
   }
 
   async resetAsync(id, initData) {
-    await this.setAsync(id, "_initiated", false);
-    await this.initAsync(id, initData);
+    const resetAsync = new Promise((resolve, reject) => {
+      this.client.flushall((err, reply) => {        
+        if (!err) {
+          console.log("Flushed Redis db: ", reply);
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
+    });
+    await resetAsync;
   }
 
   async getAsync(id, key) {
