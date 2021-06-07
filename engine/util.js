@@ -52,9 +52,9 @@ const cloudWatchLog = (silent, type, logEntry) => {
   }
 };
 
-const m3u8Header = () => {
+const m3u8Header = (instanceId) => {
   let m3u8 = "";
-  m3u8 += `## Created with Eyevinn Channel Engine library (version=${version})\n`;
+  m3u8 += `## Created with Eyevinn Channel Engine library (version=${version}${instanceId ? "<" + instanceId + ">" : "" })\n`;
   m3u8 += "##    https://www.npmjs.com/package/eyevinn-channel-engine\n";
   return m3u8;
 };

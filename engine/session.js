@@ -398,7 +398,7 @@ class Session {
   async getMasterManifestAsync(filter) {
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
-    m3u8 += m3u8Header();
+    m3u8 += m3u8Header(this._instanceId);
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
     m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
     const currentVod = await this._sessionState.getCurrentVod();
@@ -526,7 +526,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header());
+            newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -612,7 +612,7 @@ class Session {
           let loadPromise;
           if (!vodResponse.type) {
             debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header());
+            newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
             if (vodResponse.timedMetadata) {
               Object.keys(vodResponse.timedMetadata).map(k => {
                 newVod.addMetadata(k, vodResponse.timedMetadata[k]);
