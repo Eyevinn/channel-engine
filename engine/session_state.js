@@ -59,7 +59,11 @@ class SharedSessionState {
     }
 
     if (this.store.isShared()) {
-      await this.set("currentVod", hlsVod.toJSON());
+      let newHlsVodJson = await this.set("currentVod", hlsVod.toJSON());
+      if (!(await this.isLeader())) {
+        hlsVod = new HLSVod();
+        hlsVod.fromJSON(newHlsVodJson);
+      }
     } else {
       await this.set("currentVod", hlsVod);
     }
