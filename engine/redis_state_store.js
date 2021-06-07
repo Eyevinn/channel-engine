@@ -1,7 +1,7 @@
 const redis = require("redis");
 const debug = require("debug")("redis-state-store");
 
-const VOLATILE_KEY_TTL = 4; // seconds
+const VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
@@ -84,6 +84,7 @@ class RedisStateStore {
     const expireAsync = new Promise((resolve, reject) => {
       this.client.expire(storeKey, VOLATILE_KEY_TTL, (err, res) => {
         if (!err) {
+          debug(`REDIS expire ${storeKey} ${VOLATILE_KEY_TTL}s: ${res === 1 ? "OK" : "KEY DOES NOT EXIST"}`);
           resolve();
         } else {
           reject(err);
