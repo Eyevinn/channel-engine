@@ -730,7 +730,7 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri);
+          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
@@ -768,7 +768,7 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri);
+          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
