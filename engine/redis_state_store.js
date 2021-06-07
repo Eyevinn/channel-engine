@@ -1,7 +1,7 @@
 const redis = require("redis");
 const debug = require("debug")("redis-state-store");
 
-const VOLATILE_KEY_TTL = 2; // seconds
+const VOLATILE_KEY_TTL = 4; // seconds
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
