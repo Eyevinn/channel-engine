@@ -41,9 +41,6 @@ class SharedStateStore {
   async get(id, key) {
     //debug(`${this.type}:${id}:${key} Reading from shared store`);
     let data = await this.store.getAsync(id, key);
-    if (!data) {
-      data = this.initData[key];
-    }
     //debug(key !== "currentVod" ? data : (data ? "not null" : "null" ));
     return data;
   }
