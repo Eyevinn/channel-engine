@@ -240,11 +240,15 @@ class Session {
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
-      const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq);
-      debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
-      return m3u8;
+      try {
+        const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq);
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
+        return m3u8;
+      } catch (err) {
+        throw new Error("Failed to generate manifest: " + JSON.stringify(playheadState));
+      }
     } else {
-      return "Engine not ready";
+      throw new Error("Engine not ready");
     }  
   }
 
@@ -258,16 +262,20 @@ class Session {
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
-      const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq);
-      // # Case: current VOD does not have the selected track.
-      if (!m3u8) {
-        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
+      try {
+        const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq);
+        // # Case: current VOD does not have the selected track.
+        if (!m3u8) {
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
+        }
+        
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
+        return m3u8;
+      } catch (err) {
+        throw new Error("Failed to generate audio manifest: " + JSON.stringify(playheadState));
       }
-      
-      debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
-      return m3u8;
     } else {
-      return "Engine not ready";
+      throw new Error("Engine not ready");
     }  
   }
 
