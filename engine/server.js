@@ -99,6 +99,15 @@ class ChannelEngine {
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
 
+    this.server.on('NotFound', (req, res, err, next) => {
+      res.header("X-Instance-Id", this.instanceId + `<${version}>`);
+      return next();
+    });
+    this.server.on('InternalServer', (req, res, err, next) => {
+      res.header("X-Instance-Id", this.instanceId + `<${version}>`);
+      return next();
+    });
+
     if (options && options.heartbeat) {
       this.server.get(options.heartbeat, this._handleHeartbeat.bind(this));
     }
