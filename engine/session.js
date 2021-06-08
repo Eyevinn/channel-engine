@@ -245,6 +245,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
         return m3u8;
       } catch (err) {
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
         throw new Error("Failed to generate manifest: " + JSON.stringify(playheadState));
       }
     } else {
@@ -272,6 +273,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
         return m3u8;
       } catch (err) {
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
         throw new Error("Failed to generate audio manifest: " + JSON.stringify(playheadState));
       }
     } else {
