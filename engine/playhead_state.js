@@ -11,10 +11,15 @@ class SharedPlayheadState {
   constructor(store, sessionId, opts) {
     this.sessionId = sessionId;
     this.store = store;
+    this.state = PlayheadState.IDLE;
   }
 
   async get(key) {
     return await this.store.get(this.sessionId, key);
+  }
+
+  async getState() {
+    return this.state;
   }
 
   async getValues(keys) {
@@ -23,7 +28,12 @@ class SharedPlayheadState {
 
   async set(key, value) {
     return await this.store.set(this.sessionId, key, value);
-  }  
+  }
+
+  async setState(newState) {
+    this.state = newState;
+    return this.state;
+  }
 }
 
 class PlayheadStateStore extends SharedStateStore {

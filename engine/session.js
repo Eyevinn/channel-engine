@@ -113,14 +113,21 @@ class Session {
     this.disabledPlayhead = false;
 
     let playheadState = await this._playheadState.getValues(["state"]);
-    playheadState.state = await this._playheadState.set("state", PlayheadState.RUNNING);
-    while (playheadState.state !== PlayheadState.CRASHED) {
+    let state = await this._playheadState.setState(PlayheadState.RUNNING);
+    while (state !== PlayheadState.CRASHED) {
       try {
         const tsIncrementBegin = Date.now();
         const manifest = await this.incrementAsync();
+        if (!manifest) {
+          debug(`[${this._sessionId}]: No manifest available yet, will try again after 1000ms`);
+          await timer(1000);
+          continue;
+        }
         const tsIncrementEnd = Date.now();
         const sessionState = await this._sessionState.getValues(["state"]);
-        playheadState = await this._playheadState.getValues(["state", "tickInterval", "playheadRef", "tickMs"]);
+        playheadState = await this._playheadState.getValues(["tickInterval", "playheadRef", "tickMs"]);
+        state = await this._playheadState.getState();
+
         if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 2 ? 2 : firstDuration;
@@ -128,7 +135,7 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
             { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: tickInterval });
           this._playheadState.set("tickInterval", tickInterval);
-        } else if (playheadState.state == PlayheadState.STOPPED) {
+        } else if (state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
         } else {
@@ -176,7 +183,7 @@ class Session {
         cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
           { event: 'error', on: 'playhead', channel: this._sessionId, err: err });
         debug(err);
-        playheadState.state = await this._playheadState.set("state", PlayheadState.CRASHED);
+        state = await this._playheadState.setState(PlayheadState.CRASHED);
       }
     }
   }
@@ -198,7 +205,8 @@ class Session {
         sessionId: this._sessionId,
       }
     } else {
-      const playheadState = await this._playheadState.getValues(["state", "tickMs"]);
+      const playheadState = await this._playheadState.getValues(["tickMs"]);
+      const state = await this._playheadState.getState();
       const sessionState = await this._sessionState.getValues(["slateCount"]);
       const playheadStateMap = {};
       playheadStateMap[PlayheadState.IDLE] = 'idle';
@@ -209,7 +217,7 @@ class Session {
       const status = {
         sessionId: this._sessionId,
         playhead: {
-          state: playheadStateMap[playheadState.state],
+          state: playheadStateMap[state],
           tickMs: playheadState.tickMs,
         },
         slateInserted: sessionState.slateCount,
@@ -269,6 +277,15 @@ class Session {
       ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();
+    if (!currentVod || 
+        !sessionState.vodMediaSeqVideo || 
+        !sessionState.vodMediaSeqAudio || 
+        !sessionState.state || 
+        !sessionState.mediaSeq || 
+        !sessionState.discSeq) {
+      debug(`[${this._sessionId}]: Session is not ready yet`);
+      return null;
+    }
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
     } else {
@@ -512,6 +529,10 @@ class Session {
     let currentVod = await this._sessionState.getCurrentVod();
     let vodResponse;
 
+    if (!sessionState.state) {
+      sessionState.state = SessionState.VOD_INIT;
+    }
+
     switch(sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -577,6 +598,7 @@ class Session {
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_PLAYING`);
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
+            sessionState.currentVod = await this._sessionState.getCurrentVod();
             return;
           }
         } catch (err) {
@@ -605,7 +627,9 @@ class Session {
           debug(`[${this._sessionId}]: state=VOD_NEXT_INIT`);
           if (isLeader) {
             if (!currentVod) {
-              throw new Error("No VOD to init");
+              debug(`[${this._sessionId}]: no VOD to append to, assume first VOD to init`);
+              sessionState.state = await this._sessionState.set("state", SessionState.VOD_INIT);
+              return;
             }
             const length = currentVod.getLiveMediaSequencesCount();
             const lastDiscontinuity = currentVod.getLastDiscontinuity();
@@ -678,6 +702,7 @@ class Session {
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+            sessionState.currentVod = await this._sessionState.getCurrentVod();
           }
         } catch(err) {
           console.error(`[${this._sessionId}]: Failed to init next VOD`);
