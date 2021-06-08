@@ -278,12 +278,17 @@ class Session {
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod || 
-        !sessionState.vodMediaSeqVideo || 
-        !sessionState.vodMediaSeqAudio || 
-        !sessionState.state || 
-        !sessionState.mediaSeq || 
-        !sessionState.discSeq) {
+        sessionState.vodMediaSeqVideo === null || 
+        sessionState.vodMediaSeqAudio === null || 
+        sessionState.state === null || 
+        sessionState.mediaSeq === null || 
+        sessionState.discSeq === null) {
       debug(`[${this._sessionId}]: Session is not ready yet`);
+      debug(sessionState);
+      if (await this._sessionState.isLeader()) {
+        debug(`[${this._sessionId}]: I am the leader, trying to initiate the session`);
+        sessionState.state = await this._sessionState.set("state", SessionState.VOD_INIT);
+      }
       return null;
     }
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
@@ -581,6 +586,8 @@ class Session {
             debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
             debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
             //debug(newVod);
+            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
+            sessionState.discSeq = await this._sessionState.set("discSeq", 0);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             await this._playheadState.set("playheadRef", Date.now());
