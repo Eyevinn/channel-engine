@@ -27,6 +27,10 @@ class SharedSessionState {
     this.store = store;
   }
 
+  async clearCurrentVodCache() {
+    this.cache.currentVod.value = null;
+  }
+
   async getCurrentVod() {
     if (!this.sessionId) {
       throw new Error("shared session state store has not been initialized");
