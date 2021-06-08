@@ -1,6 +1,6 @@
 {
   "name": "eyevinn-channel-engine",
-  "version": "2.21.5",
+  "version": "2.21.6",
   "description": "OTT TV Channel Engine",
   "main": "index.js",
   "scripts": {
