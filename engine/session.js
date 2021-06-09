@@ -236,7 +236,6 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    await this._sessionState.ping();
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
@@ -259,7 +258,6 @@ class Session {
       throw new Error('Session not ready');
     }
 
-    await this._sessionState.ping();
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqAudio"]);
     const currentVod = await this._sessionState.getCurrentVod();
