@@ -64,7 +64,8 @@ class SharedSessionState {
 
     if (this.store.isShared()) {
       let newHlsVodJson = await this.set("currentVod", hlsVod.toJSON());
-      if (!(await this.isLeader())) {
+      const isLeader = await this.isLeader();
+      if (!isLeader) {
         debug(`[${this.sessionId}]: not a leader, will not overwrite currentVod in shared store`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(newHlsVodJson);
@@ -114,7 +115,8 @@ class SharedSessionState {
   }
 
   async ping() {
-    await this.store.setVolatile(this.sessionId, this.instanceId, Date.now());
+    // Do not prefix sessionId on ping
+    await this.store.setVolatile("", this.instanceId, Date.now());
   }
 
   async isLeader() {
@@ -124,13 +126,17 @@ class SharedSessionState {
       debug(`[${this.sessionId}]: We have a new leader! ${this.instanceId}`)
       await this.store.set(this.sessionId, "leader", this.instanceId);
     }
-    // Check whether leader is actually alive
-    const lastSeen = await this.store.get(this.sessionId, leader);
-    if (!lastSeen) {
-      leader = this.instanceId;
-      debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${this.instanceId}`);
-      await this.store.set(this.sessionId, "leader", this.instanceId);
+    // Check whether leader is actually alive only if I am not the leader
+    if (leader !== this.instanceId) {
+      debug(`[${this.sessionId}]: Checking whether leader ${this.instanceId} is alive`);
+      const lastSeen = await this.store.get("", leader); // we don't have per session pings
+      if (!lastSeen) {
+        leader = this.instanceId;
+        debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${this.instanceId}`);
+        await this.store.set(this.sessionId, "leader", this.instanceId);
+      }
     }
+    debug(`[${this.sessionId}]: I am ${leader === this.instanceId ? "" : "NOT"} the leader!`);
     return leader === this.instanceId;
   }
 }
