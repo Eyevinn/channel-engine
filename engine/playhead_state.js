@@ -12,6 +12,7 @@ class SharedPlayheadState {
     this.sessionId = sessionId;
     this.store = store;
     this.state = PlayheadState.IDLE;
+    this.lastM3u8 = null;
   }
 
   async get(key) {
@@ -20,6 +21,10 @@ class SharedPlayheadState {
 
   async getState() {
     return this.state;
+  }
+
+  async getLastM3u8() {
+    return this.lastM3u8;
   }
 
   async getValues(keys) {
@@ -33,6 +38,11 @@ class SharedPlayheadState {
   async setState(newState) {
     this.state = newState;
     return this.state;
+  }
+
+  async setLastM3u8(m3u8) {
+    this.lastM3u8 = m3u8;
+    return this.lastM3u8;
   }
 }
 
