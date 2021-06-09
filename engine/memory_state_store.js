@@ -3,7 +3,7 @@ const debug = require("debug")("memory-state-store");
 class MemoryStateStore {
   constructor(type, opts) {
     this.sharedStates = {};
-
+    this.globalSharedStates = {};
   }
 
   async initAsync(id, initData) {
@@ -17,13 +17,22 @@ class MemoryStateStore {
   }
 
   async getAsync(id, key) {
-    let value = this.sharedStates[id][key];
+    let value;
+    if (id === "" || id === null) {
+      value = this.globalSharedStates[key];
+    } else {
+      value = this.sharedStates[id][key];
+    }
     return value;
   }
 
   async setAsync(id, key, value) {
-    this.sharedStates[id][key] = value;
-    return this.sharedStates[id][key];
+    if (id === "" || id === null) {
+      this.globalSharedStates[key] = value;
+    } else {
+      this.sharedStates[id][key] = value;
+      return this.sharedStates[id][key];
+    }
   }
 
   async setVolatileAsync(id, key, value) {
