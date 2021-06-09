@@ -45,7 +45,7 @@ class SharedSessionState {
     let hlsVod = null;
     if (currentVod) {
       if (this.store.isShared()) {
-        debug(`${this.sessionId}: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cacheTTL})`);
+        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cacheTTL})`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(currentVod);
       } else {
@@ -65,7 +65,7 @@ class SharedSessionState {
     if (this.store.isShared()) {
       let newHlsVodJson = await this.set("currentVod", hlsVod.toJSON());
       if (!(await this.isLeader())) {
-        debug(`${this.sessionId}: not a leader, will not overwrite currentVod in shared store`);
+        debug(`[${this.sessionId}]: not a leader, will not overwrite currentVod in shared store`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(newHlsVodJson);
       }
