@@ -37,7 +37,7 @@ class SharedSessionState {
     }
 
     if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + this.cacheTTL) {
-      debug(`${this.sessionId}: reading 'currentVod' from cache`);
+      debug(`[${this.sessionId}]: reading 'currentVod' from cache`);
       return this.cache.currentVod.value;
     }
 
