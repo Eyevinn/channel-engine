@@ -128,12 +128,12 @@ class SharedSessionState {
     }
     // Check whether leader is actually alive only if I am not the leader
     if (leader !== this.instanceId) {
-      debug(`[${this.sessionId}]: Checking whether leader ${this.instanceId} is alive`);
+      debug(`[${this.sessionId}]: Checking whether leader ${leader} is alive`);
       const lastSeen = await this.store.get("", leader); // we don't have per session pings
       if (!lastSeen) {
         leader = this.instanceId;
-        debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${this.instanceId}`);
-        await this.store.set(this.sessionId, "leader", this.instanceId);
+        debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${leader}`);
+        await this.store.set(this.sessionId, "leader", leader);
       }
     }
     debug(`[${this.sessionId}]: I am ${leader === this.instanceId ? "" : "NOT"} the leader!`);
