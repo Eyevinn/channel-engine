@@ -128,10 +128,11 @@ class Session {
         playheadState = await this._playheadState.getValues(["tickInterval", "playheadRef", "tickMs"]);
         state = await this._playheadState.getState();
 
-        if ([SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
+        const isLeader = await this._sessionState.isLeader();
+        if (isLeader && [SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 2 ? 2 : firstDuration;
-          debug(`[${this._sessionId}]: Updated tick interval to ${tickInterval} sec`);
+          debug(`[${this._sessionId}]: I am the leader and updated tick interval to ${tickInterval} sec`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session', 
             { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: tickInterval });
           this._playheadState.set("tickInterval", tickInterval);
@@ -307,10 +308,7 @@ class Session {
         debug(`[${this._sessionId}]: I am the leader and have just initiated next VOD, let's move to VOD_PLAYING`);
         sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
       } else {
-        debug(`[${this._sessionId}]: I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
-        await this._sessionState.clearCurrentVodCache();
-        currentVod = await this._sessionState.getCurrentVod();
-        debug(`[${this._sessionId}]: And return the last generated m3u8 to give the leader some time`);
+        debug(`[${this._sessionId}]: Return the last generated m3u8 to give the leader some time`);
         let m3u8 = await this._playheadState.getLastM3u8();
         if (m3u8) {
           return m3u8;
@@ -322,6 +320,7 @@ class Session {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
       sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio");        
     }
+
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
@@ -649,6 +648,11 @@ class Session {
           }
         }
       case SessionState.VOD_PLAYING:
+        if (!isLeader && sessionState.vodMediaSeqVideo === 0) {
+          debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+          await this._sessionState.clearCurrentVodCache();
+          currentVod = await this._sessionState.getCurrentVod();    
+        }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         return;
       case SessionState.VOD_NEXT_INITIATING:
