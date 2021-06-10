@@ -9,7 +9,7 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header } = require('./util.js');
+const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -245,6 +245,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] Current media manifest for ${bw} requested`);
         return m3u8;
       } catch (err) {
+        logerror(this._sessionId, err);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
         throw new Error("Failed to generate manifest: " + JSON.stringify(playheadState));
       }
@@ -272,6 +273,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
         return m3u8;
       } catch (err) {
+        logerror(this._sessionId, err);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
         throw new Error("Failed to generate audio manifest: " + JSON.stringify(playheadState));
       }
@@ -364,6 +366,7 @@ class Session {
       if (sessionState.lastM3u8[bw]) {
         m3u8 = sessionState.lastM3u8[bw]
       } else {
+        logerror(this._sessionId, exc);
         throw new Error('Failed to generate media manifest');
       }
     }
@@ -390,6 +393,7 @@ class Session {
         if (sessionState.lastM3u8[bw]) {
           m3u8 = sessionState.lastM3u8[bw]
         } else {
+          logerror(this._sessionId, exc);
           throw new Error('Failed to generate media manifest');
         }
       }
@@ -430,6 +434,7 @@ class Session {
       if (sessionState.lastM3u8[audioGroupId][audioLanguage]) {
         m3u8 = sessionState.lastM3u8[audioGroupId][audioLanguage];
       } else {
+        logerror(this._sessionId, exc);
         throw new Error('Failed to generate audio manifest');
       }
     }
