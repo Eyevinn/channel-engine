@@ -9,6 +9,8 @@ const SessionState = Object.freeze({
   VOD_NEXT_INITIATING: 4,
 });
 
+const CURRENTVOD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 class SharedSessionState {
   constructor(store, sessionId, instanceId, opts) {
     this.sessionId = sessionId;
@@ -37,7 +39,7 @@ class SharedSessionState {
       throw new Error("shared session state store has not been initialized");
     }
 
-    if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + this.cacheTTL) {
+    if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + CURRENTVOD_CACHE_TTL) {
       debug(`[${this.sessionId}]: reading 'currentVod' from cache`);
       return this.cache.currentVod.value;
     }
@@ -46,7 +48,7 @@ class SharedSessionState {
     let hlsVod = null;
     if (currentVod) {
       if (this.store.isShared()) {
-        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cacheTTL})`);
+        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + CURRENTVOD_CACHE_TTL})`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(currentVod);
       } else {
