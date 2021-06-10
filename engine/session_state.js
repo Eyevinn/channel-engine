@@ -114,11 +114,6 @@ class SharedSessionState {
     }
   }
 
-  async ping() {
-    // Do not prefix sessionId on ping
-    await this.store.setVolatile("", this.instanceId, Date.now());
-  }
-
   async isLeader() {
     let leader = await this.store.get(this.sessionId, "leader");
     if (!leader) {      
@@ -166,6 +161,11 @@ class SessionStateStore extends SharedStateStore {
     if (opts && opts.cacheTTL) {
       this.cacheTTL = opts.cacheTTL;
     }
+  }
+
+  async ping(instanceId) {
+    let t = Date.now();
+    await this.setVolatile("", instanceId, t);
   }
 
   async create(sessionId, instanceId) {

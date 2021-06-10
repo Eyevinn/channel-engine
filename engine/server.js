@@ -115,6 +115,8 @@ class ChannelEngine {
     if (options && options.channelManager) {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
+
+    const ping = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
   }
 
   async updateChannelsAsync(channelMgr, options) {

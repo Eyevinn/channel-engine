@@ -546,8 +546,6 @@ class Session {
   async _tickAsync() {
     let newVod;
 
-    await this._sessionState.ping();
-
     let sessionState = await this._sessionState.getValues( 
       ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq", "nextVod"]);
 
