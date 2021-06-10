@@ -134,6 +134,12 @@ class SharedSessionState {
         leader = this.instanceId;
         debug(`[${this.sessionId}]: Current leader is missing, taking the lead! ${leader}`);
         await this.store.set(this.sessionId, "leader", leader);
+      } else {
+        if (Date.now() - lastSeen > 30000) {
+          leader = this.instanceId;
+          debug(`[${this.sessionId}]: Current leader hasn't been seen for the last 30 sec, taking the lead! ${leader}`);
+          await this.store.set(this.sessionId, "leader", leader);
+        }
       }
     }
     debug(`[${this.sessionId}]: I am ${leader === this.instanceId ? "" : "NOT"} the leader!`);
