@@ -51,7 +51,7 @@ class RedisStateStore {
     const storeKey = "" + this.keyPrefix + id + key;
     const getAsync = new Promise((resolve, reject) => {
       this.client.get(storeKey, (err, reply) => {
-        //debug(`REDIS get ${storeKey}:${reply}`);
+        debug(`REDIS get ${storeKey}:${reply ? reply.length + " chars" : "null"}`);
         if (!err) {
           resolve(JSON.parse(reply));
         } else {
@@ -67,7 +67,7 @@ class RedisStateStore {
     const storeKey = "" + this.keyPrefix + id + key;
     const setAsync = new Promise((resolve, reject) => {
       this.client.set(storeKey, JSON.stringify(value), (err, res) => {
-        //debug(`REDIS set ${storeKey}:${JSON.stringify(data)}`);
+        debug(`REDIS set ${storeKey}: ${res}`);
         if (!err) {
           resolve(value);
         } else {
