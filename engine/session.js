@@ -128,7 +128,7 @@ class Session {
         playheadState = await this._playheadState.getValues(["tickInterval", "playheadRef", "tickMs"]);
         state = await this._playheadState.getState();
 
-        const isLeader = await this._sessionState.isLeader();
+        const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         if (isLeader && [SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 2 ? 2 : firstDuration;
@@ -286,7 +286,7 @@ class Session {
       ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let currentVod = await this._sessionState.getCurrentVod();
-    const isLeader = await this._sessionState.isLeader();
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (!currentVod || 
         sessionState.vodMediaSeqVideo === null || 
         sessionState.vodMediaSeqAudio === null || 
@@ -549,7 +549,7 @@ class Session {
     let sessionState = await this._sessionState.getValues( 
       ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "discSeq", "nextVod"]);
 
-    let isLeader = await this._sessionState.isLeader();
+    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
 
     let currentVod = await this._sessionState.getCurrentVod();
     let vodResponse;
