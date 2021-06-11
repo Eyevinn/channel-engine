@@ -157,6 +157,9 @@ class SessionStateStore extends SharedStateStore {
   }
 
   async isLeader(instanceId) {
+    if (!instanceId) {
+      throw new Error("Cannot determine leader without instance id");
+    }
     let leader;
     if (this.cache.leader.value && Date.now() < this.cache.leader.ts + this.cacheTTL) {
       leader = this.cache.leader.value;
