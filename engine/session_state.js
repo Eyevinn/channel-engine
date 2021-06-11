@@ -18,6 +18,7 @@ class SharedSessionState {
     this.cache = {
       currentVod: {
         ts: 0,
+        ttl: CURRENTVOD_CACHE_TTL,
         value: null
       }
     };
@@ -39,7 +40,7 @@ class SharedSessionState {
       throw new Error("shared session state store has not been initialized");
     }
 
-    if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + CURRENTVOD_CACHE_TTL) {
+    if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + this.cache.currentVod.ttl) {
       debug(`[${this.sessionId}]: reading 'currentVod' from cache`);
       return this.cache.currentVod.value;
     }
@@ -48,7 +49,7 @@ class SharedSessionState {
     let hlsVod = null;
     if (currentVod) {
       if (this.store.isShared()) {
-        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + CURRENTVOD_CACHE_TTL})`);
+        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cache.currentVod.ttl})`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(currentVod);
       } else {
@@ -60,7 +61,7 @@ class SharedSessionState {
     return hlsVod;
   }
 
-  async setCurrentVod(hlsVod) {
+  async setCurrentVod(hlsVod, opts) {
     if (!this.sessionId) {
       throw new Error("shared session state store has not been initialized");
     }
@@ -78,6 +79,11 @@ class SharedSessionState {
     }
     if (this.cache.currentVod) {
       this.cache.currentVod.ts = Date.now();
+      this.cache.currentVod.ttl = CURRENTVOD_CACHE_TTL;
+      if (opts && opts.ttl) {
+        this.cache.currentVod.ttl = opts.ttl;
+      }
+      debug(`[${this.sessionId}]: TTL for current VOD is ${this.cache.currentVod.ttl}ms`);
       this.cache.currentVod.value = hlsVod;
     }
     return this.cache.currentVod.value;
@@ -151,6 +157,9 @@ class SessionStateStore extends SharedStateStore {
   }
 
   async isLeader(instanceId) {
+    if (!instanceId) {
+      throw new Error("Cannot determine leader without instance id");
+    }
     let leader;
     if (this.cache.leader.value && Date.now() < this.cache.leader.ts + this.cacheTTL) {
       leader = this.cache.leader.value;
