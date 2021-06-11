@@ -238,6 +238,13 @@ class Session {
     }
     const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    if (playheadState.vodMediaSeqVideo === 0) {
+      let isLeader = await this._sessionStateStore.isLeader();
+      if (!isLeader) {
+        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+      }
+    }
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
@@ -624,7 +631,7 @@ class Session {
               }
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
-            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
+            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             await this._sessionState.remove("nextVod");
             return;
           } else {
@@ -725,7 +732,7 @@ class Session {
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
             await this._sessionState.remove("nextVod");
-            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod);
+            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
