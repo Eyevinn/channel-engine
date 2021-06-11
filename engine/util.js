@@ -70,10 +70,16 @@ const toHHMMSS = (secs) => {
       .join(":")
 };
 
+const logerror = (sessionId, err) => {
+  console.error(`ERROR [${sessionId}]:`);
+  console.error(err);
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
   cloudWatchLog,
   m3u8Header,
   toHHMMSS,
+  logerror
 }
