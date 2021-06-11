@@ -1,6 +1,7 @@
 const Session = require('../../engine/session.js');
 const m3u8 = require('@eyevinn/m3u8');
 const Readable = require('stream').Readable;
+const { v4: uuidv4 } = require('uuid');
 
 const { SessionStateStore } = require('../../engine/session_state.js');
 const { PlayheadStateStore } = require('../../engine/playhead_state.js');
@@ -111,7 +112,8 @@ describe("Playhead consumer", () => {
   beforeEach(() => {
     sessionStore = {
       sessionStateStore: new SessionStateStore(),
-      playheadStateStore: new PlayheadStateStore()
+      playheadStateStore: new PlayheadStateStore(),
+      instanceId: uuidv4(),
     };  
   });
 
