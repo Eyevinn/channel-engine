@@ -95,6 +95,31 @@ Available options when constructing the Channel Engine object are:
 - `cloudWatchMetrics`: Output CloudWatch JSON metrics on console log. Default is false.
 - `useDemuxedAudio`: Enable playing VODs with multiple audio tracks. Default is false.
 
+## High Availability (BETA)
+
+As the engine is not a stateless microservice accomplish high availablity and redundancy is not a trivial task, and requires a shared cache cluster (also redundant) to store current state.
+
+![High-level drawing of High Availability](docs/channel_engine_ha_high_level.png)
+
+A beta-version of high availability support is available in the Channel Engine and it uses Redis as the shared storage. This allows you to run a replicaset behind a round-robin load balancer as examplified in the drawing above. To enable high-availability initiate the engine with the URL to the Redis cache.
+
+```
+const engineOptions = {
+  heartbeat: '/',
+  averageSegmentDuration: 2000,
+  channelManager: refChannelManager,
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  slateRepetitions: 10,
+  redisUrl: "redis://127.0.0.1",
+};
+
+const engine = new ChannelEngine(refAssetManager, engineOptions);
+engine.start();
+engine.listen(process.env.port || 8000);
+```
+
+Note that this feature is currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
+
 ## Demo
 
 Visit [Consuo](https://consuo.tv/) for a demonstration of this concept. A demo and proof-of-concept built on top of this library.
