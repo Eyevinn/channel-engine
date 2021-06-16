@@ -540,9 +540,13 @@ class Session {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
-      const sessionState = await this._sessionState.getValues(["slateCount"]);
+      const sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq"]);
+      const length = currentVod.getLiveMediaSequencesCount();
+      const lastDiscontinuity = currentVod.getLastDiscontinuity();
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
+      await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
+      await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("state", SessionState.VOD_PLAYING);
       await this._sessionState.setCurrentVod(slateVod);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
@@ -763,8 +767,8 @@ class Session {
           }
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
-            await this._sessionState.remove("nextVod");
-            currentVod = await this._insertSlate(currentVod);
+          await this._sessionState.remove("nextVod");
+          currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;
