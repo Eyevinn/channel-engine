@@ -551,6 +551,7 @@ class Session {
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
+      await this._playheadState.set("playheadRef", Date.now());
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
 
