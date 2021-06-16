@@ -10,6 +10,7 @@ const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
 const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
+const ChaosMonkey = require('./chaos_monkey.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -545,10 +546,10 @@ class Session {
       const lastDiscontinuity = currentVod.getLastDiscontinuity();
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
+      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+      await this._sessionState.setCurrentVod(slateVod);
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
-      await this._sessionState.set("state", SessionState.VOD_PLAYING);
-      await this._sessionState.setCurrentVod(slateVod);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
@@ -732,7 +733,7 @@ class Session {
               });
             }
             const loadStart = Date.now();
-            await loadPromise;
+            await ChaosMonkey.loadVod(loadPromise);
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
             debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
