@@ -542,8 +542,12 @@ class Session {
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
       const sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq"]);
-      const length = currentVod.getLiveMediaSequencesCount();
-      const lastDiscontinuity = currentVod.getLastDiscontinuity();
+      let length = 0;
+      let lastDiscontinuity = 0;
+      if (currentVod) {
+        length = currentVod.getLiveMediaSequencesCount();
+        lastDiscontinuity = currentVod.getLastDiscontinuity();
+      }
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
