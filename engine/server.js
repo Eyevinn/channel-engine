@@ -32,8 +32,12 @@ class ChannelEngine {
       this.slateRepetitions = options.slateRepetitions || 10;
       this.slateDuration = options.slateDuration || 4000;
     }
+    if (options && options.streamSwitchManager) {
+      this.streamSwitchManager = options.streamSwitchManager;
+    }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
+    this.lastStreamType = null
 
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
@@ -197,7 +201,7 @@ class ChannelEngine {
       debug(`[${status.sessionId}]: Playhead crashed, restarting`);
       await session.restartPlayheadAsync();
     } else if (status.playhead.state === 'idle') {
-      debug(`[${status.sessionId}]: Starting playhead`);       
+      debug(`[${status.sessionId}]: Starting playhead`);
       await session.startPlayheadAsync();
     }
   }
@@ -308,10 +312,93 @@ class ChannelEngine {
     }
   }
 
+ /**
+ *  1 - getSchedule JSON from StreamMgr object.
+ *  2 - Figure out if we are switching vod2live->live || live->vod2live || no switch. (based on schedule)
+ *  3a - If not switching: pass through the last 'session' kinds currentMediaManifest.
+ *  3b - If switching v2l->live: 
+ *        -- get current MediaSeq offset.
+ *        -- get VODs last MediaSeq segments.
+ *        -- set Live URL in SessionLive
+ *        -- return: true.
+ *  3c - If switching live->v2l:
+ *        -- get current MediaSeq offset.
+ *        -- get Live manifest's last MediaSeq segments.
+ *        -- return: false.
+ */
+  async _streamSwitcher(session) {
+    if(!this.streamSwitchManager) {
+      debug('No streamSwitchManager available');
+      return false;
+    }
+    let tsNow = Date.now();
+    let schedule = this.streamSwitchManager.getSchedule();
+
+    for (let i = 0; i < schedule.length; i++) {
+      const scheduleObj = schedule[i];
+      if (tsNow > scheduleObj.start && tsNow < scheduleObj.end) {
+        /**
+         *  type = obj.type
+         *  check if this.lastStreamType is null or not.
+         *  if true:
+         *    exec no switch needed. 
+         *  else:
+         *    compare type & this.lastStreamType;
+         *      if it the same or different?
+         *      same:
+         *          exec no switching needed.
+         *
+         *      different:
+         *          exec time to switch, start either v2l->live || live->vod2live preprocess 
+         * 
+         *   this.lastStreamType = type;
+         *
+         *    WHEN SWITCHING!
+         *    Before calling SessionLive.getCurrentMediaManifest..
+         *    it needs current mediaSeq from session,  and the vods last media sequence (incl. segments).
+         * 
+         *    Before calling session.getCurrentMediaManifest..
+         *    it needs current mediaSeq from sessionLive,  and the live manifests last media sequence (incl. segments).
+         * 
+         */
+
+        if (!this.lastStreamType) {
+          continue;
+        }
+        if (scheduleObj.type !== this.lastStreamType) {
+          this.lastStreamType = scheduleObj.type;
+          //await this._initSwitching(session, scheduleObj);
+          return true;
+        }
+        // Update last stream type
+        this.lastStreamType = scheduleObj.type;
+      }
+    }
+    return false;
+  }
+
+  async _initSwitching(session, scheduleObj) {
+      if(scheduleObj.type === 'vod2live'){
+        // Do the live->v2l version
+
+      } else {
+        // Do the v2l->live version: 1) get current mediaSeq 2) get last media sequence.
+        const currMediaAndDicSeq = await session.getCurrentMediaAndDiscSequenceCount();
+        const currVodSegments = await session.getCurrentMediaSequenceSegment();
+
+        // Send data gathered above to SessionLive, somehow
+        debug(`It worked! I sent data to SESSION-LIVE!`);
+      }
+  }
+
   async _handleMediaManifest(req, res, next) {
     debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
+
+    //const streamSw = this._streamSwitcher(session);
+    //debug(`SteamSwitcher returned: ${streamSw}`);
+ 
     if (session) {
       try {
         const body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
@@ -435,7 +522,7 @@ class ChannelEngine {
         {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",            
+          "Cache-Control": "no-cache",
         });
       }
     } else {

@@ -106,9 +106,9 @@ class Session {
 
   async startPlayheadAsync() {
     debug(`[${this._sessionId}]: Playhead consumer started:`); 
-    debug(`[${this._sessionId}]:   diffThreshold=${this.playheadDiffThreshold}`);
-    debug(`[${this._sessionId}]:   maxTickInterval=${this.maxTickInterval}`);
-    debug(`[${this._sessionId}]:   averageSegmentDuration=${this.averageSegmentDuration}`);
+    debug(`[${this._sessionId}]: diffThreshold=${this.playheadDiffThreshold}`);
+    debug(`[${this._sessionId}]: maxTickInterval=${this.maxTickInterval}`);
+    debug(`[${this._sessionId}]: averageSegmentDuration=${this.averageSegmentDuration}`);
 
     this.disabledPlayhead = false;
 
@@ -230,6 +230,55 @@ class Session {
   async resetAsync() {
     await this._sessionStateStore.reset(this._sessionId);
     await this._playheadStateStore.reset(this._sessionId);
+  }
+
+  // New Function
+  async getCurrentMediaSequenceSegments() {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    if (playheadState.vodMediaSeqVideo === 0) {
+      let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+      if (!isLeader) {
+        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+      }
+    }
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      try {
+        const mediaSegments = currentVod.getLiveMediaSequenceSegments(playheadState.vodMediaSeqVideo);
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}] All current media segments requested`);
+        return mediaSegments;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed get all current media segments: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
+
+  // New Function: Gets the current count of mediaSeq
+  async getCurrentMediaAndDiscSequenceCount() {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    try { 
+      const sessionState = await this._sessionState.getValues(["discSeq"]);
+      const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+      return {
+        'mediaSeq': playheadState.mediaSeq, 
+        'discSeq': sessionState.discSeq
+      };
+    } catch (err) {
+      logerror(this._sessionId, err);
+      await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+      throw new Error("Failed to get states: " + JSON.stringify(playheadState));
+    }
   }
 
   async getCurrentMediaManifestAsync(bw, playbackSessionId) {

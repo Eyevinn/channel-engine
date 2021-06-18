@@ -60,13 +60,28 @@ class RefChannelManager {
   }
 };
 
+// TODO: Create a Ref Stream Switch Manager
+let tsNow = Date.now();
+class StreamSwitchManager {
+  getSchedule() {
+    let schedule = [
+      { start: tsNow,  estEnd: tsNow + 20, type: "vod2live"},
+      { start: tsNow + 20,  estEnd: tsNow + 60 * 2 , type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      { start: tsNow + 60 * 2,  estEnd: 60 * 500, type: "vod2live"},
+    ]
+    return schedule;
+  }
+};
+
 const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
+const refStreamSwitchManager = new StreamSwitchManager();
 
 const engineOptions = {
   heartbeat: '/',
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
+  //streamSwitchManager: refStreamSwitchManager,
   defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
