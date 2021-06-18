@@ -10,6 +10,7 @@ const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
 const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
+const ChaosMonkey = require('./chaos_monkey.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -589,12 +590,21 @@ class Session {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
-      const sessionState = await this._sessionState.getValues(["slateCount"]);
+      const sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq"]);
+      let length = 0;
+      let lastDiscontinuity = 0;
+      if (currentVod) {
+        length = currentVod.getLiveMediaSequencesCount();
+        lastDiscontinuity = currentVod.getLastDiscontinuity();
+      }
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
-      await this._sessionState.set("state", SessionState.VOD_PLAYING);
+      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
       await this._sessionState.setCurrentVod(slateVod);
+      await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
+      await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
+      await this._playheadState.set("playheadRef", Date.now());
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
 
@@ -777,7 +787,7 @@ class Session {
               });
             }
             const loadStart = Date.now();
-            await loadPromise;
+            await ChaosMonkey.loadVod(loadPromise);
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
             debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
@@ -812,8 +822,8 @@ class Session {
           }
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
-            await this._sessionState.remove("nextVod");
-            currentVod = await this._insertSlate(currentVod);
+          await this._sessionState.remove("nextVod");
+          currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
             throw err;

@@ -34,9 +34,6 @@ class RefAssetManager {
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
         }
-        vod.timedMetadata = {
-          'start-date': (new Date()).toISOString()
-        };
         resolve(vod);  
       } else {
         reject("Invalid channelId provided");
