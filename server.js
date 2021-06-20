@@ -8,8 +8,10 @@ class RefAssetManager {
   constructor(opts) {
     this.assets = {
       '1': [
-        { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-        { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
+        //{ id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+        //{ id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" },
+        { id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" },
+        { id: 2, title: "SHORT SLATE TWO", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
       ]
     };
     this.pos = {
@@ -24,7 +26,7 @@ class RefAssetManager {
    *      sessionId,
    *      category,
    *      playlistId
-   *   } 
+   *   }
    */
   getNextVod(vodRequest) {
     return new Promise((resolve, reject) => {
@@ -34,7 +36,7 @@ class RefAssetManager {
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
         }
-        resolve(vod);  
+        resolve(vod);
       } else {
         reject("Invalid channelId provided");
       }
@@ -46,8 +48,7 @@ class RefChannelManager {
   getChannels() {
     //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
     return [ { id: '1', profile: this._getProfile() } ];
-}
-
+  }
   _getProfile() {
     return [
       { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
@@ -62,9 +63,9 @@ let tsNow = Date.now();
 class StreamSwitchManager {
   getSchedule() {
     let schedule = [
-      { start: tsNow,  estEnd: tsNow + 20, type: "vod2live"},
-      { start: tsNow + 20,  estEnd: tsNow + 60 * 2 , type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
-      { start: tsNow + 60 * 2,  estEnd: 60 * 500, type: "vod2live"},
+      { start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (30*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      { start: tsNow + (20*1000) + (33*1000), estEnd: (tsNow + (20*1000)) + (45*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      { start: tsNow + (20*1000) + (75*1000), estEnd: (tsNow + (20*1000)) + (105*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
     ]
     return schedule;
   }
@@ -78,7 +79,7 @@ const engineOptions = {
   heartbeat: '/',
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
-  //streamSwitchManager: refStreamSwitchManager,
+  streamSwitchManager: refStreamSwitchManager,
   defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
