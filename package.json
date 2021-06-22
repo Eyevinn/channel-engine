@@ -25,6 +25,7 @@
     "@eyevinn/m3u8": "^0.4.0",
     "debug": "^3.2.7",
     "memcache-client": "^0.10.1",
+    "ping": "^0.4.1",
     "redis": "^3.0.2",
     "request": ">=2.88.0",
     "restify": ">=8.5.1",

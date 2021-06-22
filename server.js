@@ -8,10 +8,10 @@ class RefAssetManager {
   constructor(opts) {
     this.assets = {
       '1': [
-        //{ id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+        { id: 1, title: "BBB", uri: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+        { id: 2, title: "BBB2", uri: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
         //{ id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" },
-        { id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" },
-        { id: 2, title: "SHORT SLATE TWO", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
+        //{ id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
       ]
     };
     this.pos = {
@@ -51,9 +51,12 @@ class RefChannelManager {
   }
   _getProfile() {
     return [
-      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
-      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
-      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+      // { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      // { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      // { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+      { bw: 3606000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 2588000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 881000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
   }
 };
@@ -63,10 +66,10 @@ let tsNow = Date.now();
 class StreamSwitchManager {
   getSchedule() {
     let schedule = [
-      { start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (30*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
-      { start: tsNow + (20*1000) + (33*1000), estEnd: (tsNow + (20*1000)) + (45*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
-      { start: tsNow + (20*1000) + (75*1000), estEnd: (tsNow + (20*1000)) + (105*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
-    ]
+      { start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (60*1000*2), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      //{ start: tsNow + (20*1000) + (33*1000), estEnd: (tsNow + (20*1000)) + (45*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      //{ start: tsNow + (20*1000) + (75*1000), estEnd: (tsNow + (20*1000)) + (105*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+    ];
     return schedule;
   }
 };

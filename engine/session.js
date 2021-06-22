@@ -20,11 +20,11 @@ const timer = ms => new Promise(res => setTimeout(res, ms));
 
 class Session {
   /**
-   * 
+   *
    * config: {
    *   startWithId,
    * }
-   * 
+   *
    */
   constructor(assetManager, config, sessionStore) {
     this._assetManager = assetManager;
@@ -44,7 +44,7 @@ class Session {
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
 
-    if (config) { 
+    if (config) {
       if (config.sessionId) {
         this._sessionId = config.sessionId;
       }
@@ -271,8 +271,10 @@ class Session {
     try { 
       const sessionState = await this._sessionState.getValues(["discSeq"]);
       const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+      debug(`-------------------SESSIONSTATE: ${sessionState.discSeq}`);
+      debug(`-------------------PLAYHEADSTATE: ${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}`);
       return {
-        'mediaSeq': playheadState.mediaSeq, 
+        'mediaSeq': (playheadState.mediaSeq + playheadState.vodMediaSeqVideo),
         'discSeq': sessionState.discSeq
       };
     } catch (err) {
@@ -326,7 +328,6 @@ class Session {
         if (!m3u8) {
           debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
         }
-        
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
         return m3u8;
       } catch (err) {
@@ -336,7 +337,7 @@ class Session {
       }
     } else {
       throw new Error("Engine not ready");
-    }  
+    }
   }
 
   async incrementAsync() {
@@ -346,11 +347,11 @@ class Session {
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let currentVod = await this._sessionState.getCurrentVod();
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-    if (!currentVod || 
-        sessionState.vodMediaSeqVideo === null || 
-        sessionState.vodMediaSeqAudio === null || 
-        sessionState.state === null || 
-        sessionState.mediaSeq === null || 
+    if (!currentVod ||
+        sessionState.vodMediaSeqVideo === null ||
+        sessionState.vodMediaSeqAudio === null ||
+        sessionState.state === null ||
+        sessionState.mediaSeq === null ||
         sessionState.discSeq === null) {
       debug(`[${this._sessionId}]: Session is not ready yet`);
       debug(sessionState);
@@ -375,7 +376,7 @@ class Session {
       }
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
-      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio");        
+      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio");
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
@@ -396,9 +397,8 @@ class Session {
     await this._tickAsync();
     const tsLastRequestVideo = await this._sessionState.get("tsLastRequestVideo");
     let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
-    let sessionState = await this._sessionState.getValues( 
+    let sessionState = await this._sessionState.getValues(
       ["state", "vodMediaSeqVideo", "mediaSeq", "discSeq", "lastM3u8"]);
-
 
     const currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod) {
