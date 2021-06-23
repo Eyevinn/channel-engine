@@ -323,34 +323,53 @@ class ChannelEngine {
   }
 
  /**
- *  1 - getSchedule JSON from StreamMgr object.
- *  2 - Figure out if we are switching vod2live->live || live->vod2live || no switch. (based on schedule)
- *  3a - If not switching: pass through the last 'session' kinds currentMediaManifest.
- *  3b - If switching v2l->live: 
- *        -- get current MediaSeq offset.
- *        -- get VODs last MediaSeq segments.
- *        -- set Live URL in SessionLive
- *        -- return: true.
- *  3c - If switching live->v2l:
- *        -- get current MediaSeq offset.
- *        -- get Live manifest's last MediaSeq segments.
- *        -- return: false.
+ *  Takes a `Session` object and `SessionLive` object as input,
+ *  and returns either True or False. 
+ *  True -> means to get manifest from SessionLive.
+ *  False -> means to get manifest from Session.
  */
   async _streamSwitcher(session, sessionLive) {
     if(!this.streamSwitchManager) {
       debug('No streamSwitchManager available');
-      return false; // this means play vod2live
+      return false;
     }
+    // Filter out schedule objects from the past
     const strmSchedule = this.streamSwitchManager.getSchedule();
     const schedule = strmSchedule.filter(obj => obj.estEnd >= Date.now());
-    debug(`+++++++++++++++++++++++ ${schedule.length} +++++++++++++++++++++++`);
+    debug(`++++++++++++++++++++++[ ${schedule.length} ]++++++++++++++++++++++`);
     // If no more live streams, and streamType is live switch back to vod2live
     if (schedule.length === 0 && this.streamTypeLive) {
       await this._initSwitching(session, sessionLive, null);
-      return false;//<- we want to use vod2live Session
+      return false;
     }
     if (schedule.length === 0) {
       return false;
+    }
+
+    const tsNow = Date.now();
+    const scheduleObj = schedule[0];
+    // If response is true switch to live else stay on vod2live
+    const resp = await ping.promise.probe(scheduleObj.uri, {timeout: 5});
+    if (!resp) {
+        return false;
+    }
+    if (tsNow >= scheduleObj.start && tsNow < scheduleObj.estEnd) {
+      // TODO: Check if current streaming url == new streaming url
+      if (!this.streamTypeLive) {
+        await this._initSwitching(session, sessionLive, scheduleObj);
+        return true;
+      }
+      return true;
+    }
+    // Case: Back-2-Back Live streams
+    if (schedule.length > 1) {
+      const nextScheduleObj = schedule[1];
+      if (tsNow > nextScheduleObj.start) {
+        await this._initSwitching(session, sessionLive, nextScheduleObj);
+        return true;
+      } else {
+        return false;
+      }
     }
     // GO BACK TO V2L? Then:
     if(strmSchedule.length !== schedule.length && this.streamTypeLive){
@@ -358,46 +377,22 @@ class ChannelEngine {
       await this._initSwitching(session, sessionLive, null);
       return false;
     }
-
-    const tsNow = Date.now();
-    const scheduleObj = schedule[0];
-    // If response true switch to live else stay on vod2live
-    const resp = await ping.promise.probe(scheduleObj.uri, {timeout: 5});
-    if (!resp) {
-        return false;
-    }
-    if (tsNow >= scheduleObj.start && tsNow < scheduleObj.estEnd) {
-      if(!this.streamTypeLive){
-        await this._initSwitching(session, sessionLive, scheduleObj);
-        return true;
-      }
-      return true;
-    }
-    // Case: Back-2-Back Live streams
-    if (schedule.length === 1) {
-        return false;
-    } else {
-        const nextScheduleObj = schedule[1];
-        if (tsNow > nextScheduleObj.start) {
-          await this._initSwitching(session, sessionLive, nextScheduleObj);
-          return true;
-        }
-    }
     return false;
   }
 
   async _initSwitching(session, sessionLive, scheduleObj) {
-      if(this.streamTypeLive){
-        if(!scheduleObj){
+      if (this.streamTypeLive) {
+        if (!scheduleObj) {
           // Do the live->v2l version
-          debug(`--------  Do the live->v2l version`);
-          const curr_counts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-          const curr_segments = await sessionLive.getCurrentMediaSequenceSegments();
-          debug(`-------- mseq & dseq from SessionLive -> [${curr_counts.mediaSeq}]:[${curr_counts.discSeq}]`);
-          debug(`-------- VOD Segments from SessionLive -> [${curr_segments}]`);
-          // TODO: SET data in Session
-
-          // Last thing to do
+          debug(`-------- Do the live->v2l version`);
+          const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+          const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          debug(`-------- mseq & dseq from SessionLive -> [${currCounts.mediaSeq}]:[${currCounts.discSeq}]`);
+          debug(`-------- VOD Segments from SessionLive -> [${currSegments}]`);
+          // TODO: Set data in Session
+          // Necessary data needed for manifest Rewrites!
+          // await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
+          // await session.setCurrentMediaSequenceSegments(currSegments);
           this.streamTypeLive = false;
           debug(`+++++++++++++++++++++++[ Switching from LIVE->V2L ]+++++++++++++++++++++++`);
         } else {
@@ -414,14 +409,13 @@ class ChannelEngine {
         // TODO: Also send ScheduleObj.uri to sessionLIVE.
         const liveStreamUri = scheduleObj.uri;
 
-        // If URI isn't valid (returns 404) stay on vod2live or switch to it if a specific time has passed
+        // TODO: If URI isn't valid (returns 404) stay on vod2live or switch to it if a specific time has passed
 
         // Necessary data needed for manifest Rewrites!
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);
 
-        // Send data gathered above to SessionLive, somehow
         this.streamTypeLive = true;
         debug(`+++++++++++++++++++++++[ Switching from V2L->LIVE ]+++++++++++++++++++++++`);
       }

@@ -1,23 +1,7 @@
-const crypto = require('crypto');
 const debug = require('debug')('engine-sessionLive');
-const HLSVod = require('@eyevinn/hls-vodtolive');
 const m3u8 = require('@eyevinn/m3u8');
-const HLSRepeatVod = require('@eyevinn/hls-repeat');
-const HLSTruncateVod = require('@eyevinn/hls-truncate');
-const Readable = require('stream').Readable;
 const request = require('request');
 const url = require('url');
-
-const { SessionState } = require('./session_state.js');
-const { PlayheadState } = require('./playhead_state.js');
-
-const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
-const ChaosMonkey = require('./chaos_monkey.js');
-
-const AVERAGE_SEGMENT_DURATION = 3000;
-const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
-const DEFAULT_MAX_TICK_INTERVAL = 10000;
-const DEFAULT_MAX_SEG = 3;
 
 class SessionLive {
   constructor(config) {
@@ -38,20 +22,18 @@ class SessionLive {
     this.allBandwidths = null;
     this.lastRequestedSegments = {};
 
-    if (config) {
-      if (config.sessionId) {
-        this.sessionId = config.sessionId;
-      }
-      if (config.useDemuxedAudio) {
-        this.use_demuxed_audio = true;
-      }
-      if (config.cloudWatchMetrics) {
-        this.cloudWatchLogging = true;
-      }
+    if (config && config.sessionId) {
+      this.sessionId = config.sessionId;
+    }
+    if (config && config.useDemuxedAudio) {
+      this.use_demuxed_audio = true;
+    }
+    if (config && config.cloudWatchMetrics) {
+      this.cloudWatchLogging = true;
     }
   }
 
-  // not tested
+  // not yet tested
   async _resetSession() {
     this.mediaSeqCount = 0;
     this.discSeqCount = 0;
@@ -65,7 +47,7 @@ class SessionLive {
     this.mediaSeqSubset = {}
     this.allMediaManifestUri = null;
     this.allBandwidths = null;
-    //this.lastRequestedSegments = {};
+    this.lastRequestedSegments = {};
   }
 
   async setLiveUri(liveUri) {
@@ -90,11 +72,11 @@ class SessionLive {
     const allBws = Object.keys(segments); 
     for (let i = 0; i < allBws.length; i++){
       const bw = allBws[i];
-      if(!this.mediaSeqSubset[bw]){
+      if (!this.mediaSeqSubset[bw]) {
           this.mediaSeqSubset[bw] = [];
       }
       const segLen = segments[bw].length;
-      for (let segIdx = segLen - DEFAULT_MAX_SEG; segIdx < segLen; segIdx++){
+      for (let segIdx = 0; segIdx < segLen; segIdx++){
         this.mediaSeqSubset[bw].push(segments[bw][segIdx]);
       }
       this.mediaSeqSubset[bw].push({ discontinuity: true })
@@ -103,16 +85,17 @@ class SessionLive {
 
   // To hand off data to normal session
   async getCurrentMediaSequenceSegments() {
-    debug(`#GETTING the current mseq segments from Live Session`);
+    debug(`# GETTING the current mseq segments from Live Session`);
     // Get desired media manifest using baseURL
     await this._getSegmentsFromLiveManifest();
+    const segments = this.lastRequestedSegments;
     await this._resetSession();
-    return this.lastRequestedSegments;
+    return segments;
   }
 
   // Switcher will call this. To use data from normal session
   async setCurrentMediaAndDiscSequenceCount(mseq, dseq) {
-    debug(`#SETTING this.mediaSeqCount AND this.discSeqCount to -> [${mseq}]:[${dseq}]`);
+    debug(`# SETTING this.mediaSeqCount AND this.discSeqCount to -> [${mseq}]:[${dseq}]`);
     this.mediaSeqCount = mseq;
     this.discSeqCount = dseq;
   }
@@ -131,10 +114,8 @@ class SessionLive {
 
   // To give manifest to client
   async getCurrentMediaManifestAsync(bw) {
-    debug("Trying to fetch live manifest");
-    debug(`MASTER MANIFEST URI: ${this.masterManifestUri}`)
+    debug(`Master manifest URI: ${this.masterManifestUri}`)
     await this._loadLive(bw);
-    debug("Got live manifest");
     return this.lastRequestedM3U8.toString();
   }
 
@@ -164,12 +145,10 @@ class SessionLive {
         })
         .pipe(parser)
       } catch (exc) {
+        debug("Error: resetting live session");
+        this._resetSession();
         reject(exc);
       }
-      let manifestStream = new Readable();
-      //manifestStream.push(manifest);
-      manifestStream.push(null);
-      //manifestStream.pipe(parser);
       parser.on('m3u', m3u => {
         // Only rewrite if fetched live manifest is new
         if (this.lastRequestedRawM3U8 && m3u.get("mediaSequence") === this.lastRequestedRawM3U8.get("mediaSequence")) {
@@ -191,7 +170,7 @@ class SessionLive {
           // Save paths to every profile in Live Manifest.
           allUris.push(url.resolve(baseUrl, m3u.items.StreamItem[i].get('uri')));
         }
-        // [SAVE these for when we Go back to V2L]
+        // Save these for when we go back to V2L
         if (!this.allMediaManifestUri) {
           this.allMediaManifestUri = allUris;
         }
@@ -212,6 +191,8 @@ class SessionLive {
         }
       });
       parser.on('error', err => {
+        debug("Error: resetting live session");
+        this._resetSession();
         reject(err);
       });
     });
@@ -227,11 +208,10 @@ class SessionLive {
         })
         .pipe(parser)
       } catch (exc) {
+        debug("Error: resetting live session");
+        this._resetSession();
         reject(exc);
       }
-      let manifestStream = new Readable();
-      //manifestStream.push(manifest);
-      manifestStream.push(null);
       // Extract updated BaseURL
       let baseUrl = "";
       const m = mediaManifestUri.match(/^(.*)\/.*?$/);
@@ -240,68 +220,95 @@ class SessionLive {
       }
       parser.on('m3u', m3u => {
         // Switch out relative urls with absolute urls
-        for (let i = 0; i <  m3u.items.PlaylistItem.length; i++) {
-          let playlistItem = m3u.items.PlaylistItem[i];
-          let segmentUri;
-          if (playlistItem.properties.uri.match('^http')) {
-            segmentUri = playlistItem.properties.uri;
-          } else {
-            segmentUri = url.resolve(baseUrl, playlistItem.properties.uri);
+        if (mediaManifestUri) {
+          for (let i = 0; i <  m3u.items.PlaylistItem.length; i++) {
+            let playlistItem = m3u.items.PlaylistItem[i];
+            let segmentUri;
+            if (playlistItem.properties.uri.match('^http')) {
+              segmentUri = playlistItem.properties.uri;
+            } else {
+              segmentUri = url.resolve(baseUrl, playlistItem.properties.uri);
+            }
+            playlistItem.set('uri', segmentUri);
+            debug(`Media URI:${segmentUri}`);
           }
-          playlistItem.set('uri', segmentUri);
-          debug(`Media Segment uri:${segmentUri}`);
         }
-        // -=MANIPULATE MANIFEST PART 1=- (until we don't need to do this anymore ;-) )
-        // ANOTHER FIND NEAREST BW OPERATION
+        // SAVE new RAW playlistItems #deep
+        // Hack to make a deep copy
+        const items = JSON.parse(JSON.stringify(m3u.items.PlaylistItem));
         const bandwidths = Object.keys(this.mediaSeqSubset);
-        if(bandwidths.length !== 0){
+        if (bandwidths.length !== 0) {
           const targetBandwidth = this._findNearestBw(bw, bandwidths);
-
+          // Manipulate the Manifest: Inject VOD segments
           debug(`# this.mediaSeqSubset[bandwidth].length ->: ${this.mediaSeqSubset[targetBandwidth].length}`);
           for (let i = 0; i < this.mediaSeqSubset[targetBandwidth].length; i++) {
             let vodSeg = this.mediaSeqSubset[targetBandwidth][i];
             // Get max duration amongst segments
-            if(vodSeg.duration > this.targetDuration){
+            if (vodSeg.duration > this.targetDuration) {
               this.targetDuration = vodSeg.duration;
             }
             if (!vodSeg.discontinuity) {
-              m3u.items.PlaylistItem[i].set("duration", vodSeg.duration);
-              m3u.items.PlaylistItem[i].set("uri", vodSeg.uri);
+              // Set or Add
+              if (i < m3u.items.PlaylistItem.length) {
+                m3u.items.PlaylistItem[i].set("duration", vodSeg.duration);
+                m3u.items.PlaylistItem[i].set("uri", vodSeg.uri);
+              } else {
+                m3u.addPlaylistItem({
+                  duration: vodSeg.duration,
+                  uri: vodSeg.uri
+                });
+              }
             }
             else {
-              m3u.items.PlaylistItem[i].set("discontinuity", true);
+              if (i < m3u.items.PlaylistItem.length) {
+                m3u.items.PlaylistItem[i].set("discontinuity", true);
+              } else {
+                m3u.addPlaylistItem({
+                  discontinuity: true,
+                });
+              }
             }
           }
+          // original -> ori&newUri -> save ori&newUri -> rewrite ori with vodSeg -> append ori&newUri
+          // Append new RAW playlistItems
+          items.forEach(item => {
+            m3u.addPlaylistItem({
+              duration: item.properties.duration,
+              uri: item.properties.uri
+            });
+          });
+
           // Pop and update the mediaSeqSubset for all variants.
           for (let i = 0; i < bandwidths.length; i++){
             this.mediaSeqSubset[bandwidths[i]].shift();
           }
         }
-
+        // Manipulate the Manifest: Change Counts in Headers.
         m3u.set("mediaSequence", this.mediaSeqCount++);
         debug(`# SETTING THE MEDIA-SEQUENCE COUNT: ${this.mediaSeqCount}`);
         debug(`# TOP PL-ITEM: ${m3u.items.PlaylistItem[0]}`);
-        // Increment discontinuity sequence counter
-        // if top segment has the discontinuity tag
+        // Increment discontinuity sequence counter if top segment has the discontinuity tag
         if (m3u.items.PlaylistItem[0].properties.discontinuity) {
-          m3u.set("# EXT-X-DISCONTINUITY-SEQUENCE", this.discSeqCount);
+          m3u.set("EXT-X-DISCONTINUITY-SEQUENCE", this.discSeqCount);
           this.discSeqCount++;
         } else {
-          m3u.set("# EXT-X-DISCONTINUITY-SEQUENCE", this.discSeqCount);
+          m3u.set("EXT-X-DISCONTINUITY-SEQUENCE", this.discSeqCount);
         }
         debug(`# SETTING THE DISCONTINUITY-SEQUENCE COUNT: ${this.discSeqCount}`);
         const targetDuration = m3u.get('targetDuration');
         if (targetDuration > this.targetDuration) {
           this.targetDuration = targetDuration;
-          debug(`TargetDuration: ${this.targetDuration}`);
+          debug(`TargetDuration is: ${this.targetDuration}`);
         }
         m3u.set('targetDuration', this.targetDuration);
-
         // Store and update the last manifest sent to client
         this.lastRequestedM3U8 = m3u;
+        debug("Updated lastRequestedM3U8 with new data")
         resolve();
       });
       parser.on('error', err => {
+        debug("Error: resetting live session");
+        this._resetSession();
         reject(err);
       });
     });
@@ -321,11 +328,10 @@ class SessionLive {
             })
             .pipe(parser)
           } catch (exc) {
+            debug("Error: resetting live session");
+            this._resetSession();
             reject(exc);
           }
-          let manifestStream = new Readable();
-          //manifestStream.push(manifest);
-          manifestStream.push(null);
           // Extract updated BaseURL
           let baseUrl = "";
           const m = mediaManifestUri.match(/^(.*)\/.*?$/);
@@ -358,6 +364,8 @@ class SessionLive {
             resolve();
           });
           parser.on('error', err => {
+            debug("Error: resetting live session");
+            this._resetSession();
             reject(err);
           });
         });
@@ -366,42 +374,12 @@ class SessionLive {
       Promise.all(collectSegmentsPromises)
       .then(resolve)
       .catch(err => {
-        debug("Error collecting segments from live: resetting session");
+        debug("Error: resetting live session");
         this._resetSession();
         reject(err);
       });
     });
   }
-
-  /** BEFORE
- * ww.vv.com/bw/liveseg1.ts
- * liveseg2.ts
- * liveseg3.ts
- * liveseg4.ts
- * liveseg5.ts
- * liveseg6.ts
- */
-
-/** AFTER
- *  DUR: 10
- *  vodseg5.ts
- *  DUR: 10
- *  vodseg6.ts
- *  DUR: 10
- *  vodseg7.ts
- *  discontinuity
- *  DUR: 2
- *  liveseg5.ts 
- */
-
-/** AFTER
- *  vodseg5.ts <- player is playing
- *  vodseg6.ts
- *  discontinuity
- *  liveseg6.ts 
- *  liveseg7.ts
- */
-
 }
 
 module.exports = SessionLive;
