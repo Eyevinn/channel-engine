@@ -77,6 +77,9 @@ class ChannelEngine {
     if (options && options.maxTickInterval) {
       this.streamerOpts.defaultMaxTickInterval = options.maxTickInterval;
     }
+    if (options && options.targetDurationPadding) {
+      this.streamerOpts.targetDurationPadding = options.targetDurationPadding;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -130,6 +133,7 @@ class ChannelEngine {
         useDemuxedAudio: options.useDemuxedAudio,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
+        targetDurationPadding: channel.options && channel.options.targetDurationPadding ? channel.options.targetDurationPadding : this.streamerOpts.targetDurationPadding,
         profile: channel.profile,
         audioTracks: channel.audioTracks,
         closedCaptions: channel.closedCaptions,
@@ -231,6 +235,7 @@ class ChannelEngine {
       options.useDemuxedAudio = this.useDemuxedAudio;
       options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
+      options.targetDurationPadding = this.streamerOpts.targetDurationPadding;
       // if we are initiating a master manifest
       // outside of specific Channel context,
       // if slate options are set at the ChannelEngine level, then set these here
