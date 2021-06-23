@@ -80,6 +80,9 @@ class ChannelEngine {
     if (options && options.targetDurationPadding) {
       this.streamerOpts.targetDurationPadding = options.targetDurationPadding;
     }
+    if (options && options.forceTargetDuration) {
+      this.streamerOpts.forceTargetDuration = options.forceTargetDuration;
+    }
     this.server.get('/live/:file', async (req, res, next) => {
       debug(req.params);
       let m;
@@ -134,6 +137,7 @@ class ChannelEngine {
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         targetDurationPadding: channel.options && channel.options.targetDurationPadding ? channel.options.targetDurationPadding : this.streamerOpts.targetDurationPadding,
+        forceTargetDuration: channel.options && channel.options.forceTargetDuration ? channel.options.forceTargetDuration : this.streamerOpts.forceTargetDuration,
         profile: channel.profile,
         audioTracks: channel.audioTracks,
         closedCaptions: channel.closedCaptions,
@@ -236,6 +240,7 @@ class ChannelEngine {
       options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
       options.targetDurationPadding = this.streamerOpts.targetDurationPadding;
+      options.forceTargetDuration = this.streamerOpts.forceTargetDuration;
       // if we are initiating a master manifest
       // outside of specific Channel context,
       // if slate options are set at the ChannelEngine level, then set these here

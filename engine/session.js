@@ -91,6 +91,9 @@ class Session {
       if (config.targetDurationPadding) {
         this.targetDurationPadding = config.targetDurationPadding;
       }
+      if (config.forceTargetDuration) {
+        this.forceTargetDuration = config.forceTargetDuration;
+      }
     }
   }
 
@@ -252,7 +255,7 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-        const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding);
+        const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
         return m3u8;
       } catch (err) {
@@ -275,7 +278,7 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-        const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq, this.targetDurationPadding);
+        const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeq, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         // # Case: current VOD does not have the selected track.
         if (!m3u8) {
           debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
