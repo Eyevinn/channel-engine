@@ -390,20 +390,23 @@ class ChannelEngine {
       if(this.streamTypeLive){
         if(!scheduleObj){
           // Do the live->v2l version
-
-          // TODO: const currMediaAndDicSeq = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-          // TODO: const currVodSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          debug(`--------  Do the live->v2l version`);
+          const curr_counts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+          const curr_segments = await sessionLive.getCurrentMediaSequenceSegments();
+          debug(`-------- mseq & dseq from SessionLive -> [${curr_counts.mediaSeq}]:[${curr_counts.discSeq}]`);
+          debug(`-------- VOD Segments from SessionLive -> [${curr_segments}]`);
+          // TODO: SET data in Session
 
           // Last thing to do
           this.streamTypeLive = false;
           debug(`+++++++++++++++++++++++[ Switching from LIVE->V2L ]+++++++++++++++++++++++`);
+        } else {
+          // Do the live->live version
+          // TODO: const currMediaAndDicSeq = await sessionLIVE.getCurrentMediaAndDiscSequenceCount();
+          // TODO: const currVodSegments = await sessionLIVE.getCurrentMediaSequenceSegments();
+          // TODO: Also send ScheduleObj.uri to sessionLIVE.
+          debug(`+++++++++++++++++++++++[ Switching from LIVE->LIVE ]+++++++++++++++++++++++`);
         }
-        // Do the live->live version
-        // TODO: const currMediaAndDicSeq = await sessionLIVE.getCurrentMediaAndDiscSequenceCount();
-        // TODO: const currVodSegments = await sessionLIVE.getCurrentMediaSequenceSegments();
-        // TODO: Also send ScheduleObj.uri to sessionLIVE.
-        debug(`+++++++++++++++++++++++[ Switching from LIVE->LIVE ]+++++++++++++++++++++++`);
-
       } else {
         // Do the v2l->live version: 1) get current mediaSeq 2) get last media sequence.
         const currCounts = await session.getCurrentMediaAndDiscSequenceCount();
@@ -412,8 +415,8 @@ class ChannelEngine {
         const liveStreamUri = scheduleObj.uri;
 
         // If URI isn't valid (returns 404) stay on vod2live or switch to it if a specific time has passed
-        
-        // Necessary data needed for manifest Rewrites! 
+
+        // Necessary data needed for manifest Rewrites!
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);

@@ -9,7 +9,7 @@ class RefAssetManager {
     this.assets = {
       '1': [
         { id: 1, title: "BBB", uri: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
-        { id: 2, title: "BBB2", uri: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+        { id: 2, title: "BBB2", uri: "https://test-streams.mux.dev/test_001/stream.m3u8" },
         //{ id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" },
         //{ id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
       ]
@@ -66,8 +66,9 @@ let tsNow = Date.now();
 class StreamSwitchManager {
   getSchedule() {
     let schedule = [
-      { start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (60*1000*2), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
-      //{ start: tsNow + (20*1000) + (33*1000), estEnd: (tsNow + (20*1000)) + (45*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
+      //{ start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (60*1000*2), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn" },
+      { start: tsNow + (20*1000), estEnd: (tsNow + (20*1000)) + (60*1000*2), type: "live", uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8" },
+      //{ start: tsNow + (20*1000) + (33*1000), estEnd: (tsNow + (20*1000)) + (45*1000), type: "live", uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8"},
       //{ start: tsNow + (20*1000) + (75*1000), estEnd: (tsNow + (20*1000)) + (105*1000), type: "live", uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"},
     ];
     return schedule;
