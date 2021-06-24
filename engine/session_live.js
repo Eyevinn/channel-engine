@@ -3,6 +3,15 @@ const m3u8 = require('@eyevinn/m3u8');
 const request = require('request');
 const url = require('url');
 
+const DEFAULT_MAX_TICK_INTERVAL = 10000;
+
+const PlayheadState = Object.freeze({
+  RUNNING: 1,
+  STOPPED: 2,
+  CRASHED: 3,
+  IDLE: 4
+});
+
 class SessionLive {
   constructor(config) {
     this.sessionId = 0;
@@ -21,6 +30,12 @@ class SessionLive {
     this.allMediaManifestUri = null;
     this.allBandwidths = null;
     this.lastRequestedSegments = {};
+
+    this.counter = 0;
+
+    this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
+    this.playheadDiffThreshold = 0;
+
 
     if (config && config.sessionId) {
       this.sessionId = config.sessionId;
@@ -114,6 +129,8 @@ class SessionLive {
 
   // To give manifest to client
   async getCurrentMediaManifestAsync(bw) {
+    debug(`----------------------------------------- counter: ${this.counter}`)
+    this.counter = 0;
     debug(`Master manifest URI: ${this.masterManifestUri}`)
     await this._loadLive(bw);
     return this.lastRequestedM3U8.toString();
@@ -381,6 +398,61 @@ class SessionLive {
         reject(err);
       });
     });
+  }
+  /**
+   *  WELCOME TO PLAYHEAD CITY ! | |  | |   | |
+   *                             | |  | |   | |
+   */
+  stopPlayheadAsync() {
+    this.playheadState = PlayheadState.STOPPED;
+    debug(`[${this.sessionId}]: Stopping SessionLive Internal Playhead`);
+  }
+
+  async startPlayheadAsync() {
+    debug(`[${this.sessionId}]: Playhead consumer started:`); 
+    debug(`[${this.sessionId}]: diffThreshold=${this.playheadDiffThreshold}`);
+    debug(`[${this.sessionId}]: maxTickInterval=${this.maxTickInterval}`);
+    debug(`[${this.sessionId}]: averageSegmentDuration=${this.averageSegmentDuration}`);
+
+    let firstDuration = null;
+    this.playheadState = PlayheadState.RUNNING;
+    while (this.playheadState !== PlayheadState.STOPPED) {
+      try {
+        let tsIncrementBegin = Date.now();
+        // GET MANIFEST FROM LIVE SOURCE
+        const manifest = true;//await this.incrementAsync();
+        if (!manifest) {
+          debug(`[${this._sessionId}]: No manifest available yet, will try again after 1000ms`);
+          await timer(1000);
+          continue;
+        }
+        let tsIncrementEnd = Date.now();
+        if (!firstDuration) {
+          firstDuration = 6;//await this._getFirstDuration(manifest);
+        }
+        let tickInterval = firstDuration < 2 ? 2 : firstDuration;
+        debug(`[${this.sessionId}]: SessionLive Internal tick interval is ${tickInterval} sec`);
+
+        const timeSpentFetchingManifest = (tsIncrementEnd - tsIncrementBegin) / 1000;
+        tickInterval = tickInterval - timeSpentFetchingManifest;
+
+        debug(`[${this.sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s)`);
+        if (tickInterval <= 0) {
+          tickInterval = 0.5;
+        } else if (tickInterval > (this.maxTickInterval / 1000)) {
+          tickInterval = this.maxTickInterval / 1000;
+        }
+        debug(`[${this.sessionId}]: (${(new Date()).toISOString()}) ${timeSpentFetchingManifest}sec in increment. NEXT TICK in ${tickInterval} seconds (^_^)`)
+        // The Hero
+        await timer((tickInterval * 1000) - 50);
+        this.counter++;
+      } catch (err) {
+        debug(`[${this.sessionId}]: SessionLive Internal Playhead Crashed!!!`);
+        console.error(`[${this.sessionId}]: ${err.message}`);
+        debug(err);
+        this.playheadState = PlayheadState.STOPPED;
+      }
+    }
   }
 }
 

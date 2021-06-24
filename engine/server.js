@@ -17,11 +17,11 @@ const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
 const eventStreams = {};
 
-const switcherState = {
+const switcherState = Object.freeze({
   updateUrl: 1,
   live: 2,
   vod: 3,
-};
+});
 
 class ChannelEngine {
   constructor(assetMgr, options) {
@@ -414,11 +414,15 @@ class ChannelEngine {
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);
+        // INIT playhead
+        await sessionLive.startPlayheadAsync();
 
         this.streamTypeLive = this.streamTypeLive ? false : true;
         debug(`+++++++++++++++++++++++ [ Switching from V2L->LIVE ] +++++++++++++++++++++++`);
         break;
       case switcherState.vod:
+        // STOP playhead
+        await sessionsLive.stopPlayheadAsync();
         // Do the live->v2l version
         debug(`-------- Do the live->v2l version`);
         const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
