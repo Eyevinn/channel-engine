@@ -29,6 +29,8 @@
     "redis": "^3.0.2",
     "request": ">=2.88.0",
     "restify": ">=8.5.1",
+    "url-exist": "^3.0.0",
+    "url-exists": "^1.0.3",
     "uuid": "^8.3.2"
   },
   "devDependencies": {

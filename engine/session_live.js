@@ -239,6 +239,7 @@ class SessionLive {
         const bandwidths = Object.keys(this.mediaSeqSubset);
         if (bandwidths.length !== 0) {
           const targetBandwidth = this._findNearestBw(bw, bandwidths);
+          debug(`-------------------------- BANDWIDTHS: ${targetBandwidth}`);
           // Manipulate the Manifest: Inject VOD segments
           debug(`# this.mediaSeqSubset[bandwidth].length ->: ${this.mediaSeqSubset[targetBandwidth].length}`);
           for (let i = 0; i < this.mediaSeqSubset[targetBandwidth].length; i++) {
@@ -248,7 +249,7 @@ class SessionLive {
               this.targetDuration = vodSeg.duration;
             }
             if (!vodSeg.discontinuity) {
-              // Set or Add
+              // Set or Add actual playlist Item
               if (i < m3u.items.PlaylistItem.length) {
                 m3u.items.PlaylistItem[i].set("duration", vodSeg.duration);
                 m3u.items.PlaylistItem[i].set("uri", vodSeg.uri);
@@ -271,12 +272,13 @@ class SessionLive {
           }
           // original -> ori&newUri -> save ori&newUri -> rewrite ori with vodSeg -> append ori&newUri
           // Append new RAW playlistItems
-          items.forEach(item => {
+          for (let i = 0; i < items.length; i++){
+            let item = items[i];
             m3u.addPlaylistItem({
               duration: item.properties.duration,
               uri: item.properties.uri
             });
-          });
+          }
 
           // Pop and update the mediaSeqSubset for all variants.
           for (let i = 0; i < bandwidths.length; i++){
@@ -345,11 +347,11 @@ class SessionLive {
               let segmentUri = null;
               let segmentDuration = 0;
 
-              if(!this.lastRequestedSegments[this.allBandwidths[i]]){
+              if (!this.lastRequestedSegments[this.allBandwidths[i]]) {
                 this.lastRequestedSegments[this.allBandwidths[i]] = [];
               }
               // PUSH disc. object OR segment object?
-              if(playlistItem.properties.discontinuity){
+              if (playlistItem.properties.discontinuity) {
                 this.lastRequestedSegments[this.allBandwidths[i]].push({ "discontinuity": true });
               } else {
                 playlistItem.properties.duration;
