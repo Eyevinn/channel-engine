@@ -9,10 +9,11 @@ class RefAssetManager {
     this.assets = {
       '1': [
         { id: 1, title: "BBB", uri: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
-        { id: 2, title: "2 Second Segments", uri: "https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8"}, //"https://test-streams.mux.dev/test_001/stream.m3u8" },
+        //{ id: 2, title: "2 Second Segments", uri: "https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8"}, 
+        //"https://test-streams.mux.dev/test_001/stream.m3u8"
         // https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8
         //{ id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" },
-        //{ id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
+        { id: 1, title: "SHORT SLATE", uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8" }
       ]
     };
     this.pos = {

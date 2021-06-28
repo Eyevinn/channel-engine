@@ -415,14 +415,14 @@ class ChannelEngine {
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);
         // INIT playhead
-        await sessionLive.startPlayheadAsync();
+        //await sessionLive.startPlayheadAsync();
 
         this.streamTypeLive = this.streamTypeLive ? false : true;
         debug(`+++++++++++++++++++++++ [ Switching from V2L->LIVE ] +++++++++++++++++++++++`);
         break;
       case switcherState.vod:
         // STOP playhead
-        await sessionsLive.stopPlayheadAsync();
+        // await sessionsLive.stopPlayheadAsync();
         // Do the live->v2l version
         debug(`-------- Do the live->v2l version`);
         const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
