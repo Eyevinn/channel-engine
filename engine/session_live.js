@@ -35,7 +35,7 @@ class SessionLive {
     this.lastRequestedM3U8 = null;
     this.mediaSeqSubset = {}
     this.mediaManifestURIs = {};
-    this.liveSegQueue = {};
+    this.liveSegQueue = [];
     this.last_requested_mediasequence_raw = 0;
     this.target_num_segs = 0;
 
@@ -65,7 +65,7 @@ class SessionLive {
     this.lastRequestedM3U8 = null;
     this.mediaSeqSubset = {},
     this.mediaManifestURIs = {};
-    this.liveSegQueue = {};
+    this.liveSegQueue = [];
     this.last_requested_mediasequence_raw = 0;
     this.target_num_segs = 0;
   }
@@ -183,7 +183,6 @@ class SessionLive {
         debug(`[${this.sessionId}]: All Media Manifest URIs Collected. (${Object.keys(this.mediaManifestURIs).length}) profiles found!`);
         resolve();
       });
-
       parser.on('error', err => {
         reject(err);
       });
@@ -192,8 +191,7 @@ class SessionLive {
 
   _loadMediaManifest(bw) {
     return new Promise((resolve, reject) => {
-      //
-      let loadNewSegments = false;
+      let createSameM3U8NewBW = true;
       debug(`# Trying to fetch live manifest for profile with bandwidth=${bw}`);
       // What bandwidth is closest to the desired bw
       const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
@@ -212,6 +210,7 @@ class SessionLive {
       } catch (exc) {
         reject(exc);
       }
+  
       // List of all bandwidths from the vod.
       const vodBandwidths = Object.keys(this.mediaSeqSubset);
       // In Case we need to extract the last segment.
@@ -230,12 +229,14 @@ class SessionLive {
           resolve();
           return;
         }
+
+        debug(`# ¤¤¤¤ ¤¤¤¤ ¤¤¤¤ ¤¤¤¤ current RAW Mseq:[${m3u.get("mediaSequence")}] ____ previous RAW Mseq:[${this.last_requested_mediasequence_raw}] `);
         // NEW SEQUENCE and/or New Bandwidth
         if(this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.last_requested_mediasequence_raw && liveTargetBandwidth !== this.lastRequestedM3U8.bandwidth){
-          // If they are the same sequence but different, DON'T pop! rebuild the manifest with all part.
+          // If they are the same sequence but different, DON'T pop! rebuild the manifest with all parts.
           debug("# +_+_+_+_+_+[What To Make?] Creating Same Media Sequence, but for new Bandwidth! ");
+          createSameM3U8NewBW = true;
         } else {
-
           // WE ARE BUILDING A COMPLETELY NEW MEDIA SEQUENCE
           // Finally, Pop and update the mediaSeqSubset for all variants.
           // Is what we are going to pop a disc-tag? Then increment discSeq. 
@@ -251,154 +252,146 @@ class SessionLive {
           this.targetDuration = m3u.get("targetDuration");
           this.mediaSeqCount++;
           debug("# +_+_+_+_+_+[What To Make?] Creating Completely New Media Sequence");
-          debug(`# Time to make MEDIA-SEQUENCE number ->: [${this.mediaSeqCount}]`)
+          debug(`# ooOOOooOOOoooOOooOOOOooOOOoo Time to make MEDIA-SEQUENCE number ->: [${this.mediaSeqCount}] oooOOOooOOOOoooOOOOOOOOOooooo `)
         }
 
+        // STEP 0: Enqueue to THE QUEUE the latest Live Segment 
+        // -=URI SWAP WHERE IT IS NEEDED=-
+        //-----
+        // Switch out relative urls if they are used, with absolute urls
+        if (mediaManifestUri) {
+          if (!createSameM3U8NewBW) { // dumb variable name... work in progress
+            let lastLivePlaylistItem = m3u.items.PlaylistItem[m3u.items.PlaylistItem.length - 1];
+            let segmentUri;
+            if(!lastLivePlaylistItem.properties.discontinuity){
+              if (lastLivePlaylistItem.properties.uri.match('^http')) {
+                segmentUri = lastLivePlaylistItem.properties.uri;
+              } else {
+                segmentUri = url.resolve(baseUrl, lastLivePlaylistItem.properties.uri);
+              }
+              lastLiveSegObj["duration"] = lastLivePlaylistItem.properties.duration;
+              lastLiveSegObj["uri"] = segmentUri;
+  
+              debug(`# Should Be Last Segment:${JSON.stringify(lastLiveSegObj)}`);
+              this.liveSegQueue.push(lastLiveSegObj);
+            } else {
+              debug(`# Should Be Last Segment is a DISCONTINUITY tag`);
+              this.liveSegQueue.push({ discontinuity: true });
+            }
+          } 
+          else {
+            // -----------------
+            // SPECIAL TREATMENT
+            // -----------------
+            const queueLength = this.liveSegQueue.length; // MAX BECOME VOD LENGTH
+            const liveLength = m3u.items.PlaylistItem.length; // CAN BE SMALLER OR GREATER
+            let start = Math.abs(liveLength - queueLength) - 1;
+            if (start > liveLength) {
+              start = liveLength - 1;
+            }
+            if (start < 0) {
+              start = 0;
+            }
+            const timesToLoop = queueLength < liveLength ? queueLength : liveLength;
+            // for (let i = 0; i < timesToLoop; i++) {
+            //   this.liveSegQueue.pop();
+            // }
+            this.liveSegQueue = [];
 
+            // Append new segments to the QUEUE.
+            debug(`# \n\nSTART:${start} : TIMESTOLOOP: ${timesToLoop} QUEUELENGTH: ${queueLength}`);
+            for (let i = start;  i < m3u.items.PlaylistItem.length; i++) {
+              let seg = {};
+              let lastLivePlaylistItem = m3u.items.PlaylistItem[i];
+              let segmentUri = "";
+              if(!lastLivePlaylistItem.properties.discontinuity){
+                if (lastLivePlaylistItem.properties.uri.match('^http')) {
+                  segmentUri = lastLivePlaylistItem.properties.uri;
+                } else {
+                  segmentUri = url.resolve(baseUrl, lastLivePlaylistItem.properties.uri);
+                }
+                seg["duration"] = lastLivePlaylistItem.properties.duration;
+                seg["uri"] = segmentUri ;
+    
+                debug(`# Should Be Last Segment:${JSON.stringify(seg)}`);
+                this.liveSegQueue.push(seg);
+              } else {
+                debug(`# Should Be Last Segment is a DISCONTINUITY tag`);
+                this.liveSegQueue.push({ discontinuity: true });
+              }
+            }
+          }
+        }
 
-      // STEP0: Enqueue to THE QUEUE the latest Live Segment 
-      let mediaManifestPromiseList = [];
-      // LOOP through all Live Profiles.
-      debug(`--------------------------------------- LOOP LIMIT ->:${Object.keys(this.mediaManifestURIs).length}`)
-      for (let index = 0; index < Object.keys(this.mediaManifestURIs).length; index++) {
-        const bandwidth = Object.keys(this.mediaManifestURIs)[index];
-        const mediaManifestURI = this.mediaManifestURIs[bandwidth];
-        debug(`------__-------- LOADING segments from Profile->uri:${mediaManifestURI}, bw:${bandwidth}`);
-        mediaManifestPromiseList.push(this._loadLatestSegments(mediaManifestURI, bandwidth));
-      }
-      Promise.all(mediaManifestPromiseList).then(() => {
+        //------------------------------------------------------------
+        // -=MANIPULATE MANIFEST PART 1=- (until no more vod segs)
+        //------------------------------------------------------------
 
-          //------------------------------------------------------------
-          // -=MANIPULATE MANIFEST PART 1=- (until no more vod segs )
-          //------------------------------------------------------------
+        // STEP1: New Target Duration?
+        const vodTargetBandwidth = this._findNearestBw(bw, vodBandwidths);
+        for (let i = 0; i < this.mediaSeqSubset[vodTargetBandwidth].length; i++) {
+          let vodSeg = this.mediaSeqSubset[vodTargetBandwidth][i];
+          // Get max duration amongst segments
+          if(vodSeg.duration > this.targetDuration){
+            this.targetDuration = vodSeg.duration;
+          }
+        }
 
-          // STEP1: New Target Duration?
-          const vodTargetBandwidth = this._findNearestBw(bw, vodBandwidths);
-          debug(`FEL: ${this.mediaSeqSubset.length} : ${vodTargetBandwidth}`);
+        let m3u8 = "#EXTM3U\n";
+        m3u8 += "#EXT-X-VERSION:6\n";
+        m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
+        m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
+        m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
+        m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
+
+        // STEP2: Add all vod segments, including the disc-tag.
+        if(vodBandwidths.length !== 0){
+          debug(`### this.mediaSeqSubset[bandwidth].length ->: ${this.mediaSeqSubset[vodTargetBandwidth].length}`);
+          debug("# Now we are actually rewriting the manifest!");
           for (let i = 0; i < this.mediaSeqSubset[vodTargetBandwidth].length; i++) {
             let vodSeg = this.mediaSeqSubset[vodTargetBandwidth][i];
             // Get max duration amongst segments
-            if(vodSeg.duration > this.targetDuration){
-              this.targetDuration = vodSeg.duration;
+            if (!vodSeg.discontinuity) {
+              m3u8 += "#EXTINF:" + vodSeg.duration.toFixed(3) + ",\n";
+              m3u8 += vodSeg.uri + "\n";
+            }
+            else {
+              m3u8 += "#EXT-X-DISCONTINUITY\n";
             }
           }
 
-          let m3u8 = "#EXTM3U\n";
-          m3u8 += "#EXT-X-VERSION:6\n";
-          m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
-          m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
-          m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
-          m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
-
-          // STEP2: Add all vod segments, including the disc-tag.
-          if(vodBandwidths.length !== 0){
-            debug(`### this.mediaSeqSubset[bandwidth].length ->: ${this.mediaSeqSubset[vodTargetBandwidth].length}`);
-            debug("# Now we are actually rewriting the manifest!");
-            for (let i = 0; i < this.mediaSeqSubset[vodTargetBandwidth].length; i++) {
-              let vodSeg = this.mediaSeqSubset[vodTargetBandwidth][i];
-              // Get max duration amongst segments
-              if (!vodSeg.discontinuity) {
-                m3u8 += "#EXTINF:" + vodSeg.duration.toFixed(3) + ",\n";
-                m3u8 += vodSeg.uri + "\n";
-              }
-              else {
-                m3u8 += "#EXT-X-DISCONTINUITY\n";
-              }
-            }
-
-            // STEP3: Append the queue of Live Segments.
-            debug(`### LIVE QUEUE should have many BW ->: ${Object.keys(this.liveSegQueue)}`);
-            debug("# ------------------------------------ Appending Current LiveManifest's Last Segment!"," QUEUE is [",this.liveSegQueue[liveTargetBandwidth].length,"] large");
-            //m3u.addPlaylistItem(lastLiveSegObj_b4);
-            for (let i = 0; i < this.liveSegQueue[liveTargetBandwidth].length; i++) {
-              const live_seg = this.liveSegQueue[liveTargetBandwidth][i];
-              m3u8 += "#EXTINF:" + live_seg.duration.toFixed(3) + ",\n";
-              m3u8 += live_seg.uri + "\n";
-            }
-
-            // LASTLY: Do we need to dequeue the queue?
-            if(this.liveSegQueue[liveTargetBandwidth].length > this.target_num_segs){
-              // DEQUEUE the Queue.
-              this._Dequeue();
-            }
+          // STEP3: Append the queue of Live Segments.
+          debug("# ------------------------------------ Appending Current LiveManifest's Last Segment!"," QUEUE is [",this.liveSegQueue.length,"] large");
+          debug(`# --- ADD THESE TO OUR MANIFEST -> ${JSON.stringify(this.liveSegQueue)}`);
+          //m3u.addPlaylistItem(lastLiveSegObj_b4);
+          for (let i = 0; i < this.liveSegQueue.length; i++) {
+            
+            const live_seg = this.liveSegQueue[i];
+            m3u8 += "#EXTINF:" + live_seg.duration.toFixed(3) + ",\n";
+            m3u8 += live_seg.uri + "\n";
           }
 
-          // Store and update the last manifest sent to client
-          if(!this.lastRequestedM3U8){
-            this.lastRequestedM3U8 = { bandwidth: null, m3u8: null };
+          // LASTLY: Do we need to dequeue the queue?
+          if(this.liveSegQueue.length > this.target_num_segs){
+            // DEQUEUE the Queue.
+            this.liveSegQueue.shift();
           }
-          this.lastRequestedM3U8.bandwidth = liveTargetBandwidth;
-          this.lastRequestedM3U8.m3u8 = m3u8;
-          debug("Updated lastRequestedM3U8 with new data");
-          resolve();
-        }); // after load segments
+        }
+
+        // Store and update the last manifest sent to client
+        if (!this.lastRequestedM3U8) {
+          this.lastRequestedM3U8 = { bandwidth: null, m3u8: null };
+        }
+        this.lastRequestedM3U8.bandwidth = liveTargetBandwidth;
+        this.lastRequestedM3U8.m3u8 = m3u8;
+        debug("Updated lastRequestedM3U8 with new data");
+        resolve();
       }); // parser.on(...)
-
       parser.on('error', err => {
         reject(err);
       });
     });// the return promise
-  } // the function 
-
-  _Dequeue() {
-    for (let index = 0; index < Object.keys(this.mediaManifestURIs).length; index++) {
-      const bandwidth = Object.keys(this.mediaManifestURIs)[index];
-      this.liveSegQueue[bandwidth].shift();
-    }
-  }
-
-  _loadLatestSegments(mediaManifestURI, bandwidth) {
-    return new Promise((resolve, reject) => {
-      // LOAD a New Manifest
-      const parser = m3u8.createStream();
-      try {
-        request({ uri: mediaManifestURI, gzip: true })
-        .on('error', err => {
-          reject(err);
-        })
-        .pipe(parser)
-      } catch (exc) {
-        reject(exc);
-      }
-      // In Case we need to extract the last segment.
-      let lastLiveSegObj = {};
-      // Extract updated BaseURL
-      let baseUrl = "";
-      const m = mediaManifestURI.match(/^(.*)\/.*?$/);
-      if (m) {
-        baseUrl = m[1] + '/';
-      }
-
-      parser.on('m3u', m3u => {
-        if (mediaManifestURI) {
-          let lastLivePlaylistItem = m3u.items.PlaylistItem[m3u.items.PlaylistItem.length - 1];
-          let segmentUri;
-          // Init. that bandwidth
-          if(!this.liveSegQueue[bandwidth]){
-            this.liveSegQueue[bandwidth] = [];
-          }
-          // -=URI SWAP WHERE IT IS NEEDED=-
-          // Switch out relative urls if they are used, with absolute urls
-          if (!lastLivePlaylistItem.properties.discontinuity) {
-            if (lastLivePlaylistItem.properties.uri.match('^http')) {
-              segmentUri = lastLivePlaylistItem.properties.uri;
-            } else {
-              segmentUri = url.resolve(baseUrl, lastLivePlaylistItem.properties.uri);
-            }
-            lastLiveSegObj["duration"] = lastLivePlaylistItem.properties.duration;
-            lastLiveSegObj["uri"] = segmentUri;
-
-            debug(`# Should Be Last Segment:${JSON.stringify(lastLiveSegObj)}`);
-            this.liveSegQueue[bandwidth].push(lastLiveSegObj);
-          } else {
-            debug(`# Should Be Last Segment is a DISCONTINUITY tag`);
-            this.liveSegQueue[bandwidth].push({ discontinuity: true });
-          }
-          resolve();
-        }
-      });
-    });
-  }
+  }// the function 
 }
 
 module.exports = SessionLive;
