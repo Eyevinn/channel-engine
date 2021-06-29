@@ -1,6 +1,6 @@
 {
   "name": "eyevinn-channel-engine",
-  "version": "2.22.1",
+  "version": "2.22.3",
   "description": "OTT TV Channel Engine",
   "main": "index.js",
   "scripts": {
@@ -21,7 +21,7 @@
   "dependencies": {
     "@eyevinn/hls-repeat": "^0.1.1",
     "@eyevinn/hls-truncate": "^0.1.0",
-    "@eyevinn/hls-vodtolive": "^1.12.0",
+    "@eyevinn/hls-vodtolive": "^1.14.0",
     "@eyevinn/m3u8": "^0.4.0",
     "debug": "^3.2.7",
     "memcache-client": "^0.10.1",
