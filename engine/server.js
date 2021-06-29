@@ -354,18 +354,24 @@ class ChannelEngine {
       return false;
     }
     const scheduleObj = schedule[0];
+    let uriAlive = true;
     // Check if Live URI is Good
     fetch(scheduleObj.uri)
     .then(res => {
       if (res.status > 399) {
         debug(`URI returned status: ${res.status} No need to switch to live`);
         debug(`++++++++++++++++++++++ [ C ] ++++++++++++++++++++++`);
-        if (this.streamTypeLive) {
-          await this._initSwitching(SwitcherState.VOD, session, sessionLive, null); // TODO: untested
-        }
-        return false;
+        uriAlive = false;
       }
     });
+    if (!uriAlive) {
+      debug(`Unreachable URI`);
+      if (this.streamTypeLive) {
+        debug(`Unreachable URI switching back to vod2live`);
+        await this._initSwitching(SwitcherState.VOD, session, sessionLive, null); // TODO: untested
+      }
+      return false;
+    }
 
     // Case: We want to be live
     if (tsNow >= scheduleObj.start && tsNow < scheduleObj.estEnd) {
