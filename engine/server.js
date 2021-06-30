@@ -364,21 +364,14 @@ class ChannelEngine {
       return false;
     }
     const scheduleObj = schedule[0];
-    let uriAlive = true;
-    // Check if Live URI is Good
-    fetch(scheduleObj.uri)
-    .then(res => {
-      if (res.status > 399) {
-        debug(`URI returned status: ${res.status} No need to switch to live`);
-        debug(`++++++++++++++++++++++ [ C ] ++++++++++++++++++++++`);
-        uriAlive = false;
-      }
-    });
-    if (!uriAlive) {
+    // Check if Live URI is ok
+    const validURI = await this._validateURI(scheduleObj.uri);
+    if (!validURI) {
       debug(`Unreachable URI`);
+      debug(`++++++++++++++++++++++ [ C ] ++++++++++++++++++++++`);
       if (this.streamTypeLive) {
-        debug(`Unreachable URI switching back to vod2live`);
-        await this._initSwitching(SwitcherState.VOD, session, sessionLive, null); // TODO: untested
+        debug(`Switching back to vod2live`);
+        await this._initSwitching(SwitcherState.VOD, session, sessionLive, null);
       }
       return false;
     }
@@ -623,6 +616,15 @@ class ChannelEngine {
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": "no-cache",
     });
+  }
+
+  async _validateURI(liveURI) {
+    try {
+      const online = await fetch(liveURI);
+      return online.status >= 200 && online.status < 300;
+    } catch (err) {
+      return false;
+    }
   }
 
   _gracefulErrorHandler(errMsg) {

@@ -75,17 +75,17 @@ class SessionLive {
    */
   async setCurrentMediaSequenceSegments(segments) {
     this.lastMediaSeq = segments;
-    const allBws = Object.keys(segments); 
-    for (let i = 0; i < allBws.length; i++){
+    const allBws = Object.keys(segments);
+    for (let i = 0; i < allBws.length; i++) {
       const bw = allBws[i];
       if (!this.mediaSeqSubset[bw]) {
           this.mediaSeqSubset[bw] = [];
       }
       const segLen = segments[bw].length;
-      for (let segIdx = segLen - segLen; segIdx < segLen; segIdx++){
+      for (let segIdx = segLen - segLen; segIdx < segLen; segIdx++) {
         this.mediaSeqSubset[bw].push(segments[bw][segIdx]);
       }
-      this.mediaSeqSubset[bw].push({ discontinuity: true })
+      this.mediaSeqSubset[bw].push({ discontinuity: true });
     }
     this.targetNumSeg = this.mediaSeqSubset[allBws[0]].length;
   }
@@ -161,7 +161,7 @@ class SessionLive {
           }
           this.mediaManifestURIs[streamItemBW] = mediaManifestUri;
         }
-        debug(`[${this.sessionId}]: All Media Manifest URIs Are Collected. (${Object.keys(this.mediaManifestURIs).length}) profiles found!`);
+        debug(`[${this.sessionId}]: All Media Manifest URIs have been collected. (${Object.keys(this.mediaManifestURIs).length}) profiles found!`);
         resolve();
       });
       parser.on("error", err => {
@@ -188,7 +188,7 @@ class SessionLive {
         .on('error', err => {
           reject(err);
         })
-        .pipe(parser)
+        .pipe(parser);
       } catch (exc) {
         reject(exc);
       }
@@ -202,7 +202,7 @@ class SessionLive {
       }
 
       parser.on("m3u", m3u => {
-        // BEFORE ANYTHING: Check if Live Source has made a new Media Sequence or not
+        // BEFORE ANYTHING: Check if Live Source has created a new media sequence or not
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaseqRaw && liveTargetBandwidth === this.lastRequestedM3U8.bandwidth) {
           debug(`[${this.sessionId}]: # [What To Make?] Sending old manifest (Live Source does not have a new Mseq)`);
           resolve();
@@ -210,9 +210,9 @@ class SessionLive {
         }
         debug(`[${this.sessionId}]: # Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
         debug(`[${this.sessionId}]: # Previous RAW Mseq: [${this.lastRequestedMediaseqRaw}]`);
-        // NEW SEQUENCE and/or New Bandwidth
+        // New sequence and/or New Bandwidth
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaseqRaw && liveTargetBandwidth !== this.lastRequestedM3U8.bandwidth) {
-          // If they are the same sequence but different, DON'T pop! rebuild the manifest with all parts.
+          // If they are the same sequence but different bw, do not pop! rebuild the manifest with all parts.
           debug(`[${this.sessionId}]: # [What To Make?] Creating An Identical Media Sequence, but for new Bandwidth!`);
           RECREATE_MSEQ = true;
         }
@@ -227,16 +227,16 @@ class SessionLive {
             RECREATE_MSEQ = true;
           }
 
-          // WE ARE BUILDING A COMPLETELY NEW MEDIA SEQUENCE
+          // Creating a completely new media sequence
           if (this.mediaSeqSubset[vodBandwidths[0]].length != 0 && this.mediaSeqSubset[vodBandwidths[0]][0].discontinuity) {
             this.discSeqCount++;
           }
-          // SET RAW DIFF
+          // Set raw diff
           RAW_mseq_diff = this.lastRequestedM3U8 ? m3u.get("mediaSequence") - this.lastRequestedMediaseqRaw : 1;
           this.lastRequestedMediaseqRaw  = m3u.get("mediaSequence");
           this.targetDuration = m3u.get("targetDuration");
 
-          // DEQUEUE and INCR MSEQ COUNTER.
+          // Dequeue and increase mediaSeqCount
           for (let j = 0; j < RAW_mseq_diff; j++) {
             // Shift the top vod segment.
             for (let i = 0; i < vodBandwidths.length; i++) {
@@ -244,7 +244,6 @@ class SessionLive {
             }
             // LASTLY: Do we need to dequeue the queue?
             if (this.lastRequestedM3U8 && this.mediaSeqSubset[vodBandwidths[0]].length === 0 || this.liveSegQueue.length > this.targetNumSeg) {
-              // DEQUEUE the Queue.
               this.liveSegQueue.shift();
             }
             this.mediaSeqCount++;
@@ -252,7 +251,7 @@ class SessionLive {
           debug(`[${this.sessionId}]: # [What To Make?] Creating a Completely New Media Sequence`);
           debug(`[${this.sessionId}]: # Time to make MEDIA-SEQUENCE number: [${this.mediaSeqCount}]`)
         }
-        // Switch out relative urls if they are used, with absolute URLs
+        // Switch out relative URLs if they are used, with absolute URLs
         if (mediaManifestUri) {
           if (!RECREATE_MSEQ || this.liveSegQueue.length === 0) {
             // CASE: Live source is more than 1 sequence ahead push all "new" segments
@@ -316,7 +315,7 @@ class SessionLive {
               }
             }
             else { // (If queueLen < liveLength)
-              // Empty the queue, then append queueLen many segments from live
+              // Empty the queue, then append queue.length many segments from live
               this.liveSegQueue = [];
               debug(`[${this.sessionId}]: # Emptied the QUEUE!`);
               // Since we might have POPPED above, compensate now
