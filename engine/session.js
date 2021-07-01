@@ -213,7 +213,7 @@ class Session {
         sessionId: this._sessionId,
       }
     } else {
-      const playheadState = await this._playheadState.getValues(["tickMs"]);
+      const playheadState = await this._playheadState.getValues(["tickMs", "mediaSeq", "vodMediaSeqVideo"]);
       const state = await this._playheadState.getState();
       const sessionState = await this._sessionState.getValues(["slateCount"]);
       const playheadStateMap = {};
@@ -227,6 +227,7 @@ class Session {
         playhead: {
           state: playheadStateMap[state],
           tickMs: playheadState.tickMs,
+          mediaSeq: playheadState.mediaSeq + playheadState.vodMediaSeqVideo,
         },
         slateInserted: sessionState.slateCount,
       };
