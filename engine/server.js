@@ -621,7 +621,10 @@ class ChannelEngine {
   async _validateURI(liveURI) {
     try {
       const online = await fetch(liveURI);
-      return online.status >= 200 && online.status < 300;
+      if (online.status >= 200 && online.status < 300) {
+        return true;
+      }
+      return false;
     } catch (err) {
       return false;
     }
@@ -636,7 +639,7 @@ class ChannelEngine {
   _errorHandler(errMsg) {
     console.error(errMsg);
     const err = new errs.InternalServerError(errMsg);
-    return err;    
+    return err;
   }
 }
 
