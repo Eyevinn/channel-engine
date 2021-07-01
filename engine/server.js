@@ -434,7 +434,7 @@ class ChannelEngine {
     if (session) {
       const status = await session.getStatusAsync();
       if (status.playhead && status.playhead.state === "running") {
-        res.sendRaw(200, JSON.stringify({ "health": "ok", "tick": status.playhead.tickMs }),
+        res.sendRaw(200, JSON.stringify({ "health": "ok", "tick": status.playhead.tickMs, "mediaSeq": status.playhead.mediaSeq }),
         {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
