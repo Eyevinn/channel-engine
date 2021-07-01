@@ -22,6 +22,7 @@ class SessionLive {
     this.liveSegQueue = [];
     this.lastRequestedMediaseqRaw = 0;
     this.targetNumSeg = 0;
+    this.latestMediaSeqSegs = {};
 
     if (config) {
       if (config.sessionId) {
@@ -51,12 +52,13 @@ class SessionLive {
     this.liveSegQueue = [];
     this.lastRequestedMediaseqRaw = 0;
     this.targetNumSeg = 0;
+    this.latestMediaSeqSegs = {};
   }
 
   async setLiveUri(liveUri) {
     this.masterManifestUri = liveUri;
     // Get All media manifest inside the entered Master manifest
-    await this.loadMasterManifest();
+    await this._loadMasterManifest();
   }
 
   async getLiveUri() {
@@ -68,10 +70,34 @@ class SessionLive {
   /**
    *  item in array -> { duration: 10, uri: http*** }
    *  segments = {
-   *   bw1: [{ }, { }, { } ... nth { }],
-   *   bw2: [{ }, { }, { } ... nth { }],
-   *   bw3: [{ }, { }, { } ... nth { }],
+   *    bw1: [{ }, { }, { } ... nth { }],
+   *    bw2: [{ }, { }, { } ... nth { }],
+   *    bw3: [{ }, { }, { } ... nth { }],
    *  }
+   *
+   *
+   * newobj = {}
+   *
+   * in _loadMasterManifest
+   *
+   * newobj = {
+   *    bw1: [],
+   *    bw2: [],
+   *    bw3: [],
+   * }
+   *
+   * when in loadMediaManifest('bw1')
+   * newobj['bw1'] = []
+   * newobj['bw1'].push(segments_that_are_used)
+   *
+   * after loadMediaManifest()
+   *
+   *  newobj = {
+   *    bw1: [{},{},{},{},{},{},{},{},{},{}],
+   *    bw2: [{},{},{},{},{},{},{},{},{},{}],
+   *    bw3: [{},{},{},{},{},{},{},{},{},{}]
+   * }
+   *
    */
   async setCurrentMediaSequenceSegments(segments) {
     this.lastMediaSeq = segments;
@@ -79,7 +105,7 @@ class SessionLive {
     for (let i = 0; i < allBws.length; i++) {
       const bw = allBws[i];
       if (!this.mediaSeqSubset[bw]) {
-          this.mediaSeqSubset[bw] = [];
+        this.mediaSeqSubset[bw] = [];
       }
       const segLen = segments[bw].length;
       for (let segIdx = segLen - segLen; segIdx < segLen; segIdx++) {
@@ -92,26 +118,33 @@ class SessionLive {
 
   // To hand off data to normal session
   async getCurrentMediaSequenceSegments() {
-
+    await this._loadAllMediaManifests();
+    return this.latestMediaSeqSegs;
   }
 
   // Switcher will call this
   // To use data from normal session
-  async setCurrentMediaAndDiscSequenceCount(mseq, dseq) {
-    debug(`[${this.sessionId}]: Setting this.mediaSeqCount & this.discSeqCount to -> [${mseq}]:[${dseq}]`);
-    this.mediaSeqCount = mseq - 1;
-    this.discSeqCount = dseq;
+  async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
+    debug(`[${this.sessionId}]: Setting this.mediaSeqCount & this.discSeqCount to -> [${mediaSeq}]:[${discSeq}]`);
+    this.mediaSeqCount = mediaSeq - 1;
+    this.discSeqCount = discSeq;
   }
 
   // To hand off data to normal session
   async getCurrentMediaAndDiscSequenceCount() {
-
+    return {
+      mediaSeqCount: this.mediaSeqCount,
+      discSeqCount: this.discSeqCount,
+    };
   }
 
   // To give manifest to client
   async getCurrentMediaManifestAsync(bw) {
     debug(`[${this.sessionId}]: ...Loading selected Live Media Manifest`);
-    await this._loadMediaManifest(bw);
+    const manifest = await this._loadMediaManifest(bw);
+    // Store and update the last manifest sent to client
+    this.lastRequestedM3U8 = manifest;
+    debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
     debug(`[${this.sessionId}]: Sending Requested Manifest To Client`);
     return this.lastRequestedM3U8.m3u8;
   }
@@ -128,11 +161,19 @@ class SessionLive {
     });
   }
 
+  async _loadAllMediaManifests() {
+    for (let i = 0; i < Object.keys(this.latestMediaSeqSegs); i++) {
+      let bw = Object.keys(this.latestMediaSeqSegs)[i];
+      await this._loadMediaManifest(bw);
+    }
+    debug(`[${this.sessionId}]: ...I gave this.latestMediaSeqSegs segs from all bandwidths`);
+  }
+
   /**
-   * 
+   *
    * @returns Loads the URIs to the different media playlists from the given master playlist
    */
-  loadMasterManifest() {
+  _loadMasterManifest() {
     return new Promise((resolve, reject) => {
       const parser = m3u8.createStream();
       try {
@@ -140,12 +181,12 @@ class SessionLive {
         .on('error', err => {
           reject(err);
         })
-        .pipe(parser)
+        .pipe(parser);
       } catch (exc) {
         reject(exc);
       }
       parser.on("m3u", m3u => {
-        debug(`[${this.sessionId}]: ...Fetched a New Live Master Manifest from:\n${this.masterManifestUri}`); 
+        debug(`[${this.sessionId}]: ...Fetched a New Live Master Manifest from:\n${this.masterManifestUri}`);
         let baseUrl = "";
         const m = this.masterManifestUri.match(/^(.*)\/.*?$/);
         if (m) {
@@ -175,12 +216,16 @@ class SessionLive {
       let RECREATE_MSEQ = false;
       let CREATE_NEW_MSEQ = false;
       let RAW_mseq_diff = 0;
+
+
       debug(`[${this.sessionId}]: # Trying to fetch live manifest for profile with bandwidth: ${bw}`);
       // What bandwidth is closest to the desired bw
       const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
       debug(`[${this.sessionId}]: # Nearest Bandwidth is: ${liveTargetBandwidth}`);
+      // Init | Clear Out -> Get New
+      this.latestMediaSeqSegs[liveTargetBandwidth] = [];
       // Get the target media manifest
-      const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth]; 
+      const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth];
       // Load a New Manifest
       const parser = m3u8.createStream();
       try {
@@ -205,7 +250,7 @@ class SessionLive {
         // BEFORE ANYTHING: Check if Live Source has created a new media sequence or not
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaseqRaw && liveTargetBandwidth === this.lastRequestedM3U8.bandwidth) {
           debug(`[${this.sessionId}]: # [What To Make?] Sending old manifest (Live Source does not have a new Mseq)`);
-          resolve();
+          resolve(this.lastRequestedM3U8);
           return;
         }
         debug(`[${this.sessionId}]: # Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
@@ -249,7 +294,7 @@ class SessionLive {
             this.mediaSeqCount++;
           }
           debug(`[${this.sessionId}]: # [What To Make?] Creating a Completely New Media Sequence`);
-          debug(`[${this.sessionId}]: # Time to make MEDIA-SEQUENCE number: [${this.mediaSeqCount}]`)
+          debug(`[${this.sessionId}]: # Time to make MEDIA-SEQUENCE number: [${this.mediaSeqCount}]`);
         }
         // Switch out relative URLs if they are used, with absolute URLs
         if (mediaManifestUri) {
@@ -283,8 +328,8 @@ class SessionLive {
               -----------------
               Here we clear out liveSegQueue and add multiple live segments.
             */
-            const queueLength = this.liveSegQueue.length; 
-            const liveLength = m3u.items.PlaylistItem.length; 
+            const queueLength = this.liveSegQueue.length;
+            const liveLength = m3u.items.PlaylistItem.length;
 
             if (queueLength >= liveLength) {
               // Then pop liveLength times, then append ALL segments from live
@@ -321,7 +366,7 @@ class SessionLive {
               // Since we might have POPPED above, compensate now
               let size = queueLength;
               if (CREATE_NEW_MSEQ) {
-                size++;
+                size += RAW_mseq_diff;
               }
               // Iterate backwards from END to (end - queue.length), and unshift segment
               for (let i = 1;  i <= size; i++) {
@@ -372,31 +417,29 @@ class SessionLive {
           debug(`[${this.sessionId}]: # Adding a Total of (${this.mediaSeqSubset[vodTargetBandwidth].length}) VOD segments to Manifest`);
           for (let i = 0; i < this.mediaSeqSubset[vodTargetBandwidth].length; i++) {
             let vodSeg = this.mediaSeqSubset[vodTargetBandwidth][i];
+            this.latestMediaSeqSegs[liveTargetBandwidth].push(vodSeg);
             // Get max duration amongst segments
             if (!vodSeg.discontinuity) {
               m3u8 += "#EXTINF:" + vodSeg.duration.toFixed(3) + ",\n";
               m3u8 += vodSeg.uri + "\n";
-            }
-            else {
+            } else {
               m3u8 += "#EXT-X-DISCONTINUITY\n";
             }
           }
           debug(`[${this.sessionId}]: # Appending Segments from Live Source. Segment QUEUE is [ ${this.liveSegQueue.length} ] large`);
           for (let i = 0; i < this.liveSegQueue.length; i++) {
             const live_seg = this.liveSegQueue[i];
+            this.latestMediaSeqSegs[liveTargetBandwidth].push(live_seg);
             m3u8 += "#EXTINF:" + live_seg.duration.toFixed(3) + ",\n";
             m3u8 += live_seg.uri + "\n";
           }
         }
-        // Store and update the last manifest sent to client
-        if (!this.lastRequestedM3U8) {
-          this.lastRequestedM3U8 = { bandwidth: null, m3u8: null };
-        }
-        this.lastRequestedM3U8.bandwidth = liveTargetBandwidth;
-        this.lastRequestedM3U8.m3u8 = m3u8;
-        debug(`[${this.sessionId}]: # Updated lastRequestedM3U8 with new data`);
-        debug(`{${this.sessionId}]: # Manifest Generation Complete!`);
-        resolve();
+        const latestM3U8 = {
+          bandwidth: liveTargetBandwidth,
+          m3u8: m3u8,
+        };
+        debug(`{${this.sessionId}]: Manifest Generation Complete!`);
+        resolve(latestM3U8);
       });
       parser.on("error", err => {
         reject(err);

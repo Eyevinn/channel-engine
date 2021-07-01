@@ -103,7 +103,7 @@ class Session {
 
     if (this.startWithId) {
       await this._sessionState.set("state", SessionState.VOD_INIT_BY_ID);
-      await this._sessionState.set("assetId", this.startWithId);  
+      await this._sessionState.set("assetId", this.startWithId);
     }
   }
 
@@ -199,7 +199,7 @@ class Session {
   async restartPlayheadAsync() {
     await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);
     debug(`[${this._sessionId}]: Restarting playhead consumer`);
-    await this.startPlayheadAsync();  
+    await this.startPlayheadAsync();
   }
 
   async stopPlayheadAsync() {
@@ -269,12 +269,23 @@ class Session {
     }
   }
 
+  async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (isLeader) {
+      sessionState.mediaSeq = await this._sessionState.set("mediaSeq", mediaSeq);
+      sessionState.discSeq = await this._sessionState.set("discSeq", discSeq);
+    }
+  }
+
   // New Function: Gets the current count of mediaSeq
   async getCurrentMediaAndDiscSequenceCount() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    try { 
+    try {
       const sessionState = await this._sessionState.getValues(["discSeq"]);
       const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
       debug(`-------------------SESSIONSTATE: ${sessionState.discSeq}`);
@@ -316,7 +327,7 @@ class Session {
       }
     } else {
       throw new Error("Engine not ready");
-    }  
+    }
   }
 
   async getCurrentAudioManifestAsync(audioGroupId, audioLanguage, playbackSessionId) {

@@ -430,8 +430,8 @@ class ChannelEngine {
         debug(`-------- Do the live->v2l version`);
         const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         const currLiveSegments = await sessionLive.getCurrentMediaSequenceSegments();
-        debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeq}]:[${currLiveCounts.discSeq}]`);
-        debug(`-------- VOD Segments from SessionLive -> [${currLiveSegments}]`);
+        debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeqCount}]:[${currLiveCounts.discSeqCount}]`);
+        debug(`-------- VOD Segments from SessionLive -> [${Object.keys(currLiveSegments)}_${currLiveSegments[Object.keys(currLiveSegments)[1]].length}]`);
         // TODO: Set data in Session
         // Necessary data needed for manifest Rewrites!
         // await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
@@ -607,7 +607,7 @@ class ChannelEngine {
         sessionResets.push(sessionId);
       } else {
         const err = new errs.NotFoundError('Invalid session');
-        next(err);  
+        next(err);
       }
     }
     res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
