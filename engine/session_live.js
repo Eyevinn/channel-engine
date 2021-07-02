@@ -166,6 +166,10 @@ class SessionLive {
       let bw = Object.keys(this.latestMediaSeqSegs)[i];
       await this._loadMediaManifest(bw);
     }
+    for (let i = 0; i < Object.keys(this.latestMediaSeqSegs); i++) {
+      let bw = Object.keys(this.latestMediaSeqSegs)[i];
+      this.latestMediaSeqSegs[bw].push({ discontinuity: true });
+    }
     debug(`[${this.sessionId}]: ...I gave this.latestMediaSeqSegs segs from all bandwidths`);
   }
 
@@ -272,7 +276,7 @@ class SessionLive {
             RECREATE_MSEQ = true;
           }
 
-          // Creating a completely new media sequence
+          // Increase Discontinuity count if top segment is a discontinuity segment.
           if (this.mediaSeqSubset[vodBandwidths[0]].length != 0 && this.mediaSeqSubset[vodBandwidths[0]][0].discontinuity) {
             this.discSeqCount++;
           }

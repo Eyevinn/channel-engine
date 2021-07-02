@@ -434,7 +434,7 @@ class ChannelEngine {
         // TODO: Set data in Session
         // Necessary data needed for manifest Rewrites!
         await session.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
-        // await session.setCurrentMediaSequenceSegments(currSegments);
+        await session.setCurrentMediaSequenceSegments(currLiveSegments, currLiveCounts.mediaSeq, currLiveCounts.discSeq);
         this.streamTypeLive = false;
         debug(`+++++++++++++++++++++++ [ Switching from LIVE->V2L ] +++++++++++++++++++++++`);
         break;

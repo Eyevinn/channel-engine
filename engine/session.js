@@ -240,14 +240,14 @@ class Session {
   }
 
   // New Function
-  async setCurrentMediaSequenceSegments(segments) {
+  async setCurrentMediaSequenceSegments(segments, mseq, dseq) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
       debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-      this._sessionState.set("lastLiveMixSegs", { mediaSeq: 0 , discSeq: 0, lastSegments: segments } );
+      this._sessionState.set("lastLiveMixSegs", { mediaSeq: mseq , discSeq: dseq, lastSegments: segments } );
     }
   }
 
@@ -290,6 +290,7 @@ class Session {
       const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
       const newOffset = Math.abs(mediaSeq - playheadState.vodMediaSeqVideo) + 1;
       await this._sessionState.set("mediaSeq", newOffset);
+      await this._sessionState.set("last", newOffset);
       await this._playheadState.set("mediaSeq", newOffset);
       await this._sessionState.set("discSeq", discSeq);
     }
@@ -338,6 +339,7 @@ class Session {
           m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
           debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
         } else {
+
           // The handle Live->V2L Way
           m3u8 = currentVod.getTransitionManifest(
             playheadState.mediaSeq,
@@ -348,9 +350,11 @@ class Session {
             this.forceTargetDuration,
             sessionState.lastLiveMixSegs);
           // What to Set liveMixSegs to?
-          let liveMixSegs = currentVod.getLiveMixSegs();
+          let liveMixSegs = currentVod.getTransitionSegments();
+
           if (isLeader) {
             if (liveMixSegs.segments[Object.keys(liveMixSegs.segments)[0]].length === 0) {
+              await this._sessionState.set("discSeq", liveMixSegs.discSeq);
               await this._sessionState.set("lastLiveMixSegs", null);
             } else {
               await this._sessionState.set("lastLiveMixSegs", liveMixSegs);
