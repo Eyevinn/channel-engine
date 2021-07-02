@@ -422,7 +422,7 @@ class ChannelEngine {
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);
-        this.streamTypeLive = this.streamTypeLive ? false : true;
+        this.streamTypeLive = true;
         debug(`+++++++++++++++++++++++ [ Switching from V2L->LIVE ] +++++++++++++++++++++++`);
         break;
       case SwitcherState.VOD:
@@ -430,13 +430,13 @@ class ChannelEngine {
         debug(`-------- Do the live->v2l version`);
         const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         const currLiveSegments = await sessionLive.getCurrentMediaSequenceSegments();
-        debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeqCount}]:[${currLiveCounts.discSeqCount}]`);
+        debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeq}]:[${currLiveCounts.discSeq}]`);
         debug(`-------- VOD Segments from SessionLive -> [${Object.keys(currLiveSegments)}_${currLiveSegments[Object.keys(currLiveSegments)[1]].length}]`);
         // TODO: Set data in Session
         // Necessary data needed for manifest Rewrites!
-        // await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
+        await session.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
         // await session.setCurrentMediaSequenceSegments(currSegments);
-        this.streamTypeLive = this.streamTypeLive ? true : false;
+        this.streamTypeLive = false;
         debug(`+++++++++++++++++++++++ [ Switching from LIVE->V2L ] +++++++++++++++++++++++`);
         break;
       case SwitcherState.LIVE_NEW_URL:
@@ -445,6 +445,7 @@ class ChannelEngine {
         // TODO: const currVodSegments = await sessionLIVE.getCurrentMediaSequenceSegments();
         // TODO: Also send ScheduleObj.uri to sessionLIVE
         debug(`+++++++++++++++++++++++ [ Switching from LIVE->LIVE ] +++++++++++++++++++++++`);
+        this.streamTypeLive = true;
         break;
       default:
         this.streamTypeLive = false;

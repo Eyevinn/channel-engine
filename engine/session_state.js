@@ -139,7 +139,7 @@ class SessionStateStore extends SharedStateStore {
       currentVod: null,
       slateCount: 0,
       assetId: "",
-      lastLiveTransitionSegs: null,
+      lastLiveMixSegs: null,
     });
     if (opts && opts.cacheTTL) {
       this.cacheTTL = opts.cacheTTL;

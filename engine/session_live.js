@@ -133,8 +133,8 @@ class SessionLive {
   // To hand off data to normal session
   async getCurrentMediaAndDiscSequenceCount() {
     return {
-      mediaSeqCount: this.mediaSeqCount,
-      discSeqCount: this.discSeqCount,
+      mediaSeq: this.mediaSeqCount,
+      discSeq: this.discSeqCount,
     };
   }
 

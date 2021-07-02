@@ -275,8 +275,11 @@ class Session {
     }
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
-      sessionState.mediaSeq = await this._sessionState.set("mediaSeq", mediaSeq);
-      sessionState.discSeq = await this._sessionState.set("discSeq", discSeq);
+      const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+      const newOffset = Math.abs(mediaSeq - playheadState.vodMediaSeqVideo) + 1;
+      await this._sessionState.set("mediaSeq", newOffset);
+      await this._playheadState.set("mediaSeq", newOffset);
+      await this._sessionState.set("discSeq", discSeq);
     }
   }
 
