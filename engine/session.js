@@ -240,6 +240,18 @@ class Session {
   }
 
   // New Function
+  async setCurrentMediaSequenceSegments(segments) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (isLeader) {
+      debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
+      this._sessionState.set("lastLiveMixSegs", { mediaSeq: 0 , discSeq: 0, lastSegments: segments } );
+    }
+  }
+
+  // New Function
   async getCurrentMediaSequenceSegments() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
@@ -308,7 +320,7 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const sessionState = await this._sessionState.getValues(["discSeq", "lastLiveMixSegs"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
       let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
@@ -320,8 +332,32 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-        const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
+        let m3u8 = null;
+        if (!sessionState.lastLiveMixSegs) {
+          // The Normal Way
+          m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
+        } else {
+          // The handle Live->V2L Way
+          m3u8 = currentVod.getTransitionManifest(
+            playheadState.mediaSeq,
+            bw,
+            playheadState.vodMediaSeqVideo,
+            sessionState.discSeq,
+            this.targetDurationPadding,
+            this.forceTargetDuration,
+            sessionState.lastLiveMixSegs);
+          // What to Set liveMixSegs to?
+          let liveMixSegs = currentVod.getLiveMixSegs();
+          if (isLeader) {
+            if (liveMixSegs.segments[Object.keys(liveMixSegs.segments)[0]].length === 0) {
+              await this._sessionState.set("lastLiveMixSegs", null);
+            } else {
+              await this._sessionState.set("lastLiveMixSegs", liveMixSegs);
+            }
+          }
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Transition media manifest for ${bw} requested`);
+        }
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -606,7 +642,7 @@ class Session {
   }
 
   async _insertSlate(currentVod) {
-    if(this.slateUri) {
+    if (this.slateUri) {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
@@ -1024,6 +1060,7 @@ class Session {
       }
     });
   }
+
 
   async _getCurrentDeltaTime() {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo"]);

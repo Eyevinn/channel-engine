@@ -345,7 +345,7 @@ class ChannelEngine {
  *  False -> means to get manifest from Session
  */
   async _streamSwitcher(session, sessionLive) {
-    if(!this.streamSwitchManager) {
+    if (!this.streamSwitchManager) {
       debug('No streamSwitchManager available');
       return false;
     }
@@ -400,7 +400,7 @@ class ChannelEngine {
       }
     }
     // GO BACK TO V2L? Then:
-    if(strmSchedule.length !== schedule.length && this.streamTypeLive){
+    if (strmSchedule.length !== schedule.length && this.streamTypeLive){
       // We are past the end point for the scheduled Live stream
       await this._initSwitching(SwitcherState.VOD, session, sessionLive, null);
       debug(`++++++++++++++++++++++ [ H ] ++++++++++++++++++++++`);
@@ -427,7 +427,6 @@ class ChannelEngine {
         break;
       case SwitcherState.VOD:
         // Do the live->v2l version
-        debug(`-------- Do the live->v2l version`);
         const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         const currLiveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeq}]:[${currLiveCounts.discSeq}]`);
@@ -445,7 +444,6 @@ class ChannelEngine {
         // TODO: const currVodSegments = await sessionLIVE.getCurrentMediaSequenceSegments();
         // TODO: Also send ScheduleObj.uri to sessionLIVE
         debug(`+++++++++++++++++++++++ [ Switching from LIVE->LIVE ] +++++++++++++++++++++++`);
-        this.streamTypeLive = true;
         break;
       default:
         this.streamTypeLive = false;
@@ -462,7 +460,7 @@ class ChannelEngine {
       try {
         let body = null;
         const useLiveSession = await this._streamSwitcher(session, sessionLive);
-        if(useLiveSession) {
+        if (useLiveSession) {
           debug(`Responding with Altered-Live stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {
