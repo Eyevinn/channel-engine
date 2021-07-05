@@ -240,15 +240,39 @@ class Session {
   }
 
   // New Function
-  async setCurrentMediaSequenceSegments(segments, mseq, dseq) {
+  async setCurrentMediaSequenceSegments(segments) {
+    debug(`-------------setCurrentMediaSequenceSegments(segments) STARTED`);
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
+
+    debug(`[${this._sessionId}]: first bw segments have size=${segments[Object.keys(segments)[0]].length}`);
+    debug(`[${this._sessionId}]: last bw segments have size=${segments[Object.keys(segments)[Object.keys(segments).length - 1]].length}`);
+
+    
+
+
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
-      debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-      this._sessionState.set("lastLiveMixSegs", { mediaSeq: mseq , discSeq: dseq, lastSegments: segments } );
+      debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
+
+      const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
+      let currentVod = await this._sessionState.getCurrentVod(); 
+      debug(`[${this._sessionId}]: old currentVod duration=${currentVod.getDuration()}.`);
+      // ### USE NEW RELOAD FUNCTION ###
+      await currentVod.reload(playheadState.vodMediaSeqVideo, segments);
+      debug(`[${this._sessionId}]: _NEW_ currentVod duration=${currentVod.getDuration()}.`);
+
+      await this._sessionState.clearCurrentVodCache();
+      await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+      await this._sessionState.set("vodMediaSeqVideo", 0);
+      await this._sessionState.set("vodMediaSeqAudio", 0);
+      await this._playheadState.set("vodMediaSeqVideo", 0);
+      await this._playheadState.set("vodMediaSeqAudio", 0);
+      await this._playheadState.set("playheadRef", Date.now());
+
     }
+    debug(`-------------setCurrentMediaSequenceSegments(segments) DUNZO`);
   }
 
   // New Function
@@ -281,19 +305,21 @@ class Session {
     }
   }
 
-  async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
+  // new
+  async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) {
+    debug(`---------------setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) STARTED`);
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
       const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-      const newOffset = Math.abs(mediaSeq - playheadState.vodMediaSeqVideo) + 1;
-      await this._sessionState.set("mediaSeq", newOffset);
-      await this._sessionState.set("last", newOffset);
-      await this._playheadState.set("mediaSeq", newOffset);
-      await this._sessionState.set("discSeq", discSeq);
+      const newOffset = Math.abs(_mediaSeq - playheadState.vodMediaSeqVideo) + 1;
+      await this._sessionState.set("mediaSeq", _mediaSeq + 1);
+      await this._playheadState.set("mediaSeq", _mediaSeq + 1);
+      await this._sessionState.set("discSeq", _discSeq);
     }
+    debug(`---------------setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) DUNZO`);
   }
 
   // New Function: Gets the current count of mediaSeq
@@ -321,10 +347,11 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["discSeq", "lastLiveMixSegs"]);
+    let isLeader = null;
+    const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
-      let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+      isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
@@ -334,34 +361,8 @@ class Session {
     if (currentVod) {
       try {
         let m3u8 = null;
-        if (!sessionState.lastLiveMixSegs) {
-          // The Normal Way
-          m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
-        } else {
-
-          // The handle Live->V2L Way
-          m3u8 = currentVod.getTransitionManifest(
-            playheadState.mediaSeq,
-            bw,
-            playheadState.vodMediaSeqVideo,
-            sessionState.discSeq,
-            this.targetDurationPadding,
-            this.forceTargetDuration,
-            sessionState.lastLiveMixSegs);
-          // What to Set liveMixSegs to?
-          let liveMixSegs = currentVod.getTransitionSegments();
-
-          if (isLeader) {
-            if (liveMixSegs.segments[Object.keys(liveMixSegs.segments)[0]].length === 0) {
-              await this._sessionState.set("discSeq", liveMixSegs.discSeq);
-              await this._sessionState.set("lastLiveMixSegs", null);
-            } else {
-              await this._sessionState.set("lastLiveMixSegs", liveMixSegs);
-            }
-          }
-          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Transition media manifest for ${bw} requested`);
-        }
+        m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding||0}] Current media manifest for ${bw} requested`);
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -440,6 +441,8 @@ class Session {
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
+      debug(`[${this._sessionId}]: I GOT TRIGGERED: ${sessionState.vodMediaSeqVideo}_${currentVod.getLiveMediaSequencesCount() - 1} )`);
+    
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);

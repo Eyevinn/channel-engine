@@ -12,29 +12,26 @@ class RefAssetManager {
         //{ id: 2, title: "10 sec segs", uri: "https://test-streams.mux.dev/test_001/stream.m3u8" },
         //{ id: 2, title: "2 Second Segments", uri: "https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8"},
         //{ id: 0, title: "unhinged trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-        {
-          id: 1,
-          title: "4 sec esegs",
-          uri: "https://bitmovin-a.akamaihd.net/content/playhouse-vr/m3u8s/105560.m3u8",
-        },
+        //{ id: 1, title: "4 sec esegs", uri: "https://bitmovin-a.akamaihd.net/content/playhouse-vr/m3u8s/105560.m3u8" },
         //"https://test-streams.mux.dev/test_001/stream.m3u8"
         // https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8
-        //{ id: 1, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" },
+        { 
+          id: 1,
+          title: "VINN",
+          uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8"
+        },
         //{ id: 1, title: "6 sec segs", uri: "https://nfrederiksen.github.io/testing-streams-hls/hls-test-short-no-sound/playlist.m3u8" },
+        //{ id: 2,   title: "SHORT SLATE",    uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8",},
         {
           id: 2,
-          title: "SHORT SLATE",
-          uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8",
-        },
-        {
-          id: 3,
-          title: "SHORT SLATE",
-          uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8",
+          title: "6 sec segs",
+          //uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8",
+          uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8" // unhinged
         },
       ],
     };
     this.pos = {
-      1: 1,
+      '1': 1,
     };
   }
 
@@ -70,9 +67,9 @@ class RefChannelManager {
   }
   _getProfile() {
     return [
-      { bw: 4947980, codecs: "avc1.4d001f,mp4a.40.2", resolution: [1024, 458] },
-      { bw: 2749539, codecs: "avc1.4d001f,mp4a.40.2", resolution: [640, 286] },
-      { bw: 550172, codecs: "avc1.4d001f,mp4a.40.2", resolution: [480, 214] },
+      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ];
   }
 }
@@ -83,10 +80,13 @@ class StreamSwitchManager {
   getSchedule() {
     let schedule = [
       {
-        id: "test123",
-        title: "My Live Show",
         start: tsNow + 20 * 1000,
-        estEnd: tsNow + 20 * 1000 + 100 * 60 * 1000,
+        estEnd: tsNow + 20 * 1000 + 1 * 60 * 1000,
+        uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+      },
+      {
+        start: tsNow + (20 * 1000 + 1 * 60 * 1000) + 60 * 1000,
+        estEnd: tsNow + ((20 * 1000 + 1 * 60 * 1000) + 60 * 1000) + 2*45*1000,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
     ];
