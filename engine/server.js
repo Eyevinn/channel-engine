@@ -5,6 +5,7 @@ const debug = require('debug')('engine-server');
 const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
 const SessionLive = require('./session_live.js');
+//const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 const fetch = require('node-fetch');
 
@@ -456,6 +457,7 @@ class ChannelEngine {
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]];
+    //const streamSwitcher = StreamSwitcher[req.params[1]];
     if (session && sessionLive) {
       try {
         let body = null;

@@ -15,7 +15,7 @@ class RefAssetManager {
         //{ id: 1, title: "4 sec esegs", uri: "https://bitmovin-a.akamaihd.net/content/playhouse-vr/m3u8s/105560.m3u8" },
         //"https://test-streams.mux.dev/test_001/stream.m3u8"
         // https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8
-        { 
+        {
           id: 1,
           title: "VINN",
           uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8"
@@ -86,7 +86,7 @@ class StreamSwitchManager {
       },
       {
         start: tsNow + (20 * 1000 + 1 * 60 * 1000) + 60 * 1000,
-        estEnd: tsNow + ((20 * 1000 + 1 * 60 * 1000) + 60 * 1000) + 2*45*1000,
+        estEnd: tsNow + ((20 * 1000 + 1 * 60 * 1000) + 60 * 1000) + 2*42*1000,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
     ];
@@ -103,8 +103,7 @@ const engineOptions = {
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
   streamSwitchManager: refStreamSwitchManager,
-  defaultSlateUri:
-    "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
 };
