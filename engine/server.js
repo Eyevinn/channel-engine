@@ -5,9 +5,8 @@ const debug = require('debug')('engine-server');
 const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
 const SessionLive = require('./session_live.js');
-//const StreamSwitcher = require('./stream_switcher.js');
+const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
-const fetch = require('node-fetch');
 
 const { SessionStateStore } = require('./session_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
@@ -16,13 +15,8 @@ const { version } = require('../package.json');
 
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
+const sessionSwitcher = {};
 const eventStreams = {};
-
-const SwitcherState = Object.freeze({
-  LIVE_NEW_URL: 1,
-  LIVE: 2,
-  VOD: 3,
-});
 
 class ChannelEngine {
   constructor(assetMgr, options) {
@@ -47,7 +41,6 @@ class ChannelEngine {
     }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
-    this.streamTypeLive = false;
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
     this.serverStartTime = Date.now();
@@ -166,6 +159,13 @@ class ChannelEngine {
         cloudWatchMetrics: this.logCloudWatchMetrics,
       });
 
+      sessionSwitcher[channel.id] = new StreamSwitcher({
+        sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
+        cloudWatchMetrics: this.logCloudWatchMetrics,
+        streamSwitchManager: this.streamSwitchManager,
+      });
+
       await sessions[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
@@ -182,6 +182,7 @@ class ChannelEngine {
       await sessions[channelId].stopPlayheadAsync();
       delete sessions[channelId];
       delete sessionsLive[channelId];
+      delete sessionSwitcher[channelId];
     };
     await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
@@ -310,7 +311,7 @@ class ChannelEngine {
       }
     } else {
       next(this._gracefulErrorHandler("Could not find a valid session"));
-    } 
+    }
   }
 
   async _handleAudioManifest(req, res, next) {
@@ -339,129 +340,16 @@ class ChannelEngine {
     }
   }
 
- /**
- *  Takes a `Session` object and `SessionLive` object as input
- *  and returns either True or False
- *  True -> means to get manifest from SessionLive
- *  False -> means to get manifest from Session
- */
-  async _streamSwitcher(session, sessionLive) {
-    if (!this.streamSwitchManager) {
-      debug('No streamSwitchManager available');
-      return false;
-    }
-    // Filter out schedule objects from the past
-    const tsNow = Date.now();
-    const strmSchedule = this.streamSwitchManager.getSchedule();
-    const schedule = strmSchedule.filter(obj => obj.estEnd >= tsNow);
-    // If no more live streams, and streamType is live switch back to vod2live
-    if (schedule.length === 0 && this.streamTypeLive) {
-      await this._initSwitching(SwitcherState.VOD, session, sessionLive, null);
-      debug(`++++++++++++++++++++++ [ A ] ++++++++++++++++++++++`);
-      return false;
-    }
-    if (schedule.length === 0) {
-      debug(`++++++++++++++++++++++ [ B ] ++++++++++++++++++++++`);
-      return false;
-    }
-    const scheduleObj = schedule[0];
-    // Check if Live URI is ok
-    const validURI = await this._validateURI(scheduleObj.uri);
-    if (!validURI) {
-      debug(`Unreachable URI`);
-      debug(`++++++++++++++++++++++ [ C ] ++++++++++++++++++++++`);
-      if (this.streamTypeLive) {
-        debug(`Switching back to vod2live`);
-        await this._initSwitching(SwitcherState.VOD, session, sessionLive, null);
-      }
-      return false;
-    }
-
-    // Case: We want to be live
-    if (tsNow >= scheduleObj.start && tsNow < scheduleObj.estEnd) {
-      // TODO: Check if current streaming url == new streaming url
-      if (!this.streamTypeLive) {
-        await this._initSwitching(SwitcherState.LIVE, session, sessionLive, scheduleObj);
-        debug(`++++++++++++++++++++++ [ D ] ++++++++++++++++++++++`);
-        return true;
-      }
-      debug(`++++++++++++++++++++++ [ E ] ++++++++++++++++++++++`);
-      return true;
-    }
-    // Case: Back-2-Back Live streams
-    if (schedule.length > 1) {
-      const nextScheduleObj = schedule[1];
-      if (tsNow > nextScheduleObj.start) {
-        await this._initSwitching(SwitcherState.LIVE, session, sessionLive, nextScheduleObj);
-        debug(`++++++++++++++++++++++ [ F ] ++++++++++++++++++++++`);
-        return true;
-      } else {
-        debug(`++++++++++++++++++++++ [ G ] ++++++++++++++++++++++`);
-        return false;
-      }
-    }
-    // GO BACK TO V2L? Then:
-    if (strmSchedule.length !== schedule.length && this.streamTypeLive){
-      // We are past the end point for the scheduled Live stream
-      await this._initSwitching(SwitcherState.VOD, session, sessionLive, null);
-      debug(`++++++++++++++++++++++ [ H ] ++++++++++++++++++++++`);
-      return false;
-    }
-    debug(`++++++++++++++++++++++ [ I ] ++++++++++++++++++++++`);
-    return false;
-  }
-
-  async _initSwitching(state, session, sessionLive, scheduleObj) {
-    switch (state) {
-      case SwitcherState.LIVE:
-        // Do the v2l->live version: 1) get current mediaSeq 2) get last media sequence.
-        const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-        const currVodSegments = await session.getCurrentMediaSequenceSegments();
-        const liveStreamUri = scheduleObj.uri;
-
-        // Necessary data needed for manifest Rewrites!
-        await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
-        await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
-        await sessionLive.setLiveUri(liveStreamUri);
-        this.streamTypeLive = true;
-        debug(`+++++++++++++++++++++++ [ Switching from V2L->LIVE ] +++++++++++++++++++++++`);
-        break;
-      case SwitcherState.VOD:
-        // Do the live->v2l version
-        const currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-        const currLiveSegments = await sessionLive.getCurrentMediaSequenceSegments();
-        debug(`-------- mseq & dseq from SessionLive -> [${currLiveCounts.mediaSeq}]:[${currLiveCounts.discSeq}]`);
-        debug(`-------- VOD Segments from SessionLive -> [${Object.keys(currLiveSegments)}_${currLiveSegments[Object.keys(currLiveSegments)[1]].length}]`);
-        // TODO: Set data in Session
-        // Necessary data needed for manifest Rewrites!
-        await session.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
-        await session.setCurrentMediaSequenceSegments(currLiveSegments);
-        this.streamTypeLive = false;
-        debug(`+++++++++++++++++++++++ [ Switching from LIVE->V2L ] +++++++++++++++++++++++`);
-        break;
-      case SwitcherState.LIVE_NEW_URL:
-        // Do the live->live version
-        // TODO: const currMediaAndDicSeq = await sessionLIVE.getCurrentMediaAndDiscSequenceCount();
-        // TODO: const currVodSegments = await sessionLIVE.getCurrentMediaSequenceSegments();
-        // TODO: Also send ScheduleObj.uri to sessionLIVE
-        debug(`+++++++++++++++++++++++ [ Switching from LIVE->LIVE ] +++++++++++++++++++++++`);
-        break;
-      default:
-        this.streamTypeLive = false;
-        break;
-    }
-  }
-
   async _handleMediaManifest(req, res, next) {
     debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]];
-    //const streamSwitcher = StreamSwitcher[req.params[1]];
+    const switcher = sessionSwitcher[req.params[1]];
     if (session && sessionLive) {
       try {
         let body = null;
-        const useLiveSession = await this._streamSwitcher(session, sessionLive);
+        const useLiveSession = await switcher.streamSwitcher(session, sessionLive);
         if (useLiveSession) {
           debug(`Responding with Altered-Live stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
@@ -617,18 +505,6 @@ class ChannelEngine {
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": "no-cache",
     });
-  }
-
-  async _validateURI(liveURI) {
-    try {
-      const online = await fetch(liveURI);
-      if (online.status >= 200 && online.status < 300) {
-        return true;
-      }
-      return false;
-    } catch (err) {
-      return false;
-    }
   }
 
   _gracefulErrorHandler(errMsg) {
