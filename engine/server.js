@@ -296,7 +296,7 @@ class ChannelEngine {
 
       try {
         const body = await session.getMasterManifestAsync(filter);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
@@ -341,7 +341,7 @@ class ChannelEngine {
   }
 
   async _handleMediaManifest(req, res, next) {
-    debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]];

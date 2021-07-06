@@ -89,16 +89,17 @@ class StreamSwitcher {
       debug(`++++++++++++++++++++++ [ E ] ++++++++++++++++++++++`);
       return true;
     }
-    // Case: Back-2-Back Live streams
     if (schedule.length > 1) {
       const nextScheduleObj = schedule[1];
-      if (tsNow > nextScheduleObj.start) {
+      if (tsNow >= nextScheduleObj.start) {
+        debug(`BEFORE STREAMTYPE LIVE IS ${this.streamTypeLive}`);
         await this._initSwitching(
           SwitcherState.LIVE,
           session,
           sessionLive,
           nextScheduleObj
         );
+        debug(`AFTER STREAMTYPE LIVE IS ${this.streamTypeLive}`);
         debug(`++++++++++++++++++++++ [ F ] ++++++++++++++++++++++`);
         return true;
       } else {
@@ -120,9 +121,9 @@ class StreamSwitcher {
   async _initSwitching(state, session, sessionLive, scheduleObj) {
     switch (state) {
       case SwitcherState.LIVE:
+        this.streamTypeLive = true;
         // Do the v2l->live version: 1) get current mediaSeq 2) get last media sequence.
-        const currVodCounts =
-          await session.getCurrentMediaAndDiscSequenceCount();
+        const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         const currVodSegments = await session.getCurrentMediaSequenceSegments();
         const liveStreamUri = scheduleObj.uri;
 
@@ -133,12 +134,12 @@ class StreamSwitcher {
         );
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(liveStreamUri);
-        this.streamTypeLive = true;
         debug(
           `+++++++++++++++++++++++ [ Switching from V2L->LIVE ] +++++++++++++++++++++++`
         );
         break;
       case SwitcherState.VOD:
+        this.streamTypeLive = false;
         // Do the live->v2l version
         const currLiveCounts =
           await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -159,7 +160,6 @@ class StreamSwitcher {
           currLiveCounts.discSeq
         );
         await session.setCurrentMediaSequenceSegments(currLiveSegments);
-        this.streamTypeLive = false;
         debug(
           `+++++++++++++++++++++++ [ Switching from LIVE->V2L ] +++++++++++++++++++++++`
         );

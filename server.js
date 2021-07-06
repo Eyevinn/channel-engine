@@ -18,7 +18,8 @@ class RefAssetManager {
         {
           id: 1,
           title: "VINN",
-          uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8"
+          uri: "https://nfrederiksen.github.io/testing-streams-hls/hls-test-short-no-sound/playlist.m3u8",
+          //uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8"
         },
         //{ id: 1, title: "6 sec segs", uri: "https://nfrederiksen.github.io/testing-streams-hls/hls-test-short-no-sound/playlist.m3u8" },
         //{ id: 2,   title: "SHORT SLATE",    uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8",},
@@ -26,7 +27,8 @@ class RefAssetManager {
           id: 2,
           title: "6 sec segs",
           //uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/redundant.m3u8",
-          uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8" // unhinged
+          uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" // unhinged
+          //uri: "https://test-streams.mux.dev/test_001/stream.m3u8"
         },
       ],
     };
@@ -82,7 +84,7 @@ class StreamSwitchManager {
       {
         start: tsNow + 20 * 1000,
         estEnd: tsNow + 20 * 1000 + 1 * 60 * 1000,
-        uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+        uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn",
       },
       {
         start: tsNow + (20 * 1000 + 1 * 60 * 1000) + 60 * 1000,
