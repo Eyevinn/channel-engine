@@ -84,7 +84,7 @@ class StreamSwitchManager {
       {
         start: tsNow + 20 * 1000,
         estEnd: tsNow + 20 * 1000 + 1 * 60 * 1000,
-        uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn",
+        uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
       {
         start: tsNow + (20 * 1000 + 1 * 60 * 1000) + 60 * 1000,

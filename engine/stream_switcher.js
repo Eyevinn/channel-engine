@@ -123,8 +123,9 @@ class StreamSwitcher {
       case SwitcherState.LIVE:
         this.streamTypeLive = true;
         // Do the v2l->live version: 1) get current mediaSeq 2) get last media sequence.
-        const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         const currVodSegments = await session.getCurrentMediaSequenceSegments();
+        const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+        
         const liveStreamUri = scheduleObj.uri;
 
         // Necessary data needed for manifest Rewrites!
