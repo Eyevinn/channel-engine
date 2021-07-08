@@ -138,7 +138,7 @@ class SessionStateStore extends SharedStateStore {
       tsLastRequestAudio: null,
       currentVod: null,
       slateCount: 0,
-      assetId: ""
+      assetId: "",
     });
     if (opts && opts.cacheTTL) {
       this.cacheTTL = opts.cacheTTL;
@@ -167,8 +167,7 @@ class SessionStateStore extends SharedStateStore {
       return leader === instanceId;
     }
     leader = await this.get("", "leader");
-  
-    if (!leader) {      
+    if (!leader) {
       leader = instanceId;
       debug(`[${instanceId}]: We have a new leader! ${instanceId}`)
       await this.set("", "leader", instanceId);

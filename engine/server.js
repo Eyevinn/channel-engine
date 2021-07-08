@@ -4,6 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 const debug = require('debug')('engine-server');
 const verbose = require('debug')('engine-server-verbose');
 const Session = require('./session.js');
+const SessionLive = require('./session_live.js');
+const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 
 const { SessionStateStore } = require('./session_state.js');
@@ -12,6 +14,8 @@ const { filterQueryParser, toHHMMSS } = require('./util.js');
 const { version } = require('../package.json');
 
 const sessions = {}; // Should be a persistent store...
+const sessionsLive = {}; // Should be a persistent store...
+const sessionSwitcher = {};
 const eventStreams = {};
 
 class ChannelEngine {
@@ -32,9 +36,11 @@ class ChannelEngine {
       this.slateRepetitions = options.slateRepetitions || 10;
       this.slateDuration = options.slateDuration || 4000;
     }
+    if (options && options.streamSwitchManager) {
+      this.streamSwitchManager = options.streamSwitchManager;
+    }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
-
     this.server = restify.createServer();
     this.server.use(restify.plugins.queryParser());
     this.serverStartTime = Date.now();
@@ -146,6 +152,21 @@ class ChannelEngine {
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionStore);
+
+      sessionsLive[channel.id] = new SessionLive({
+        instanceId: this.sessionStore.instanceId,
+        sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
+        cloudWatchMetrics: this.logCloudWatchMetrics,
+      });
+
+      sessionSwitcher[channel.id] = new StreamSwitcher({
+        sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
+        cloudWatchMetrics: this.logCloudWatchMetrics,
+        streamSwitchManager: this.streamSwitchManager,
+      });
+
       await sessions[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
@@ -161,6 +182,8 @@ class ChannelEngine {
       clearInterval(this.monitorTimer[channelId]);
       await sessions[channelId].stopPlayheadAsync();
       delete sessions[channelId];
+      delete sessionsLive[channelId];
+      delete sessionSwitcher[channelId];
     };
     await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
@@ -205,7 +228,7 @@ class ChannelEngine {
       debug(`[${status.sessionId}]: Playhead crashed, restarting`);
       await session.restartPlayheadAsync();
     } else if (status.playhead.state === 'idle') {
-      debug(`[${status.sessionId}]: Starting playhead`);       
+      debug(`[${status.sessionId}]: Starting playhead`);
       await session.startPlayheadAsync();
     }
   }
@@ -274,7 +297,7 @@ class ChannelEngine {
 
       try {
         const body = await session.getMasterManifestAsync(filter);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
@@ -289,7 +312,7 @@ class ChannelEngine {
       }
     } else {
       next(this._gracefulErrorHandler("Could not find a valid session"));
-    } 
+    }
   }
 
   async _handleAudioManifest(req, res, next) {
@@ -319,12 +342,22 @@ class ChannelEngine {
   }
 
   async _handleMediaManifest(req, res, next) {
-    debug(`${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
-    if (session) {
+    const sessionLive = sessionsLive[req.params[1]];
+    const switcher = sessionSwitcher[req.params[1]];
+    if (session && sessionLive) {
       try {
-        const body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+        let body = null;
+        const useLiveSession = await switcher.streamSwitcher(session, sessionLive);
+        if (useLiveSession) {
+          debug(`Responding with Altered-Live stream manifest`);
+          body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
+        } else {
+          debug(`Responding with VOD2Live stream manifest`);
+          body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+        }
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, Buffer.from(body, 'utf8'), { 
@@ -445,7 +478,7 @@ class ChannelEngine {
         {
           "Content-Type": "application/json",
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",            
+          "Cache-Control": "no-cache",
         });
       }
     } else {
@@ -464,7 +497,7 @@ class ChannelEngine {
         sessionResets.push(sessionId);
       } else {
         const err = new errs.NotFoundError('Invalid session');
-        next(err);  
+        next(err);
       }
     }
     res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
@@ -484,7 +517,7 @@ class ChannelEngine {
   _errorHandler(errMsg) {
     console.error(errMsg);
     const err = new errs.InternalServerError(errMsg);
-    return err;    
+    return err;
   }
 }
 
