@@ -154,6 +154,7 @@ class ChannelEngine {
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
+        instanceId: this.sessionStore.instanceId,
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,

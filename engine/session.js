@@ -239,29 +239,18 @@ class Session {
     await this._playheadStateStore.reset(this._sessionId);
   }
 
-  // New Function
   async setCurrentMediaSequenceSegments(segments) {
-    debug(`-------------setCurrentMediaSequenceSegments(segments) STARTED`);
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-
-    debug(`[${this._sessionId}]: first bw segments have size=${segments[Object.keys(segments)[0]].length}`);
-    debug(`[${this._sessionId}]: last bw segments have size=${segments[Object.keys(segments)[Object.keys(segments).length - 1]].length}`);
-
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
-
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod(); 
-      debug(`[${this._sessionId}]: old currentVod duration=${currentVod.getDuration()}.`);
-      // ### USE NEW RELOAD FUNCTION ###
       await currentVod.reload(playheadState.vodMediaSeqVideo, segments);
-      debug(`[${this._sessionId}]: _NEW_ currentVod duration=${currentVod.getDuration()}.`);
-
       await this._sessionState.clearCurrentVodCache();
-      await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+      await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("vodMediaSeqVideo", 0);
@@ -270,7 +259,6 @@ class Session {
     }
   }
 
-  // New Function
   async getCurrentMediaSequenceSegments() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
@@ -287,21 +275,19 @@ class Session {
     if (currentVod) {
       try {
         const mediaSegments = currentVod.getLiveMediaSequenceSegments(playheadState.vodMediaSeqVideo);
-        debug(`[${this._sessionId}]: All current media segments requested`);
+        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence`);
         return mediaSegments;
       } catch (err) {
         logerror(this._sessionId, err);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-        throw new Error("Failed get all current media segments: " + JSON.stringify(playheadState));
+        throw new Error("Failed to get all current Media segments: " + JSON.stringify(playheadState));
       }
     } else {
       throw new Error("Engine not ready");
     }
   }
 
-  // new
   async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) {
-    debug(`---------------setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) STARTED`);
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
@@ -314,7 +300,6 @@ class Session {
     debug(`[${this._sessionId}]: Setting current media and discontinuity count.`);
   }
 
-  // New Function: Gets the current count of mediaSeq
   async getCurrentMediaAndDiscSequenceCount() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
