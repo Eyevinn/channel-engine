@@ -50,9 +50,9 @@ class StreamSwitcher {
     // If no more live streams, and streamType is live switch back to vod2live
     if (schedule.length === 0 && this.streamTypeLive) {
       await this._initSwitching(
-        SwitcherState.LIVE_TO_VOD, 
-        session, 
-        sessionLive, 
+        SwitcherState.LIVE_TO_VOD,
+        session,
+        sessionLive,
         null
       );
       return false;
@@ -78,13 +78,12 @@ class StreamSwitcher {
     }
     // Case: Live->Live
     if (schedule.length > 0 && this.streamTypeLive) {
-      const nextScheduleObj = schedule[0];
-      if (tsNow >= nextScheduleObj.start && this.streamID !== nextScheduleObj.id) {
+      if (tsNow >= scheduleObj.start && this.streamID !== scheduleObj.id) {
         await this._initSwitching(
           SwitcherState.LIVE_TO_LIVE,
           session,
           sessionLive,
-          nextScheduleObj
+          scheduleObj
         );
         return true;
       }
@@ -103,12 +102,12 @@ class StreamSwitcher {
       return true;
     }
     // GO BACK TO V2L? Then:
-    if (strmSchedule.length !== schedule.length && this.streamTypeLive) {
+    if (tsNow < scheduleObj.start && this.streamTypeLive) {
       // We are past the end point for the scheduled Live stream
       await this._initSwitching(
-        SwitcherState.LIVE_TO_VOD, 
-        session, 
-        sessionLive, 
+        SwitcherState.LIVE_TO_VOD,
+        session,
+        sessionLive,
         null
       );
       return false;
