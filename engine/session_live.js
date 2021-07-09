@@ -39,30 +39,10 @@ class SessionLive {
     }
   }
 
-  // not currently used/tested, This is used for going LIVE->V2L
-  async _resetSession() {
-    debug(`[${this.sessionId}]: Resetting Live Session`);
-    this.mediaSeqCount = 0;
-    this.discSeqCount = 0;
-    this.targetDuration = 0;
-    this.masterManifestUri = null;
-    this.lastRequestedM3U8 = null;
-    this.vodSegments = {};
-    this.mediaManifestURIs = {};
-    this.liveSegQueue = [];
-    this.lastRequestedMediaSeqRaw = 0;
-    this.targetNumSeg = 0;
-    this.latestMediaSeqSegs = {};
-  }
-
   async setLiveUri(liveUri) {
     this.masterManifestUri = liveUri;
     // Get All media manifest from the Master manifest
     await this._loadMasterManifest();
-  }
-
-  async getLiveUri() {
-    return this.masterManifestUri;
   }
 
   async setCurrentMediaSequenceSegments(segments) {
@@ -83,20 +63,24 @@ class SessionLive {
     this.targetNumSeg = this.vodSegments[allBws[0]].length;
   }
 
-  // To handoff data to normal session
-  async getCurrentMediaSequenceSegments() {
-    await this._loadAllMediaManifests();
-    debug(`[${this.sessionId}]: All bw in segs we sent to Session: ${Object.keys(this.latestMediaSeqSegs)}`);
-    const lastMediaSegs = this.latestMediaSeqSegs;
-    this._resetSession();
-    return lastMediaSegs;
-  }
-
   // To handoff data from normal session
   async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
     debug(`[${this.sessionId}]: Setting mediaSeqCount and discSeqCount to -> [${mediaSeq}]:[${discSeq}]`);
     this.mediaSeqCount = mediaSeq - 1;
     this.discSeqCount = discSeq;
+  }
+
+  async getLiveUri() {
+    return this.masterManifestUri;
+  }
+
+  // To handoff data to normal session
+  async getCurrentMediaSequenceSegments() {
+    await this._loadAllMediaManifests();
+    debug(`[${this.sessionId}]: All bw in segs we sent to Session: ${Object.keys(this.latestMediaSeqSegs)}`);
+    const lastMediaSegs = this.latestMediaSeqSegs;
+    await this._resetSession();
+    return lastMediaSegs;
   }
 
   // To handoff data to normal session
@@ -114,7 +98,7 @@ class SessionLive {
     try {
       manifest = await this._loadMediaManifest(bw);
       if (!manifest.m3u8) {
-        const delayMs = this._getDelay();
+        const delayMs = await this._getDelay();
         debug(`[${this.sessionId}]: Trying to fetch Live Media Manifest again, after a ${delayMs}ms delay!`);
         await timer(delayMs);
         manifest = await this._loadMediaManifest(bw);
@@ -156,49 +140,54 @@ class SessionLive {
     for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
       let bw = Object.keys(this.mediaManifestURIs)[i];
       livePromises.push(this._loadMediaManifest(bw));
-      debug(`[${this.sessionId}]: ...Added promise to add segments to this.latestMediaSeqSegs for bw=${bw}`);
+      debug(`[${this.sessionId}]: Pushed to this.latestMediaSeqSegs for bw=${bw}`);
     }
+
     const manifestList = await Promise.allSettled(livePromises);
-    const delayMs = this._getDelay();
     livePromises = [];
-    let allMediaSeqCounts = manifestList.map((item) => {
+    const allMediaSeqCounts = manifestList.map((item) => {
       if (item.status === 'rejected') {
         return item.reason.mediaSeq;
       }
       return item.value.mediaSeq;
     });
 
-    const maxMseq = Math.max(...allMediaSeqCounts);
-    let isFirstTime = true;
-    for (let i = 0; i < manifestList.length; i++) {
-      let retryBw = 0;
-      let mseq = 0;
-      if (manifestList[i].status === 'rejected') {
-        retryBw = manifestList[i].reason.bandwidth;
-        mseq = manifestList[i].reason.mediaSeq;
-      } else {
-        retryBw = manifestList[i].value.bandwidth;
-        mseq = manifestList[i].value.mediaSeq;
-      }
-      if (mseq < maxMseq) {
-        if (isFirstTime) {
-          // Try to not fetch in the middle of a segment by accident,
-          // Wait for the live source to generate the next one before trying again
-          // Time to wait is approximately 75% of a average seg duration
-          debug(`[${this.sessionId}]: Delay before trying again is ${delayMs}ms`);
-          await timer(delayMs);
-          isFirstTime = false;
+    if (!allMediaSeqCounts.every( (val, i, arr) => val === arr[0])) {
+      const maxMseq = Math.max(...allMediaSeqCounts);
+      debug(`[${this.sessionId}]: maxMseq=${maxMseq}, everyone=${allMediaSeqCounts}`);
+      const delayMs = await this._getDelay();
+      let isFirstTime = true;
+      for (let i = 0; i < manifestList.length; i++) {
+        let retryBw = 0;
+        let mseq = 0;
+        if (manifestList[i].status === 'rejected') {
+          retryBw = manifestList[i].reason.bandwidth;
+          mseq = manifestList[i].reason.mediaSeq;
+        } else {
+          retryBw = manifestList[i].value.bandwidth;
+          mseq = manifestList[i].value.mediaSeq;
         }
-        livePromises.push(this._loadMediaManifest(retryBw));
+        if (mseq < maxMseq) {
+          if (isFirstTime) {
+            // Try to not fetch in the middle of a segment by accident,
+            // Wait for the live source to generate the next one before trying again
+            // Time to wait is approximately 75% of a average seg duration
+            debug(`[${this.sessionId}]: Delay before trying again is ${delayMs}ms`);
+            await timer(delayMs);
+            isFirstTime = false;
+          }
+          livePromises.push(this._loadMediaManifest(retryBw));
+        }
       }
-    }
-    if (livePromises.length > 0) {
-      // Try to fetch new media manifests one last time
-      debug(`[${this.sessionId}]: ...Trying one more time to create updated manifests for [${livePromises.length}] bandwidths.`);
-      try {
-        await Promise.all(livePromises);
-      } catch (e) {
-        throw new Error(e);
+      if (livePromises.length > 0) {
+        // Try to fetch new media manifests one last time
+        debug(`[${this.sessionId}]: ...Trying one more time to create updated manifests for [${livePromises.length}] bandwidths.`);
+        try {
+          await Promise.all(livePromises);
+          debug(`[${this.sessionId}]: Succeeded when trying again.`);
+        } catch (e) {
+          throw new Error(e);
+        }
       }
     }
     for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
@@ -206,7 +195,7 @@ class SessionLive {
       this.latestMediaSeqSegs[bw].push({ discontinuity: true });
       debug(`[${this.sessionId}]: ...Added a disc-segment to this.latestMediaSeqSegs for bw=${bw}`);
     }
-    debug(`[${this.sessionId}]: Get all segs for all bandwidths to pass on to VOD2Live Session`);
+    debug(`[${this.sessionId}]: Got all segments for all bandwidths to pass on to VOD2Live Session`);
   }
 
   /**
@@ -318,7 +307,7 @@ class SessionLive {
           resolve({
             bandwidth: liveTargetBandwidth,
             m3u8: null,
-            mediaSeq: this.lastRequestedMediaSeqRaw,
+            mediaSeq: m3u.get('mediaSequence'),
           });
           return;
         } else if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaSeqRaw && liveTargetBandwidth !== this.lastRequestedM3U8.bandwidth) {
@@ -366,7 +355,10 @@ class SessionLive {
         if (this.lastRequestedM3U8 && mediaManifestUri) {
           if (!recreateMseq || this.liveSegQueue.length === 0) {
             // CASE: Live source is more than 1 sequence ahead push all "new" segments
-            const startIdx = m3u.items.PlaylistItem.length - mediaSeqCountDiffRaw;
+            let startIdx = m3u.items.PlaylistItem.length - mediaSeqCountDiffRaw;
+            if (startIdx < 0) {
+              startIdx = 0;
+            }
             for (let i = startIdx; i < m3u.items.PlaylistItem.length; i++) {
               let seg = {};
               let playlistItem = m3u.items.PlaylistItem[i];
@@ -524,6 +516,21 @@ class SessionLive {
     });
   }
 
+  async _resetSession() {
+    debug(`[${this.sessionId}]: Resetting Live Session`);
+    this.mediaSeqCount = 0;
+    this.discSeqCount = 0;
+    this.targetDuration = 0;
+    this.masterManifestUri = null;
+    this.lastRequestedM3U8 = null;
+    this.vodSegments = {};
+    this.mediaManifestURIs = {};
+    this.liveSegQueue = [];
+    this.lastRequestedMediaSeqRaw = 0;
+    this.targetNumSeg = 0;
+    this.latestMediaSeqSegs = {};
+  }
+
   _getFirstBwWithSegmentsInList(allSegments) {
     const bandwidths = Object.keys(allSegments);
     for (let i = 0; i < bandwidths.length; i++) {
@@ -559,7 +566,7 @@ class SessionLive {
     return true;
   }
 
-  _getDelay() {
+  async _getDelay() {
     const delayMs = 1000 * (this.delayFactor * this._getAverageDuration(this.latestMediaSeqSegs[this._getFirstBwWithSegmentsInList(this.latestMediaSeqSegs)]));
     debug(`[${this.sessionId}]: Current delay is: [${delayMs}] `);
     return delayMs;

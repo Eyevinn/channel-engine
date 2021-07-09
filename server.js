@@ -64,19 +64,30 @@ class RefChannelManager {
   }
 }
 
-const tsNow = Date.now();
 class StreamSwitchManager {
+  constructor() {
+    this.schedule = [];
+    this.scheduleID = 0;
+  }
   getSchedule() {
-    // Break in with live content after 20 seconds of VOD2Live and let it play for 60 seconds
-    let schedule = [
-      {
-        id: "abc-100",
-        start: tsNow + 20 * 1000,
-        estEnd: tsNow + 20 * 1000 + 1 * 60 * 1000,
+    const tsNow = Date.now();
+    const liveStreamDuration = 1 * 60 * 1000;
+    const startOffset = tsNow + liveStreamDuration;
+    const endTime = startOffset + liveStreamDuration;
+    // Break in with live content after 1 minute of VOD2Live the first time Channel Engine starts
+    // and let it play for 1 minute then break in with live content after 1 minute of VOD2Live and let it run for 1 minute
+    console.log(JSON.stringify(this.schedule));
+    this.schedule = this.schedule.filter((obj) => obj.estEnd >= tsNow);
+    if (this.schedule.length === 0) {
+      this.schedule.push({
+        id: this.scheduleID++,
+        start: startOffset,
+        estEnd: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
-      },
-    ];
-    return schedule;
+      });
+    }
+
+    return this.schedule;
   }
 }
 
