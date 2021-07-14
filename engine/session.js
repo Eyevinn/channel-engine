@@ -240,7 +240,18 @@ class Session {
     await this._playheadStateStore.reset(this._sessionId);
   }
 
-  async setCurrentMediaSequenceSegments(segments) {
+  async getTruncatedVodSegments(vodUri, duration) {
+    const hlsVod = await this._truncateSlate(null, duration, vodUri);
+    let vodSegments = hlsVod.getMediaSegments();
+    const bandwidths = Object.keys(vodSegments);
+
+    bandwidths.forEach(bw => {
+      vodSegments[bw].unshift({ discontinuity: true });
+    });
+    return vodSegments;
+  }
+
+  async setCurrentMediaSequenceSegments(segments, reloadBehind) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
@@ -249,7 +260,7 @@ class Session {
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod(); 
-      await currentVod.reload(playheadState.vodMediaSeqVideo, segments);
+      await currentVod.reload(playheadState.vodMediaSeqVideo, segments, null, reloadBehind);
       await this._sessionState.clearCurrentVodCache();
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodMediaSeqVideo", 0);
@@ -305,7 +316,6 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
       let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
@@ -429,8 +439,6 @@ class Session {
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
-      debug(`[${this._sessionId}]: I GOT TRIGGERED: ${sessionState.vodMediaSeqVideo}_${currentVod.getLiveMediaSequencesCount() - 1} )`);
-    
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);
@@ -956,15 +964,21 @@ class Session {
     });
   }
 
-  _truncateSlate(afterVod, requestedDuration) {
+  _truncateSlate(afterVod, requestedDuration, vodUri) {
     return new Promise((resolve, reject) => {
+      let nexVodUri = null;
       try {
-        const slateVod = new HLSTruncateVod(this.slateUri, requestedDuration);
+        if (vodUri) {
+          nexVodUri = vodUri;
+        } else {
+          nexVodUri = this.slateUri;
+        }
+        const slateVod = new HLSTruncateVod(nexVodUri, requestedDuration);
         let hlsVod;
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
+          hlsVod = new HLSVod(nexVodUri, null, null, null, m3u8Header(this._instanceId));
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());

@@ -102,26 +102,27 @@ class SessionLive {
         debug(`[${this.sessionId}]: Trying to fetch Live Media Manifest again, after a ${delayMs}ms delay!`);
         await timer(delayMs);
         manifest = await this._loadMediaManifest(bw);
-        if(!manifest.m3u8) {
+        if (!manifest.m3u8) {
           debug(`[${this.sessionId}]: Could not generate a new manifest return last generated`);
           return this.lastRequestedM3U8.m3u8;
         }
-        this.lastRequestedM3U8.m3u8 = manifest
-        return this.lastRequestedM3U8.m3u8;
       }
+      // Store and update the last manifest sent to client
+      if (manifest.m3u8) {
+        this.lastRequestedM3U8 = manifest;
+        debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
+      }
+      debug(`[${this.sessionId}]: Sending Requested Manifest To Client`);
+      return this.lastRequestedM3U8.m3u8;
     } catch (e) {
       // session live not yet ready
       throw new Error(e);
     }
-    // Store and update the last manifest sent to client
-    this.lastRequestedM3U8 = manifest;
-    debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
-    debug(`[${this.sessionId}]: Sending Requested Manifest To Client`);
-    return this.lastRequestedM3U8.m3u8;
   }
 
   // TODO: Implement this later
   async getCurrentAudioManifestAsync(audioGroupId, audioLanguage) {
+    debug(`[${this.sessionId}]: getCurrentAudioManifestAsync is NOT Implemented`);
     return "Not Implemented";
   }
 
@@ -171,7 +172,7 @@ class SessionLive {
           if (isFirstTime) {
             // Try to not fetch in the middle of a segment by accident,
             // Wait for the live source to generate the next one before trying again
-            // Time to wait is approximately 75% of a average seg duration
+            // Time to wait is approximately 75% of an average seg duration
             debug(`[${this.sessionId}]: Delay before trying again is ${delayMs}ms`);
             await timer(delayMs);
             isFirstTime = false;
@@ -293,15 +294,14 @@ class SessionLive {
       }
 
       parser.on("m3u", (m3u) => {
+        debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
+        debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRaw}]`);
         // Before anything else is done: Check if Live Source has created a new media sequence or not
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaSeqRaw && liveTargetBandwidth === this.lastRequestedM3U8.bandwidth) {
           debug(`[${this.sessionId}]: [What To Create?] Sending old manifest (Live Source does not have a new Mseq)`);
           resolve(this.lastRequestedM3U8);
           return;
         }
-        debug(`[${this.sessionId}]: Current RAW Mseq: [${m3u.get("mediaSequence")}]`);
-        debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRaw}]`);
-
         if (this.lastRequestedM3U8 && m3u.get('mediaSequence') < this.lastRequestedMediaSeqRaw) {
           debug(`[${this.sessionId}]: [What To Create?] Odd case! Live Source MediaSeq is not up tp date. Aborting.`);
           resolve({
@@ -489,15 +489,15 @@ class SessionLive {
           }
           debug(`[${this.sessionId}]: Appending Segments from Live Source. Segment QUEUE is [ ${this.liveSegQueue.length} ] large`);
           for (let i = 0; i < this.liveSegQueue.length; i++) {
-            const live_seg = this.liveSegQueue[i];
-            this.latestMediaSeqSegs[liveTargetBandwidth].push(live_seg);
-            if (live_seg.uri && live_seg.duration) {
-              m3u8 += "#EXTINF:" + live_seg.duration.toFixed(3) + ",\n";
-              m3u8 += live_seg.uri + "\n";
+            const liveSeg = this.liveSegQueue[i];
+            this.latestMediaSeqSegs[liveTargetBandwidth].push(liveSeg);
+            if (liveSeg.uri && liveSeg.duration) {
+              m3u8 += "#EXTINF:" + liveSeg.duration.toFixed(3) + ",\n";
+              m3u8 += liveSeg.uri + "\n";
             }
           }
         }
-        debug(`{${this.sessionId}]: Manifest Generation Complete!`);
+        debug(`[${this.sessionId}]: Manifest Generation Complete!`);
         resolve({
           bandwidth: liveTargetBandwidth,
           mediaSeq: this.lastRequestedMediaSeqRaw,
@@ -568,7 +568,7 @@ class SessionLive {
 
   async _getDelay() {
     const delayMs = 1000 * (this.delayFactor * this._getAverageDuration(this.latestMediaSeqSegs[this._getFirstBwWithSegmentsInList(this.latestMediaSeqSegs)]));
-    debug(`[${this.sessionId}]: Current delay is: [${delayMs}] `);
+    debug(`[${this.sessionId}]: Current delay is: [${delayMs}ms] `);
     return delayMs;
   }
 }
