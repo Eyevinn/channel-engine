@@ -1,4 +1,5 @@
 const debug = require('debug')('engine-sessionLive');
+const crypto = require('crypto');
 const m3u8 = require('@eyevinn/m3u8');
 const request = require('request');
 const url = require('url');
@@ -9,7 +10,7 @@ const DELAY_FACTOR = 0.75;
 class SessionLive {
   constructor(config) {
     this.instanceId = null;
-    this.sessionId = 0;
+    this.sessionId = crypto.randomBytes(20).toString('hex');
     this.mediaSeqCount = 0;
     this.discSeqCount = 0;
     this.targetDuration = 0;
@@ -68,10 +69,6 @@ class SessionLive {
     debug(`[${this.sessionId}]: Setting mediaSeqCount and discSeqCount to -> [${mediaSeq}]:[${discSeq}]`);
     this.mediaSeqCount = mediaSeq - 1;
     this.discSeqCount = discSeq;
-  }
-
-  async getLiveUri() {
-    return this.masterManifestUri;
   }
 
   // To handoff data to normal session

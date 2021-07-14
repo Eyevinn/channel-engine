@@ -1,4 +1,5 @@
 const debug = require('debug')('engine-streamSwitcher');
+const crypto = require('crypto');
 const fetch = require('node-fetch');
 
 const SwitcherState = Object.freeze({
@@ -14,6 +15,7 @@ const StreamType = Object.freeze({
 
 class StreamSwitcher {
   constructor(config) {
+    this.sessionId =  crypto.randomBytes(20).toString('hex');
     this.useDemuxedAudio = false;
     this.cloudWatchLogging = false;
     this.streamTypeLive = false;
@@ -180,7 +182,7 @@ class StreamSwitcher {
         const liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         if (!scheduleObj || !scheduleObj.duration) {
           this.eventId = null;
-          if(!scheduleObj.duration) {
+          if(scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
@@ -190,7 +192,7 @@ class StreamSwitcher {
         }
         this.eventId = scheduleObj.eventId;
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
-        // Complete the Live->V2L
+        // Complete the Live->V2L 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
         // Do V2L->VOD
