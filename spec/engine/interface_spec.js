@@ -43,11 +43,10 @@ describe("Asset Manager Interface", () => {
     jasmine.clock().uninstall();
   });
 
-  it("receives an error event when VOD fails to load", async (done) => {
+  it("receives an error event when VOD fails to load", async () => {
     const errorHandler = (err, data) => {
       expect(err.message).toEqual("Failed to init first VOD");
       expect(data.id).toEqual(1);
-      done();
     };
 
     const testAssetManager = new TestAssetManager({ errorHandler: errorHandler });
@@ -56,6 +55,5 @@ describe("Asset Manager Interface", () => {
     const engine = new ChannelEngine(testAssetManager, { channelManager: testChannelManager });
     await engine.start();
     jasmine.clock().tick((10 * 1000) + 1);
-
   });
 });
