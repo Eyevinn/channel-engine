@@ -42,7 +42,6 @@ class SessionLive {
 
   async setLiveUri(liveUri) {
     this.masterManifestUri = liveUri;
-    // Get All media manifest from the Master manifest
     await this._loadMasterManifest();
   }
 
@@ -64,14 +63,16 @@ class SessionLive {
     this.targetNumSeg = this.vodSegments[allBws[0]].length;
   }
 
-  // To handoff data from normal session
   async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
     debug(`[${this.sessionId}]: Setting mediaSeqCount and discSeqCount to -> [${mediaSeq}]:[${discSeq}]`);
     this.mediaSeqCount = mediaSeq - 1;
     this.discSeqCount = discSeq;
   }
 
-  // To handoff data to normal session
+  async getTransitionalSegments() {
+    return this.vodSegments;
+  }
+
   async getCurrentMediaSequenceSegments() {
     await this._loadAllMediaManifests();
     debug(`[${this.sessionId}]: All bw in segs we sent to Session: ${Object.keys(this.latestMediaSeqSegs)}`);
@@ -80,7 +81,6 @@ class SessionLive {
     return lastMediaSegs;
   }
 
-  // To handoff data to normal session
   async getCurrentMediaAndDiscSequenceCount() {
     return {
       mediaSeq: this.mediaSeqCount,
@@ -104,7 +104,6 @@ class SessionLive {
           return this.lastRequestedM3U8.m3u8;
         }
       }
-      // Store and update the last manifest sent to client
       if (manifest.m3u8) {
         this.lastRequestedM3U8 = manifest;
         debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
@@ -183,8 +182,8 @@ class SessionLive {
         try {
           await Promise.all(livePromises);
           debug(`[${this.sessionId}]: Succeeded when trying again.`);
-        } catch (e) {
-          throw new Error(e);
+        } catch (exc) {
+          throw new Error(exc);
         }
       }
     }
@@ -205,16 +204,16 @@ class SessionLive {
       const parser = m3u8.createStream();
       try {
         request({ uri: this.masterManifestUri, gzip: true })
-        .on("error", err => {
+        .on("error", (exc) => {
           debug(`ERROR: ${Object.keys(exc)}`);
-          reject(err);
+          reject(exc);
         })
         .pipe(parser);
       } catch (exc) {
         debug(`ERROR: ${Object.keys(exc)}`);
         reject(exc);
       }
-      parser.on("m3u", m3u => {
+      parser.on("m3u", (m3u) => {
         debug(`[${this.sessionId}]: ...Fetched a New Live Master Manifest from:\n${this.masterManifestUri}`);
         let baseUrl = "";
         const m = this.masterManifestUri.match(/^(.*)\/.*?$/);
@@ -234,9 +233,9 @@ class SessionLive {
         debug(`[${this.sessionId}]: All Live Media Manifest URIs have been collected. (${Object.keys(this.mediaManifestURIs).length}) profiles found!`);
         resolve();
       });
-      parser.on("error", err => {
+      parser.on("error", (exc) => {
         debug(`ERROR: ${Object.keys(exc)}`);
-        reject(err);
+        reject(exc);
       });
     });
   }
@@ -262,10 +261,10 @@ class SessionLive {
       const parser = m3u8.createStream();
       try {
         request({ uri: mediaManifestUri, gzip: true })
-        .on("error", err => {
+        .on("error", exc => {
           debug(`ERROR: ${Object.keys(exc)}`);
           reject({
-            message: err,
+            message: exc,
             bandwidth: liveTargetBandwidth,
             m3u8: null,
             mediaSeq: -1
@@ -275,7 +274,7 @@ class SessionLive {
       } catch (exc) {
         debug(`ERROR: ${Object.keys(exc)}`);
         reject({
-          message: err,
+          message: exc,
           bandwidth: liveTargetBandwidth,
           m3u8: null,
           mediaSeq: -1,
@@ -501,7 +500,7 @@ class SessionLive {
           m3u8: m3u8,
         });
       });
-      parser.on("error", err => {
+      parser.on("error", (err) => {
         debug(`ERROR: ${Object.keys(exc)}`);
         reject({
           message: err,

@@ -117,7 +117,7 @@ describe("Playhead consumer", () => {
     };  
   });
 
-  it("continously increases media sequence over two VOD switches", async () => {
+  it("continuously increases media sequence over two VOD switches", async () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: '1' }, sessionStore);
     await session.initAsync();
