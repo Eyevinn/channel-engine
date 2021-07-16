@@ -10,15 +10,18 @@ const mockBaseUri = "https://mock.mock.com/";
 
 const mockMasterM3U8 = `#EXTM3U
 #EXT-X-VERSION:3
-#EXT-X-STREAM-INF:BANDWIDTH=550172,RESOLUTION=256x106
+
+#EXT-X-STREAM-INF:BANDWIDTH=550001,RESOLUTION=480x240
 level_0.m3u8
 
-#EXT-X-STREAM-INF:BANDWIDTH=1650064,RESOLUTION=640x266
+#EXT-X-STREAM-INF:BANDWIDTH=1650001,RESOLUTION=640x266
 level_1.m3u8
 
-#EXT-X-STREAM-INF:BANDWIDTH=2749539,RESOLUTION=1280x534
-level_2.m3u8`;
-const mockMediaM3U8_0 = `#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=2749001,RESOLUTION=1280x534
+level_2.m3u8
+`;
+
+const mockMediaM3U8_0 = [`#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:10
@@ -36,8 +39,26 @@ segment_0_4.ts
 segment_0_5.ts
 #EXTINF:6.000000,
 segment_0_6.ts
-`;
-const mockMediaM3U8_1 = `#EXTM3U
+`,`#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:11
+#EXTINF:6.000000,
+segment_0_1.ts
+#EXTINF:6.000000,
+segment_0_2.ts
+#EXTINF:6.000000,
+segment_0_3.ts
+#EXTINF:6.000000,
+segment_0_4.ts
+#EXTINF:6.000000,
+segment_0_5.ts
+#EXTINF:6.000000,
+segment_0_6.ts
+#EXTINF:6.000000,
+segment_0_7.ts
+`];
+const mockMediaM3U8_1 = [`#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:10
@@ -55,8 +76,26 @@ segment_1_4.ts
 segment_1_5.ts
 #EXTINF:6.000000,
 segment_1_6.ts
-`;
-const mockMediaM3U8_2 = `#EXTM3U
+`,`#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:11
+#EXTINF:6.000000,
+segment_1_1.ts
+#EXTINF:6.000000,
+segment_1_2.ts
+#EXTINF:6.000000,
+segment_1_3.ts
+#EXTINF:6.000000,
+segment_1_4.ts
+#EXTINF:6.000000,
+segment_1_5.ts
+#EXTINF:6.000000,
+segment_1_6.ts
+#EXTINF:6.000000,
+segment_1_7.ts
+`]
+const mockMediaM3U8_2 = [`#EXTM3U
 #EXT-X-VERSION:3
 #EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:10
@@ -74,7 +113,26 @@ segment_2_4.ts
 segment_2_5.ts
 #EXTINF:6.000000,
 segment_2_6.ts
-`;
+`,
+`#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:11
+#EXTINF:6.000000,
+segment_2_1.ts
+#EXTINF:6.000000,
+segment_2_2.ts
+#EXTINF:6.000000,
+segment_2_3.ts
+#EXTINF:6.000000,
+segment_2_4.ts
+#EXTINF:6.000000,
+segment_2_5.ts
+#EXTINF:6.000000,
+segment_2_6.ts
+#EXTINF:6.000000,
+segment_2_7.ts
+`];
 
 const mockLiveSegments = {
   "180000": [{duration: 7,uri: "http://mock.mock.com/180000/seg09.ts"},
@@ -155,11 +213,11 @@ describe("The initialize switching", () => {
   });
 
   it("should give correct segments and sequence counts from session to sessionLive (case: V2L->LIVE)", async () => {
-    nock(mockBaseUri).get('/live/master.m3u8').times(1).reply(200, mockMasterM3U8);
-    nock(mockBaseUri).get('/live/level_0.m3u8').times(1).reply(200, mockMediaM3U8_0);
-    nock(mockBaseUri).get('/live/level_1.m3u8').times(1).reply(200, mockMediaM3U8_1);
-    nock(mockBaseUri).get('/live/level_2.m3u8').times(1).reply(200, mockMediaM3U8_2);
-
+    nock(mockBaseUri).persist()
+    .get('/live/master.m3u8').reply(200, mockMasterM3U8)
+    .get('/live/level_0.m3u8').reply(200, mockMediaM3U8_0[0])
+    .get('/live/level_1.m3u8').reply(200, mockMediaM3U8_1[0])
+    .get('/live/level_2.m3u8').reply(200, mockMediaM3U8_2[0]);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"});
@@ -193,6 +251,7 @@ describe("The initialize switching", () => {
     await sessionLive.setLiveUri(mockLiveUri);
     let counts =  await sessionLive.getCurrentMediaAndDiscSequenceCount();
     let tSegments = await sessionLive.getTransitionalSegments();
+    await sessionLive.getCurrentMediaManifestAsync(180000);
     expect(counts).toEqual({
       mediaSeq: 1,
       discSeq: 0
@@ -204,16 +263,15 @@ describe("The initialize switching", () => {
   });
 
   it("should give correct segments and sequence counts from sessionLive to session (case: LIVE->V2L)", async () => {
-    nock(mockBaseUri).get('/live/master.m3u8').times(1).reply(200, mockMasterM3U8);
-    nock(mockBaseUri).get('/live/level_0.m3u8').times(1).reply(200, mockMediaM3U8_0);
-    nock(mockBaseUri).get('/live/level_1.m3u8').times(1).reply(200, mockMediaM3U8_1);
-    nock(mockBaseUri).get('/live/level_2.m3u8').times(1).reply(200, mockMediaM3U8_2);
-
+    nock(mockBaseUri).persist()
+    .get('/live/master.m3u8').reply(200, mockMasterM3U8)
+    .get('/live/level_0.m3u8').reply(200, mockMediaM3U8_0[0])
+    .get('/live/level_1.m3u8').reply(200, mockMediaM3U8_1[0])
+    .get('/live/level_2.m3u8').reply(200, mockMediaM3U8_2[0]);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"});
 
-    spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     for (let i = 0; i < 6; i++) {
       await session.incrementAsync();
@@ -222,21 +280,168 @@ describe("The initialize switching", () => {
     await sessionLive.setCurrentMediaAndDiscSequenceCount(13, 1);
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
     await sessionLive.setLiveUri(mockLiveUri);
-
     await sessionLive.getCurrentMediaManifestAsync(180000);
 
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
-
     await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(currSegments);
-    currCounts.mediaSeq = currCounts.mediaSeq + 2;
+    currCounts.mediaSeq = (currCounts.mediaSeq + 2);
     await session.incrementAsync();
-    // TODO: get rid off lonely reload bandwidths
     const sessionCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const sessionCurrentSegs = await session.getCurrentMediaSequenceSegments();
+    const size = sessionCurrentSegs['1313000'].length;
     expect(currCounts).toEqual(sessionCounts);
-    expect(currSegments).toEqual(sessionCurrentSegs);
+    expect(sessionCurrentSegs['1313000'][0])
+    .toEqual({
+      duration: 7,
+      uri: "http://mock.mock.com/180000/seg10.ts"
+    });
+    expect(sessionCurrentSegs['1313000'][size - 1 - 1])
+    .toEqual({
+      discontinuity: true
+    });
+    expect(sessionCurrentSegs['1313000'][size - 1])
+    .toEqual({
+      duration: 7.5,
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00005.ts",
+      timelinePosition: null,
+      cue: null
+    });
     nock.cleanAll();
   });
+
+  it("should give correct segments and sequence counts from session back to session (case: V2L->VOD)", async () => {
+    const assetMgr = new TestAssetManager();
+    const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
+    const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
+    const vodEventDurationMs = 50 *1000;
+
+    await session.initAsync();
+    for (let i = 0; i < 6; i++) {
+      await session.incrementAsync();
+    }
+    const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs/ 1000));
+
+    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+    await session.setCurrentMediaSequenceSegments(eventSegments, true);
+
+    const sessionCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    expect(currVodCounts).toEqual(sessionCounts);
+
+    await session.incrementAsync();
+    const sessionCurrentSegs = await session.getCurrentMediaSequenceSegments();
+    let manifest = await session.getCurrentMediaManifestAsync(180000);
+    const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
+    let mseqNo;
+    if (m) {
+      mseqNo = Number(m[1]);
+    }
+    expect(mseqNo).toBe(7);
+    const size = sessionCurrentSegs['1313000'].length;
+    expect(sessionCurrentSegs['1313000'][0])
+    .toEqual({
+      duration: 11.25,
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00007.ts",
+      timelinePosition: null,
+      cue: null,
+    });
+    expect(sessionCurrentSegs['1313000'][size - 1 - 1])
+    .toEqual({
+      discontinuity: true
+    });
+    expect(sessionCurrentSegs['1313000'][size - 1].daterange["planned-duration"]).toEqual(vodEventDurationMs/1000);
+    expect("start-date" in sessionCurrentSegs['1313000'][size - 1].daterange).toBe(true);
+    expect("id" in sessionCurrentSegs['1313000'][size - 1].daterange).toBe(true);
+    expect(sessionCurrentSegs['1313000'][size - 1].duration).toEqual(10.88);
+    expect(sessionCurrentSegs['1313000'][size - 1].timelinePosition).toEqual(null);
+    expect(sessionCurrentSegs['1313000'][size - 1].cue).toEqual(null);
+    expect(sessionCurrentSegs['1313000'][size - 1].uri).toEqual("https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00000.ts");
+  });
+
+  it("should give correct segments and sequence counts from session to sessionLive (case: VOD->LIVE)", async () => {
+    let manifestNumber = 0;
+    nock(mockBaseUri).persist()
+    .get('/live/master.m3u8').reply(200, mockMasterM3U8)
+    .get('/live/level_0.m3u8').reply(200, () => {
+      switch (manifestNumber) {
+        case 0:
+          return mockMediaM3U8_0[0];
+        case 1:
+          return mockMediaM3U8_0[1];
+        default:
+          return mockMediaM3U8_0[0];
+      }
+    })
+    .get('/live/level_1.m3u8').reply(200, () => {
+      switch (manifestNumber) {
+        case 0:
+          return mockMediaM3U8_1[0];
+        case 1:
+          return mockMediaM3U8_1[1];
+        default:
+          return mockMediaM3U8_1[0];
+      }
+    })
+    .get('/live/level_2.m3u8').reply(200, () => {
+      switch (manifestNumber) {
+        case 0:
+          return mockMediaM3U8_2[0];
+        case 1:
+          return mockMediaM3U8_2[1];
+        default:
+          return mockMediaM3U8_2[0];
+      }
+    });
+    const assetMgr = new TestAssetManager();
+    const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
+    const sessionLive = new SessionLive({sessionId: "1"});
+    const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
+    const vodEventDurationMs = 60 *1000;
+
+    await session.initAsync();
+    for (let i = 0; i < 3; i++) {
+      await session.incrementAsync();
+    }
+    const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs/ 1000));
+    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+    await session.setCurrentMediaSequenceSegments(eventSegments, true);
+    for (let i = 0; i < 6; i++) {
+      await session.incrementAsync();
+    }
+    // Get from session
+    const newVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    const newVodSegments = await session.getCurrentMediaSequenceSegments();
+    console.log(JSON.stringify(newVodSegments['1313000'])+"\n\n\n");
+    // Set to sessionLive
+    
+    await sessionLive.setCurrentMediaAndDiscSequenceCount(newVodCounts.mediaSeq, newVodCounts.discSeq);
+    await sessionLive.setCurrentMediaSequenceSegments(newVodSegments);
+    await sessionLive.setLiveUri(mockLiveUri);
+    // Get and inspect counts from sessionLive
+    let manifest = await sessionLive.getCurrentMediaManifestAsync(180000);
+    const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
+    let mseqNo;
+    if (m) {
+      mseqNo = Number(m[1]);
+    }
+    expect(mseqNo).toBe(9);
+    manifestNumber++;
+    const liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+    expect(liveCounts).toEqual({
+      mediaSeq: 9,
+      discSeq: 0
+    });
+    // Get and inspect segments from sessionLive
+    const liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+    console.log(JSON.stringify(liveSegments['550001']));
+    // TODO: expect segments order.
+    nock.cleanAll();
+  });
+
+  // live -> VOD
+  // VOD -> VOD
+  // live -> live
 });

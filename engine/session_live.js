@@ -132,7 +132,9 @@ class SessionLive {
   async _loadAllMediaManifests() {
     debug(`[${this.sessionId}]: ...Attempting to load all media manifest URIs in=${Object.keys(this.mediaManifestURIs)}`);
     // To make sure... we load all profiles!
-    this.lastRequestedM3U8.bandwidth = null;
+    if (this.lastRequestedM3U8 && this.lastRequestedM3U8.bandwidth) {
+      this.lastRequestedM3U8.bandwidth = null;
+    }
     let livePromises = [];
     for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
       let bw = Object.keys(this.mediaManifestURIs)[i];
@@ -263,6 +265,7 @@ class SessionLive {
         request({ uri: mediaManifestUri, gzip: true })
         .on("error", exc => {
           debug(`ERROR: ${Object.keys(exc)}`);
+          delete this.latestMediaSeqSegs[liveTargetBandwidth];
           reject({
             message: exc,
             bandwidth: liveTargetBandwidth,
@@ -273,6 +276,7 @@ class SessionLive {
         .pipe(parser);
       } catch (exc) {
         debug(`ERROR: ${Object.keys(exc)}`);
+        delete this.latestMediaSeqSegs[liveTargetBandwidth];
         reject({
           message: exc,
           bandwidth: liveTargetBandwidth,
@@ -500,10 +504,10 @@ class SessionLive {
           m3u8: m3u8,
         });
       });
-      parser.on("error", (err) => {
+      parser.on("error", (exc) => {
         debug(`ERROR: ${Object.keys(exc)}`);
         reject({
-          message: err,
+          message: exc,
           bandwidth: liveTargetBandwidth,
           m3u8: null,
           mediaSeq: -1,
