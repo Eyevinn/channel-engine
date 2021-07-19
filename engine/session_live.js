@@ -1,4 +1,5 @@
 const debug = require('debug')('engine-sessionLive');
+const allSettled = require('promise.allsettled');
 const crypto = require('crypto');
 const m3u8 = require('@eyevinn/m3u8');
 const request = require('request');
@@ -155,7 +156,7 @@ class SessionLive {
       debug(`[${this.sessionId}]: Pushed to this.latestMediaSeqSegs for bw=${bw}`);
     }
 
-    const manifestList = await Promise.allSettled(livePromises);
+    const manifestList = await allSettled(livePromises);
     livePromises = [];
     const allMediaSeqCounts = manifestList.map((item) => {
       if (item.status === 'rejected') {

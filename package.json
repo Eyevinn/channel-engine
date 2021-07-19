@@ -27,6 +27,7 @@
     "memcache-client": "^0.10.1",
     "nock": "^13.1.1",
     "node-fetch": "^2.6.1",
+    "promise.allsettled": "^1.0.4",
     "redis": "^3.0.2",
     "request": ">=2.88.0",
     "restify": ">=8.5.1",
