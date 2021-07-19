@@ -1,0 +1,39 @@
+version: "3.7"
+networks:
+  jh-vc-net:
+    driver: bridge
+    
+services:
+  engine1:
+    depends_on:
+      - redis
+    build: . 
+    image: jh-channel-engine:test
+    environment:
+      - PORT=8081
+      - TEST_CHANNELS=10
+      - REDIS_URL=redis://redis:6379/
+    networks:
+      - jh-vc-net
+  engine2:
+    depends_on:
+      - redis
+    build: . 
+    image: jh-channel-engine:test
+    environment:
+      - PORT=8082
+      - TEST_CHANNELS=10
+      - REDIS_URL=redis://redis:6379/
+    networks:
+      - jh-vc-net
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+  nginx:
+    build: .
+    image: /nginx_image
+    networks:
+      - jh-vc-net
+    ports:
+      - 8000:8000
