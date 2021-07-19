@@ -84,7 +84,6 @@ class StreamSwitcher {
       this.eventId = null;
       return false;
     }
-    // Check if Live URI is ok
     const validURI = await this._validURI(scheduleObj.uri);
     if (!validURI) {
       debug(`[${this.sessionId}]: Unreachable URI`);
@@ -183,8 +182,10 @@ class StreamSwitcher {
       case SwitcherState.LIVE_TO_V2L:
         this.eventId = null;
         this.streamTypeLive = false;
-        liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+        liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+        sessionLive.resetSession();
+
         if(scheduleObj && !scheduleObj.duration) {
           debug(`[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`);
         }
@@ -194,8 +195,10 @@ class StreamSwitcher {
         break;
       case SwitcherState.LIVE_TO_VOD:
         this.streamTypeLive = false;
-        liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+        liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+        sessionLive.resetSession();
+
         this.eventId = scheduleObj.eventId;
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
 
@@ -206,8 +209,9 @@ class StreamSwitcher {
         break;
       case SwitcherState.LIVE_TO_LIVE:
         this.eventId = scheduleObj.eventId;
-        currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
+        currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+        sessionLive.resetSession();
 
         await sessionLive.setCurrentMediaAndDiscSequenceCount((currLiveCounts.mediaSeq + 1), currLiveCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(eventSegments);
