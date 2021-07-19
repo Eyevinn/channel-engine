@@ -12,18 +12,11 @@ class RefAssetManager {
         {
           id: 1,
           title: "VINN",
-          //uri: "https://bitmovin-a.akamaihd.net/content/playhouse-vr/m3u8s/105560.m3u8",
-          //uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8",
-          //type: "gap",
-          //desiredDuration: 60*1000,
           uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
         },
         {
           id: 2,
-          title: "VOD_2",
-          //uri: "https://bitmovin-a.akamaihd.net/content/playhouse-vr/m3u8s/105560.m3u8",
-          //uri: "https://nfrederiksen.github.io/testing-streams-hls/test-audio-enNfr/master_demux.m3u8"
-          //uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8"
+          title: "BECKY",
           uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8",
         },
       ],
