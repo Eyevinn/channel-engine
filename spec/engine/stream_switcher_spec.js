@@ -223,7 +223,7 @@ describe("The Stream Switcher", () => {
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
+  it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if URI is unreachable", async () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
@@ -247,7 +247,7 @@ describe("The Stream Switcher", () => {
       assetId: 1,
       start_time: tsNow + 20 * 1000,
       end_time: tsNow + 20 * 1000 + 1 * 60 * 1000,
-      uri: "https://unreachable.mock.com/mock.m3u8",
+      uri: "https://mock.com/unreachable.m3u8",
     }]);
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
@@ -294,16 +294,15 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(1);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
     await session.initAsync();
     await session.incrementAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe("vod-0");
   });
 
@@ -311,17 +310,16 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(1);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
     await session.initAsync();
     await session.incrementAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe("vod-0");
     jasmine.clock().tick((1 + (60 * 1000 + 25 * 1000)));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
@@ -329,14 +327,13 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(6);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
     await session.initAsync();
     await session.incrementAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 

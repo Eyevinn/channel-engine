@@ -9,16 +9,12 @@ class RefAssetManager {
   constructor(opts) {
     this.assets = {
       1: [
-        {
-          id: 1,
-          title: "VINN",
-          uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
-        },
-        {
-          id: 2,
-          title: "BECKY",
-          uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8",
-        },
+        //{ id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+        { id: 1, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+        { id: 2, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+        { id: 3, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
+        { id: 4, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+        { id: 5, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
       ],
     };
     this.pos = {
@@ -74,10 +70,9 @@ const StreamType = Object.freeze({
 class StreamSwitchManager {
   constructor() {
     this.schedule = [];
-    this.eventId = 0;
   }
-  // TODO: If we do not have a predefined ID generate one
-  generateEventID() {
+
+  generateID() {
     return uuidv4();
   }
 
@@ -87,13 +82,13 @@ class StreamSwitchManager {
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts
-    // Required: "assetId", "start_time", "end_time", "uri", "duration"
+    // Required: "eventId", "assetId", "start_time", "end_time", "uri", "duration"
     // "duration" is only required for StreamType.VOD
     this.schedule = this.schedule.filter((obj) => obj.end_time >= tsNow);
     if (this.schedule.length === 0) {
       this.schedule.push({
-        eventId: "event-" + this.eventId++,
-        assetId: "asset-" + this.eventId++,
+        eventId: this.generateID(),
+        assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
         start_time: startOffset,
@@ -101,16 +96,17 @@ class StreamSwitchManager {
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
       {
-        eventId: "event-" +  this.eventId++,
-        assetId: "asset-" + this.eventId++,
+        eventId: this.generateID(),
+        assetId: this.generateID(),
+        title: "Scheduled VOD test",
         type: StreamType.VOD,
-        start_time: endTime - startOffset,
-        end_time: 2*endTime - startOffset,
-        uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8",
+        start_time: endTime + 100*1000,
+        end_time: (endTime + 100*1000) + streamDuration,
+        uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
       });
+      console.log(JSON.stringify(this.schedule));
     }
-
     return this.schedule;
   }
 }

@@ -22,6 +22,7 @@ class StreamSwitcher {
     this.streamTypeLive = false;
     this.streamSwitchManager = null;
     this.eventId = null;
+    this.working = false;
 
     if (config) {
       if (config.sessionId) {
@@ -54,6 +55,11 @@ class StreamSwitcher {
       debug(`[${this.sessionId}]: No streamSwitchManager available`);
       return false;
     }
+    if (this.working) {
+      debug(`[${this.sessionId}]: streamSwitcher is currently busy`);
+      return null;
+    }
+
     // Filter out schedule objects from the past
     const tsNow = Date.now();
     const strmSchedule = this.streamSwitchManager.getSchedule();
@@ -160,6 +166,7 @@ class StreamSwitcher {
 
     switch (state) {
       case SwitcherState.V2L_TO_LIVE:
+        this.working = true;
         this.streamTypeLive = true;
         this.eventId = scheduleObj.eventId;
         currVodSegments = await session.getCurrentMediaSequenceSegments();
@@ -168,18 +175,22 @@ class StreamSwitcher {
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
+        this.working = false;
         debug(`[${this.sessionId}]: [ Switching from V2L->LIVE ]`);
         break;
       case SwitcherState.V2L_TO_VOD:
+        this.working = true;
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
 
         await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
+        this.working = false;
         debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
         break;
       case SwitcherState.LIVE_TO_V2L:
+        this.working = true;
         this.eventId = null;
         this.streamTypeLive = false;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
@@ -191,9 +202,11 @@ class StreamSwitcher {
         }
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
+        this.working = false;
         debug(`[${this.sessionId}]: Switching from LIVE->V2L`);
         break;
       case SwitcherState.LIVE_TO_VOD:
+        this.working = true;
         this.streamTypeLive = false;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -205,9 +218,11 @@ class StreamSwitcher {
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
+        this.working = false;
         debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
         break;
       case SwitcherState.LIVE_TO_LIVE:
+        this.working = true;
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
         currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -216,10 +231,12 @@ class StreamSwitcher {
         await sessionLive.setCurrentMediaAndDiscSequenceCount((currLiveCounts.mediaSeq + 1), currLiveCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(eventSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
+        this.working = false;
         debug(`[${this.sessionId}]: Switching from LIVE->LIVE`);
         break;
       default:
         debug(`[${this.sessionId}]: SwitcherState [${state}] not implemented`);
+        this.working = false;
         this.streamTypeLive = false;
         break;
     }

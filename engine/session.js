@@ -277,7 +277,7 @@ class Session {
     }
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
-      let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+      const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
@@ -303,7 +303,7 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
       await this._sessionState.set("mediaSeq", _mediaSeq + 1);
       await this._playheadState.set("mediaSeq", _mediaSeq + 1);
