@@ -9,13 +9,18 @@ const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 
 const { SessionStateStore } = require('./session_state.js');
+const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
+
 const { filterQueryParser, toHHMMSS } = require('./util.js');
 const { version } = require('../package.json');
 
+const timer = ms => new Promise(res => setTimeout(res, ms));
+
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
-const sessionSwitcher = {};
+const sessionSwitcher = {}; // Should be a persistent store...
+const switchSession = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
@@ -47,12 +52,21 @@ class ChannelEngine {
     this.instanceId = uuidv4();
 
     this.sessionStore = {
-      sessionStateStore: new SessionStateStore({ 
+      sessionStateStore: new SessionStateStore({
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
       }),
       playheadStateStore: new PlayheadStateStore({ 
+        redisUrl: options.redisUrl, 
+        memcachedUrl: options.memcachedUrl, 
+        cacheTTL: options.sharedStoreCacheTTL,
+      }),
+      instanceId: this.instanceId,
+    };
+
+    this.sessionLiveStore = {
+      sessionLiveStateStore: new SessionLiveStateStore({
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
@@ -128,6 +142,17 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
+    setInterval(async () => {
+      for (const chId in sessionSwitcher) {
+        if (Object.hasOwnProperty.call(sessionSwitcher, chId)) {
+          const switcher = sessionSwitcher[chId];
+          switchSession[chId] = null;
+          switchSession[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
+          console.log(`Instance: [${this.instanceId}] Channel: [${chId}] TIME: [${Date.now()}]`)
+        }
+      }
+    }, 3000);
+
     const ping = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
   }
 
@@ -158,7 +183,7 @@ class ChannelEngine {
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,
-      });
+      }, this.sessionLiveStore);
 
       sessionSwitcher[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
@@ -168,6 +193,7 @@ class ChannelEngine {
       });
 
       await sessions[channel.id].initAsync();
+      await sessionsLive[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
       }
@@ -345,17 +371,19 @@ class ChannelEngine {
     debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
-    const sessionLive = sessionsLive[req.params[1]];
-    const switcher = sessionSwitcher[req.params[1]];
+    const sessionLive = sessionsLive[req.params[1]]; 
     if (session && sessionLive) {
       try {
+        while(switchSession[req.params[1]] === null){
+          console.log(`[${req.params[1]}]: Stop! Waiting for streamSwitcher to finish switching session`);
+          await timer(500);
+        }
         let body = null;
-        const useLiveSession = await switcher.streamSwitcher(session, sessionLive);
-        if (useLiveSession) {
-          debug(`Responding with Altered-Live stream manifest`);
+        if (switchSession[req.params[1]]) {
+          debug(`[${req.params[1]}]: Responding with Altered-Live stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {
-          debug(`Responding with VOD2Live stream manifest`);
+          debug(`[${req.params[1]}]: Responding with VOD2Live stream manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         }
         //verbose(`[${session.sessionId}] body=`);
@@ -371,7 +399,7 @@ class ChannelEngine {
         next(this._gracefulErrorHandler(err));
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
+      const err = new errs.NotFoundError('Invalid session(s)');
       next(err);
     }
   }

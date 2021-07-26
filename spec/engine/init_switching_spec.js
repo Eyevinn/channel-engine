@@ -340,7 +340,7 @@ describe("The initialize switching", () => {
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
     sessionLive.resetSession();
 
-    await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
+    await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq + 1, currCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(currSegments);
     currCounts.mediaSeq = (currCounts.mediaSeq + 2);
     await session.incrementAsync();
@@ -378,7 +378,7 @@ describe("The initialize switching", () => {
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs / 1000));
 
-    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(eventSegments, true);
 
     const sessionCounts = await session.getCurrentMediaAndDiscSequenceCount();
@@ -460,7 +460,7 @@ describe("The initialize switching", () => {
     }
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs / 1000));
-    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(eventSegments, true);
     for (let i = 0; i < 8; i++) {
       await session.incrementAsync();
@@ -588,7 +588,7 @@ describe("The initialize switching", () => {
       mseqNo = Number(m[1]);
       dseqNo = Number(d[1]);
     }
-    expect(mseqNo).toBe(15);
+    expect(mseqNo).toBe(14);
     expect(dseqNo).toBe(1);
     expect(newSegments['1313000'][size - 1].daterange["planned-duration"]).toEqual(vodEventDurationMs/1000);
     expect("start-date" in newSegments['1313000'][size - 1].daterange).toBe(true);
@@ -627,7 +627,7 @@ describe("The initialize switching", () => {
     }
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs / 1000));
-    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+    await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(eventSegments, true);
     for (let i = 0; i < 10; i++) {
       await session.incrementAsync();
@@ -636,7 +636,7 @@ describe("The initialize switching", () => {
     let newVodSegments = await session.getCurrentMediaSequenceSegments();
     const eventSegments2 = await session.getTruncatedVodSegments(vodUri2, (vodEventDurationMs2 / 1000));
     // Make sure VOD_NEXT_INIT has run before setting
-    await session.setCurrentMediaAndDiscSequenceCount((newVodCounts.mediaSeq - 1), newVodCounts.discSeq);
+    await session.setCurrentMediaAndDiscSequenceCount((newVodCounts.mediaSeq), newVodCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(eventSegments2, true);
     for (let i = 0; i < 2; i++) {
       await session.incrementAsync();
