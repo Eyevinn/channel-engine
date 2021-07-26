@@ -168,15 +168,17 @@ class StreamSwitcher {
     switch (state) {
       case SwitcherState.V2L_TO_LIVE:
         this.working = true;
-        this.streamTypeLive = true;
         this.eventId = scheduleObj.eventId;
-        currVodSegments = await session.getCurrentMediaSequenceSegments();
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+        currVodSegments = await session.getCurrentMediaSequenceSegments();
 
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
+        await sessionLive.getCurrentMediaManifestAsync(1313000);
+
         this.working = false;
+        this.streamTypeLive = true;
         debug(`[${this.sessionId}]: [ Switching from V2L->LIVE ]`);
         break;
       case SwitcherState.V2L_TO_VOD:
@@ -185,15 +187,15 @@ class StreamSwitcher {
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
 
-        await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq);
+        await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
+
         this.working = false;
         debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
         break;
       case SwitcherState.LIVE_TO_V2L:
         this.working = true;
         this.eventId = null;
-        this.streamTypeLive = false;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         sessionLive.resetSession();
@@ -201,25 +203,31 @@ class StreamSwitcher {
         if(scheduleObj && !scheduleObj.duration) {
           debug(`[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`);
         }
+        debug(`[${this.sessionId}]: SESSION received these counts: ${JSON.stringify(liveCounts)}`);
+        debug(`[${this.sessionId}]: SESSION received first & last segments: \n${liveSegments[Object.keys(liveSegments)[0]][0].uri}\n
+        ${liveSegments[Object.keys(liveSegments)[0]][(liveSegments[Object.keys(liveSegments)[0]].length - 1)].uri}`);
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
+
         this.working = false;
+        this.streamTypeLive = false;
         debug(`[${this.sessionId}]: Switching from LIVE->V2L`);
         break;
       case SwitcherState.LIVE_TO_VOD:
         this.working = true;
-        this.streamTypeLive = false;
+        this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         sessionLive.resetSession();
 
-        this.eventId = scheduleObj.eventId;
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
+
         this.working = false;
+        this.streamTypeLive = false;
         debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
         break;
       case SwitcherState.LIVE_TO_LIVE:
@@ -232,13 +240,15 @@ class StreamSwitcher {
         await sessionLive.setCurrentMediaAndDiscSequenceCount((currLiveCounts.mediaSeq + 1), currLiveCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(eventSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
+
         this.working = false;
         debug(`[${this.sessionId}]: Switching from LIVE->LIVE`);
         break;
       default:
         debug(`[${this.sessionId}]: SwitcherState [${state}] not implemented`);
-        this.working = false;
         this.streamTypeLive = false;
+        this.working = false;
+        this.eventId = null;
         break;
     }
   }

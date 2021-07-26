@@ -19,6 +19,8 @@ const sessionSwitcher = {};
 const eventStreams = {};
 const switchSession = {};
 
+const timer = ms => new Promise(res => setTimeout(res, ms));
+
 class ChannelEngine {
   constructor(assetMgr, options) {
     this.options = options;
@@ -129,13 +131,13 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
-    setInterval(async () => {
+    const pingSessionSwitcher = setInterval(async () => {
       for (const chId in sessionSwitcher) {
         if (Object.hasOwnProperty.call(sessionSwitcher, chId)) {
           const switcher = sessionSwitcher[chId];
           switchSession[chId] = null;
           switchSession[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
-          //console.log(`Instance: [${this.instanceId}] Channel: [${chId}] TIME: [${Date.now()}]`)
+          // console.log(`Instance: [${this.instanceId}] Channel: [${chId}] TIME: [${Date.now()}]`)
         }
       }
     }, 2000);

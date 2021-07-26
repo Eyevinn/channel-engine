@@ -259,15 +259,17 @@ class Session {
     if (isLeader) {
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
-      let currentVod = await this._sessionState.getCurrentVod(); 
+      let currentVod = await this._sessionState.getCurrentVod();
       await currentVod.reload(playheadState.vodMediaSeqVideo, segments, null, reloadBehind);
-      await this._sessionState.clearCurrentVodCache();
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("vodMediaSeqVideo", 0);
       await this._playheadState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("playheadRef", Date.now());
+    } else {
+      await this._sessionState.clearCurrentVodCache();
+      debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD!`);
     }
   }
 
@@ -305,11 +307,11 @@ class Session {
     }
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
-      await this._sessionState.set("mediaSeq", _mediaSeq + 1);
-      await this._playheadState.set("mediaSeq", _mediaSeq + 1);
+      await this._sessionState.set("mediaSeq", _mediaSeq);
+      await this._playheadState.set("mediaSeq", _mediaSeq);
       await this._sessionState.set("discSeq", _discSeq);
+      debug(`[${this._sessionId}]: Setting current media and discontinuity count.`);
     }
-    debug(`[${this._sessionId}]: Setting current media and discontinuity count.`);
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
@@ -318,7 +320,7 @@ class Session {
     }
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
-      let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+      const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
@@ -401,11 +403,19 @@ class Session {
 
   async incrementAsync() {
     await this._tickAsync();
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     let sessionState = await this._sessionState.getValues(
       ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+    if (playheadState.vodMediaSeqVideo < 2) {
+      // This is due to the possibility that we miss the tick where vodMediaSeqVideo is 0
+      // The worst case scenario is that we clear cache two times in a row on a switch.
+      if (!isLeader) {
+        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+      }
+    }
     let currentVod = await this._sessionState.getCurrentVod();
-    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (!currentVod ||
         sessionState.vodMediaSeqVideo === null ||
         sessionState.vodMediaSeqAudio === null ||
