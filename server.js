@@ -9,7 +9,6 @@ class RefAssetManager {
   constructor(opts) {
     this.assets = {
       1: [
-        //{ id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
         { id: 1, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
         { id: 2, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
         { id: 3, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
@@ -105,7 +104,6 @@ class StreamSwitchManager {
         uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
       });
-      console.log(JSON.stringify(this.schedule));
     }
     return this.schedule;
   }

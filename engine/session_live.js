@@ -5,6 +5,7 @@ const m3u8 = require('@eyevinn/m3u8');
 const request = require('request');
 const url = require('url');
 const { m3u8Header } = require('./util.js');
+
 const timer = ms => new Promise(res => setTimeout(res, ms));
 const DELAY_FACTOR = 0.75;
 

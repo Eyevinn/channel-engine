@@ -1,6 +1,7 @@
 const debug = require('debug')('engine-streamSwitcher');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
+const { AbortController } = require('abort-controller');
 
 const SwitcherState = Object.freeze({
   V2L_TO_LIVE: 1,
@@ -243,14 +244,20 @@ class StreamSwitcher {
   }
 
   async _validURI(uri) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, 3000);
     try {
-      const online = await fetch(uri);
+      const online = await fetch(uri, {signal: controller.signal });
       if (online.status >= 200 && online.status < 300) {
         return true;
       }
       return false;
     } catch (err) {
       return false;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

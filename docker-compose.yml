@@ -11,12 +11,10 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8081
-      - TEST_CHANNELS=2
+      - TEST_CHANNELS=5
       - REDIS_URL=redis://redis:6379/
     networks:
       - vc-net
-    ports:
-      - 8081:8081
   engine2:
     depends_on:
       - redis
@@ -24,12 +22,10 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8082
-      - TEST_CHANNELS=2
+      - TEST_CHANNELS=5
       - REDIS_URL=redis://redis:6379/
     networks:
       - vc-net
-    ports:
-      - 8082:8082
   redis:
     image: redis
     ports:
@@ -37,7 +33,7 @@ services:
     networks:
       - vc-net
   nginx:
-    build: ./nginx_image
+    build: .
     image: nginx_custom:test
     networks:
       - vc-net
