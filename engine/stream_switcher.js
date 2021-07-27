@@ -187,7 +187,7 @@ class StreamSwitcher {
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, (scheduleObj.duration / 1000));
 
-        await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
+        await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq - 1), currVodCounts.discSeq - 1);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
 
         this.working = false;
