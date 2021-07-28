@@ -4,6 +4,7 @@ const StreamSwitcher = require('../../engine/stream_switcher.js');
 const { v4: uuidv4 } = require('uuid');
 const { SessionStateStore } = require('../../engine/session_state.js');
 const { PlayheadStateStore } = require('../../engine/playhead_state.js');
+const { SessionLiveStateStore } = require('../../engine/session_live_state.js');
 const StreamType = Object.freeze({
   LIVE: 1,
   VOD: 2,
@@ -198,12 +199,17 @@ const mockLiveSegments = {
 
 describe("The Stream Switcher", () => {
   let sessionStore = undefined;
+  let sessionLiveStore = undefined;
 
   beforeEach(() => {
     jasmine.clock().install();
     sessionStore = {
       sessionStateStore: new SessionStateStore(),
       playheadStateStore: new PlayheadStateStore(),
+      instanceId: uuidv4(),
+    };
+    sessionLiveStore = {
+      sessionStateStore: new SessionLiveStateStore(),
       instanceId: uuidv4(),
     };
   });
@@ -214,7 +220,7 @@ describe("The Stream Switcher", () => {
   it("should return false if no StreamSwitchManager was given.", async () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     await session.initAsync();
     await session.incrementAsync();
 
@@ -223,11 +229,11 @@ describe("The Stream Switcher", () => {
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
+  fit("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.callFake( () => mockLiveSegments );
     await session.initAsync();
     await session.incrementAsync();

@@ -148,12 +148,12 @@ class ChannelEngine {
           const switcher = sessionSwitcher[chId];
           switchSession[chId] = null;
           switchSession[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
-          console.log(`Instance: [${this.instanceId}] Channel: [${chId}] TIME: [${Date.now()}]`)
         }
       }
-    }, 3000);
+    }, 2000);
 
-    const ping = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
+    const pingSession = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
+    const pingSessionLive = setInterval(async () => { await this.sessionLiveStore.sessionLiveStateStore.ping(this.instanceId); }, 3000);
   }
 
   async updateChannelsAsync(channelMgr, options) {
@@ -179,7 +179,7 @@ class ChannelEngine {
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
-        instanceId: this.sessionStore.instanceId,
+        instanceId: this.sessionLiveStore.instanceId,
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,
@@ -269,6 +269,7 @@ class ChannelEngine {
     debug('req.url=' + req.url);
     debug(req.query);
     let session;
+    let sessionLive;
     let options = {};
     if (req.query['playlist']) {
       // Backward compatibility
@@ -375,7 +376,7 @@ class ChannelEngine {
     if (session && sessionLive) {
       try {
         while(switchSession[req.params[1]] === null){
-          console.log(`[${req.params[1]}]: Stop! Waiting for streamSwitcher to finish switching session`);
+          debug(`[${req.params[1]}]: Waiting for streamSwitcher to finish switching session`);
           await timer(500);
         }
         let body = null;

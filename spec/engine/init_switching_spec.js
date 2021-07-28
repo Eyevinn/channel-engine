@@ -338,7 +338,7 @@ describe("The initialize switching", () => {
 
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
-    sessionLive.resetSession();
+    await sessionLive.resetSession();
 
     await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq + 1, currCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(currSegments);
@@ -488,7 +488,7 @@ describe("The initialize switching", () => {
     });
     // Get and inspect segments from sessionLive
     const liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
-    sessionLive.resetSession();
+    await sessionLive.resetSession();
 
     const size = liveSegments['550001'].length;
     expect(liveSegments['550001'][size - 1]).toEqual({ discontinuity: true });
@@ -567,7 +567,7 @@ describe("The initialize switching", () => {
  
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
-    sessionLive.resetSession();
+    await sessionLive.resetSession();
 
     await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(currSegments);
@@ -740,7 +740,7 @@ describe("The initialize switching", () => {
 
     let liveSegs = await sessionLive.getCurrentMediaSequenceSegments();
     let liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-    sessionLive.resetSession();
+    await sessionLive.resetSession();
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(liveSegs);

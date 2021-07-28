@@ -1,5 +1,5 @@
 const SharedStateStore = require('./shared_state_store.js');
-const debug = require("debug")("session--live-state-store");
+const debug = require("debug")("sessionLive-state-store");
 
 
 class SharedSessionLiveState {
@@ -97,6 +97,7 @@ class SessionLiveStateStore extends SharedStateStore {
   }
 
   async create(sessionId, instanceId) {
+    debug(`[${sessionId}][${instanceId}]: creating SharedSessionLiveState`);
     await this.init(sessionId);
     return new SharedSessionLiveState(this, sessionId, instanceId, { cacheTTL: this.cacheTTL || 5000 });
   }

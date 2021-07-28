@@ -204,7 +204,7 @@ class StreamSwitchManager {
         uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
       });
-      console.log(JSON.stringify(this.schedule));
+      // console.log(JSON.stringify(this.schedule));
     }
     return this.schedule;
   }
