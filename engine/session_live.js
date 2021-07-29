@@ -236,7 +236,11 @@ class SessionLive {
         this.latestMediaSeqSegs[bw].push({ discontinuity: true });
         debug(`[${this.sessionId}]: ...Added a disc-segment to this.latestMediaSeqSegs for bw=${bw}`);
       }
+      await this.sessionLiveState.set("latestMediaSeqSegs", this.latestMediaSeqSegs);
       debug(`[${this.sessionId}]: Got all segments for all bandwidths to pass on to VOD2Live Session`);
+    } else {
+      debug(`[${this.sessionId}]: Not the leader, reading from store`);
+      this.latestMediaSeqSegs = await this.sessionLiveState.get("latestMediaSeqSegs");
     }
   }
 
@@ -311,6 +315,7 @@ class SessionLive {
       }
       const liveM3U = liveSourceM3U8s[liveTargetBandwidth];
       if(liveM3U) {
+        //TODO: Update m3u8 header with instanceId of the correct follower
         debug(`[${this.sessionId}]: got a manifest from store MSeqRaw ${liveM3U.mediaSeq}`);
         return liveM3U;
       } else {

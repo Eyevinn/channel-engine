@@ -40,6 +40,7 @@ class SessionLiveStateStore extends SharedStateStore {
   constructor(opts) {
     super("sessionLive", opts, {
       liveSourceM3U8s: "[]",
+      latestMediaSeqSegs: "{}",
     });
 
     if (opts && opts.cacheTTL) {
