@@ -2,9 +2,9 @@ const debug = require("debug")("engine-sessionLive");
 const allSettled = require("promise.allsettled");
 const crypto = require("crypto");
 const m3u8 = require("@eyevinn/m3u8");
+const { M3U } = require("@eyevinn/m3u8");
 const request = require("request");
 const url = require("url");
-const Readable = require('stream').Readable;
 const { m3u8Header } = require("./util.js");
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
@@ -64,6 +64,7 @@ class SessionLive {
     this.lastRequestedMediaSeqRaw = 0;
     this.targetNumSeg = 0;
     this.latestMediaSeqSegs = {};
+    // TODO: reset session live store
 
     debug(`[${this.sessionId}]: Resetting Live Session for instance: [${this.instanceId}]`);
   }
@@ -104,10 +105,6 @@ class SessionLive {
   async getCurrentMediaSequenceSegments() {
     await this._loadAllMediaManifests();
     debug(`[${this.sessionId}]: All bw in segs we sent to Session: ${Object.keys(this.latestMediaSeqSegs)}`);
-    //debug(`\n[${this.sessionId}]:--()()()-BEFORE-\n`);
-    //debug(`[${this.sessionId}]:--()()()--\n ${JSON.stringify(this.lastRequestedM3U8.m3u8)}`);
-    // this.lastRequestedM3U8.m3u8 is old, but why are we returning something old? we should be making new
-    // M3u8s based on the current Live source segments...
     return this.latestMediaSeqSegs;
   }
 
@@ -121,6 +118,11 @@ class SessionLive {
   // Generate manifest to give to client
   async getCurrentMediaManifestAsync(bw) {
     debug(`[${this.sessionId}]: ...Loading the selected Live Media Manifest`);
+    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    if (isLeader) {
+      debug(`[${this.sessionId}]: Prepare for followers by loading all fetching media manifests for all BWs`);
+      await this._loadAllMediaManifests();
+    }
     let manifest = null;
     try {
       manifest = await this._loadMediaManifest(bw);
@@ -137,13 +139,11 @@ class SessionLive {
       if (manifest.m3u8) {
         this.lastRequestedM3U8 = manifest;
         debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
-        const m = manifest.m3u8.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
-        //debug(`[${this.sessionId}]: ->#EXT-X-MEDIA-SEQUENCE: [${m[1]}]<-`) //delete me later
       }
       debug(`[${this.sessionId}]: Sending Requested Manifest To Client`);
       return this.lastRequestedM3U8.m3u8;
     } catch (exc) {
-      console.error(Object.keys(exc));
+      console.error(exc);
       // session live not yet ready
       throw new Error(exc);
     }
@@ -223,8 +223,7 @@ class SessionLive {
       }
     }
 
-    // SET m3u8s for all bw in store, if u are leader.
-    // todo
+    // SET m3u8s for all bw in store, if you are leader
     for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
       const bw = Object.keys(this.mediaManifestURIs)[i];
       this.latestMediaSeqSegs[bw].push({ discontinuity: true });
@@ -295,21 +294,24 @@ class SessionLive {
       const storeLiveM3U8s = await this.sessionLiveState.get("liveSourceM3U8s")
       return new Promise((resolve, reject) => {
         try {
-          if (storeLiveM3U8s && storeLiveM3U8s[liveTargetBandwidth]) {
-            debug(`[${this.sessionId}]: "Found live manifest in store"`);
-            resolve(this._parseMediaManifest(storeLiveM3U8s[liveTargetBandwidth], bw, mediaManifestUri, liveTargetBandwidth));
-          } else {
-            debug(`[${this.sessionId}]: "No live manifest found in store for bw ${liveTargetBandwidth}"`);
-            reject({
+          if (!storeLiveM3U8s[liveTargetBandwidth]) {
+            resolve({
               message: `No live manifest found in store for bw ${liveTargetBandwidth}`,
               bandwidth: liveTargetBandwidth,
               m3u8: null,
               mediaSeq: -1,
             });
+            return;
+          }
+          const m3u = M3U.unserialize(storeLiveM3U8s[liveTargetBandwidth]);
+          try {
+            let manifest = this._parseMediaManifest(m3u, bw, mediaManifestUri, liveTargetBandwidth);
+            resolve(manifest);
+          } catch (exc) {
+            debug(`[${this.sessionId}]: Error when parsing latest manifest`);
+            reject(exc);
           }
         } catch (exc) {
-          console.error(exc)
-          debug(`[${this.sessionId}]: Error when parsing latest manifest`);
           reject({
             message: exc,
             bandwidth: liveTargetBandwidth,
@@ -333,8 +335,6 @@ class SessionLive {
             mediaSeq: -1,
           });
         });
-      }).on('data', (chunk) => {
-        console.log(chunk);
       })
       .pipe(parser);
     } catch (exc) {
@@ -351,14 +351,13 @@ class SessionLive {
     }
     const storeLiveM3U8s = await this.sessionLiveState.get("liveSourceM3U8s");
     return new Promise((resolve, reject) => {
-      parser.on("m3u", (m3u) => {
+      parser.on("m3u", async (m3u) => {
         debug(`[${this.instanceId}]: I'm the leader, set latest m3u in store`);
         storeLiveM3U8s[liveTargetBandwidth] = m3u;
-        debug(`[${this.sessionId}]: Current RAW Mseq3:  [${m3u.get("mediaSequence")}]`);
-        debug(`[${this.sessionId}]: Current RAW Mseq4:  [${storeLiveM3U8s[liveTargetBandwidth].get("mediaSequence")}]`);
-        this.sessionLiveState.set("liveSourceM3U8s", storeLiveM3U8s);
+        await this.sessionLiveState.set("liveSourceM3U8s", storeLiveM3U8s);
         try {
-          resolve(this._parseMediaManifest(m3u, bw, mediaManifestUri, liveTargetBandwidth));
+          let manifest = this._parseMediaManifest(m3u, bw, mediaManifestUri, liveTargetBandwidth);
+          resolve(manifest);
         } catch (exc) {
           debug(`[${this.sessionId}]: Error when parsing latest manifest`);
           reject(exc);
@@ -398,7 +397,7 @@ class SessionLive {
           return;
         }
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") < this.lastRequestedMediaSeqRaw) {
-          debug(`[${this.sessionId}]: [What To Create?] Odd case! Live Source MediaSeq is not up tp date. Aborting.`);
+          debug(`[${this.sessionId}]: [What To Create?] Odd case! Live Source MediaSeq is not up to date. Aborting.`);
           resolve({
             bandwidth: liveTargetBandwidth,
             m3u8: null,
