@@ -5,7 +5,7 @@ describe("SessionLive", () => {
   let sessionLiveStore = undefined;
   beforeEach(() => {
     sessionLiveStore = {
-      sessionStateStore: new SessionLiveStateStore()
+      sessionLiveStateStore: new SessionLiveStateStore()
     };
   });
 

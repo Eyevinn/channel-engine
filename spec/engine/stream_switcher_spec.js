@@ -209,7 +209,7 @@ describe("The Stream Switcher", () => {
       instanceId: uuidv4(),
     };
     sessionLiveStore = {
-      sessionStateStore: new SessionLiveStateStore(),
+      sessionLiveStateStore: new SessionLiveStateStore(),
       instanceId: uuidv4(),
     };
   });
@@ -223,13 +223,14 @@ describe("The Stream Switcher", () => {
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
 
     let TestStreamSwitcher = new StreamSwitcher();
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  fit("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
+  it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
@@ -237,6 +238,7 @@ describe("The Stream Switcher", () => {
     spyOn(sessionLive, "_loadAllMediaManifests").and.callFake( () => mockLiveSegments );
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
@@ -256,16 +258,17 @@ describe("The Stream Switcher", () => {
       uri: "https://www.google.com/nothere",
     }]);
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(TestStreamSwitcher.getEventId()).toEqual(null);
   });
 
   it("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule", async () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
@@ -280,10 +283,11 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -348,10 +352,11 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(2);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
+    sessionLive.initAsync();
     const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -372,10 +377,11 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(3);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -397,10 +403,11 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(4);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
     const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -421,10 +428,11 @@ describe("The Stream Switcher", () => {
     const switchMgr = new TestSwitchManager(5);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
+    await sessionLive.initAsync();
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);

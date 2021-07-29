@@ -4,6 +4,7 @@ const nock = require('nock')
 const { v4: uuidv4 } = require('uuid');
 const { SessionStateStore } = require('../../engine/session_state.js');
 const { PlayheadStateStore } = require('../../engine/playhead_state.js');
+const { SessionLiveStateStore } = require('../../engine/session_live_state.js');
 
 const mockLiveUri = "https://mock.mock.com/live/master.m3u8";
 const mockBaseUri = "https://mock.mock.com/";
@@ -254,11 +255,16 @@ class TestAssetManager {
 
 describe("The initialize switching", () => {
   let sessionStore = undefined;
+  let sessionLiveStore = undefined;
   beforeEach(() => {
     jasmine.clock().install();
     sessionStore = {
       sessionStateStore: new SessionStateStore(),
       playheadStateStore: new PlayheadStateStore(),
+      instanceId: uuidv4(),
+    };
+    sessionLiveStore = {
+      sessionLiveStateStore: new SessionLiveStateStore(),
       instanceId: uuidv4(),
     };
   });
@@ -274,12 +280,13 @@ describe("The initialize switching", () => {
     .get('/live/level_2.m3u8').reply(200, mockMediaM3U8_2[0]);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
 
     await session.initAsync();
     for (let i = 0; i < 2; i++) {
       await session.incrementAsync();
     }
+    await sessionLive.initAsync();
 
     currVodSegments = await session.getCurrentMediaSequenceSegments();
     currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
@@ -324,12 +331,13 @@ describe("The initialize switching", () => {
     .get('/live/level_2.m3u8').reply(200, mockMediaM3U8_2[0]);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
 
     await session.initAsync();
     for (let i = 0; i < 6; i++) {
       await session.incrementAsync();
     }
+    await sessionLive.initAsync();
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(13, 1);
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
@@ -450,7 +458,7 @@ describe("The initialize switching", () => {
     });
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
     const vodEventDurationMs = 70 *1000;
 
@@ -458,6 +466,7 @@ describe("The initialize switching", () => {
     for (let i = 0; i < 3; i++) {
       await session.incrementAsync();
     }
+    await sessionLive.initAsync();
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const eventSegments = await session.getTruncatedVodSegments(vodUri, (vodEventDurationMs / 1000));
     await session.setCurrentMediaAndDiscSequenceCount((currVodCounts.mediaSeq), currVodCounts.discSeq);
@@ -548,7 +557,7 @@ describe("The initialize switching", () => {
     });
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
 
     const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
     const vodEventDurationMs = 70 *1000;
@@ -557,6 +566,7 @@ describe("The initialize switching", () => {
     for (let i = 0; i < 6; i++) {
       await session.incrementAsync();
     }
+    await sessionLive.initAsync();
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(13, 1);
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
@@ -720,12 +730,13 @@ describe("The initialize switching", () => {
     });
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
-    const sessionLive = new SessionLive({sessionId: "1"});
+    const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
 
     await session.initAsync();
     for (let i = 0; i < 2; i++) {
       await session.incrementAsync();
     }
+    await sessionLive.initAsync();
 
     currVodSegments = await session.getCurrentMediaSequenceSegments();
     currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
