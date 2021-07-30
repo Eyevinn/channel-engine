@@ -2,7 +2,6 @@ const debug = require("debug")("engine-sessionLive");
 const allSettled = require("promise.allsettled");
 const crypto = require("crypto");
 const m3u8 = require("@eyevinn/m3u8");
-const { M3U } = require("@eyevinn/m3u8");
 const request = require("request");
 const url = require("url");
 const { m3u8Header } = require("./util.js");
@@ -53,6 +52,10 @@ class SessionLive {
   }
 
   async resetSession() {
+    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    if (!isLeader) {
+      await this.sessionLiveState.clearCurrentLiveCache();
+    }
     this.mediaSeqCount = 0;
     this.discSeqCount = 0;
     this.targetDuration = 0;
@@ -65,13 +68,8 @@ class SessionLive {
     this.targetNumSeg = 0;
     this.latestMediaSeqSegs = {};
     // Should we reset the session live state store here?
-    // If so should the reset be done by the follower?
+    // If so should the reset be done by the "last" follower?
     // So that the leader don't remove it before the follower is done with it?
-    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader) {
-      debug(`[${this.instanceId}][${this.sessionId}]: I'm not the leader and are now done using the cached data, resetting session`);
-      await this.sessionLiveState.set("liveSourceM3U8s", []);
-    }
     debug(`[${this.instanceId}][${this.sessionId}]: Resetting Live Session`);
   }
 
@@ -125,34 +123,30 @@ class SessionLive {
   async getCurrentMediaManifestAsync(bw) {
     debug(`[${this.sessionId}]: ...Loading the selected Live Media Manifest`);
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    // TODO: This is currently kind of a hack so that we can get manifests for all BWs
+    let manifest = null;
     if (isLeader) {
       debug(`[${this.sessionId}]: Prepare for followers by loading all fetching media manifests for all BWs`);
       await this._loadAllMediaManifests();
-    }
-    let manifest = null;
-    try {
-      manifest = await this._loadMediaManifest(bw);
+      const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
+      const liveSourceM3U8s = await this.sessionLiveState.getLiveSourceM3U8s();
+      manifest = liveSourceM3U8s[liveTargetBandwidth];
+      //manifest = await this._loadMediaManifest(bw);
       if (!manifest.m3u8) {
-        const delayMs = this._getDelay();
-        debug(`[${this.sessionId}]: Trying to fetch Live Media Manifest again, after a ${delayMs}ms delay!`);
-        await timer(delayMs);
-        manifest = await this._loadMediaManifest(bw);
-        if (!manifest.m3u8) {
-          debug(`[${this.sessionId}]: Could not generate a new manifest return last generated`);
-          return this.lastRequestedM3U8.m3u8;
-        }
+        debug(`[${this.sessionId}]: Could not generate a new manifest return last generated`);
+        return this.lastRequestedM3U8.m3u8;
       }
-      if (manifest.m3u8) {
-        this.lastRequestedM3U8 = manifest;
-        debug(`[${this.sessionId}]: Updated lastRequestedM3U8 with new data`);
-      }
-      debug(`[${this.sessionId}]: Sending requested manifest to client`);
+      this.lastRequestedM3U8 = manifest;
+      debug(`[${this.sessionId}]: LEADER: Updated lastRequestedM3U8 with new data`);
+      debug(`[${this.sessionId}]: LEADER: Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]`);
       return this.lastRequestedM3U8.m3u8;
-    } catch (exc) {
-      console.error(exc);
-      // session live not yet ready
-      throw new Error(exc);
     }
+    debug(`[${this.instanceId}][${this.sessionId}]: I'm NOT the leader returning manifest from store`);
+    manifest = await this._loadMediaManifest(bw);
+    this.lastRequestedM3U8 = manifest;
+    debug(`[${this.sessionId}]: FOLLOWER: Updated lastRequestedM3U8 with new data`);
+    debug(`[${this.sessionId}]: FOLLOWER: Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]`);
+    return this.lastRequestedM3U8.m3u8;
   }
 
   // TODO: Implement this later
@@ -174,6 +168,13 @@ class SessionLive {
     if (this.lastRequestedM3U8 && this.lastRequestedM3U8.bandwidth) {
       this.lastRequestedM3U8.bandwidth = null;
     }
+    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    if (!isLeader) {
+      debug(`[${this.sessionId}]: I'm not the leader, reading from store`);
+      this.latestMediaSeqSegs = await this.sessionLiveState.get("latestMediaSeqSegs");
+      return;
+    }
+    debug(`[${this.sessionId}]: I'm the leader, trying to fetch manifests for all bandwidths`);
     let livePromises = [];
     for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
       let bw = Object.keys(this.mediaManifestURIs)[i];
@@ -229,19 +230,13 @@ class SessionLive {
       }
     }
 
-    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (isLeader) {
-      for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
-        const bw = Object.keys(this.mediaManifestURIs)[i];
-        this.latestMediaSeqSegs[bw].push({ discontinuity: true });
-        debug(`[${this.sessionId}]: ...Added a disc-segment to this.latestMediaSeqSegs for bw=${bw}`);
-      }
-      await this.sessionLiveState.set("latestMediaSeqSegs", this.latestMediaSeqSegs);
-      debug(`[${this.sessionId}]: Got all segments for all bandwidths to pass on to VOD2Live Session`);
-    } else {
-      debug(`[${this.sessionId}]: Not the leader, reading from store`);
-      this.latestMediaSeqSegs = await this.sessionLiveState.get("latestMediaSeqSegs");
+    for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
+      const bw = Object.keys(this.mediaManifestURIs)[i];
+      this.latestMediaSeqSegs[bw].push({ discontinuity: true });
+      debug(`[${this.sessionId}]: ...Added a disc-segment to this.latestMediaSeqSegs for bw=${bw}`);
     }
+    await this.sessionLiveState.set("latestMediaSeqSegs", this.latestMediaSeqSegs);
+    debug(`[${this.sessionId}]: Got all segments for all bandwidths`);
   }
 
   /**
@@ -295,34 +290,39 @@ class SessionLive {
     }
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
-    const parser = m3u8.createStream();
     debug(`[${this.sessionId}]: Nearest Bandwidth is: ${liveTargetBandwidth}`);
     // Init | Clear Out -> Get New
     this.latestMediaSeqSegs[liveTargetBandwidth] = [];
     // Get the target media manifest
     const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth];
-    if(!isLeader) {
+    if (!isLeader) {
+      if (!this.lastRequestedM3U8) {
+        debug(`[${this.instanceId}][${this.sessionId}]: I'm not the leader and first time, clear cache`);
+        await this.sessionLiveState.clearCurrentLiveCache();
+      }
       debug(`[${this.instanceId}][${this.sessionId}]: I'm not the leader, fetching latest manifest from store`);
-      let liveSourceM3U8s = await this.sessionLiveState.get("liveSourceM3U8s");
-      if(!liveSourceM3U8s[liveTargetBandwidth]) {
-        debug(`[${this.sessionId}]: ...but it's empty, trying again`);
-        let counter = 3;
-        while (counter >= 0 || !liveSourceM3U8s[liveTargetBandwidth]) {
-          await timer(4500);
-          liveSourceM3U8s = await this.sessionLiveState.get("liveSourceM3U8s");
-          counter--;
-        }
+      //TODO: Check why this is currently not always working (looks like the live manifest is not always updated in the store correctly)
+      let liveSourceM3U8s = await this.sessionLiveState.getLiveSourceM3U8s();
+      debug(`[${this.instanceId}][${this.sessionId}]: Got latest manifest from store: ${JSON.stringify(liveSourceM3U8s)}`);
+      if (!liveSourceM3U8s[liveTargetBandwidth]) {
+        debug(`[${this.instanceId}][${this.sessionId}]: liveTargetBandwidth: [${liveTargetBandwidth}] is not available`);
+        await this.sessionLiveState.clearCurrentLiveCache();
+        return {
+          bandwidth: liveTargetBandwidth,
+          mediaSeq: this.lastRequestedMediaSeqRaw,
+          m3u8: "",
+        };
       }
+
       const liveM3U = liveSourceM3U8s[liveTargetBandwidth];
-      if(liveM3U) {
-        //TODO: Update m3u8 header with instanceId of the correct follower
-        debug(`[${this.sessionId}]: got a manifest from store MSeqRaw ${liveM3U.mediaSeq}`);
-        return liveM3U;
-      } else {
-        throw new Error(`[${this.instanceId}][${this.sessionId}]: Cannot find liveSourceM3U8s for bandwidth ${liveTargetBandwidth}`);
-      }
+      const leaderId = await this.sessionLiveStateStore.getLeader();
+      liveM3U.m3u8.replace(leaderId, this.instanceId);
+      liveM3U.m3u8.replace("LEADER", "FOLLOWER"); // TODO: Remove this line
+      debug(`[${this.instanceId}][${this.sessionId}]: got a manifest from store MSeqRaw ${liveM3U.mediaSeq}`);
+      return liveM3U;
     }
     debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader, fetching new manifest from live source.`);
+    const parser = m3u8.createStream();
     try {
       request({ uri: mediaManifestUri, gzip: true })
       .on("error", exc => {
@@ -371,14 +371,11 @@ class SessionLive {
         let mediaSeqCountDiffRaw = 0;
         // List of all bandwidths from the VOD
         const vodBandwidths = Object.keys(this.vodSegments);
-        // What bandwidth is closest to the desired bw
-        //const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
         let baseUrl = "";
         const m = mediaManifestUri.match(/^(.*)\/.*?$/);
         if (m) {
           baseUrl = m[1] + "/";
         }
-        debug(`[${this.sessionId}]: Starting to parse new media manifest`);
         debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
         debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRaw}]`);
 
@@ -559,7 +556,7 @@ class SessionLive {
         debug(`[${this.sessionId}]: ...Start Generating the Manifest`);
         let m3u8 = "#EXTM3U\n";
         m3u8 += "#EXT-X-VERSION:6\n";
-        m3u8 += "## Manifest from SESSION LIVE\n";// delete later
+        m3u8 += "## LEADER\n"; // TODO: Remove this line
         m3u8 += m3u8Header(this.instanceId);
         m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
         m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
@@ -590,19 +587,18 @@ class SessionLive {
           }
         }
         debug(`[${this.sessionId}]: Manifest Generation Complete!`);
-        // debug(`[${this.sessionId}]: liveTargetBW=${liveTargetBandwidth}`);
-        // debug(`\n[${this.sessionId}]: ${m3u8} \n`);
 
         const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
         if (isLeader) {
-          debug(`[${this.instanceId}]: I'm the leader, set latest m3u8s [MSeqRaw: ${this.lastRequestedMediaSeqRaw}] in store`);
-          let storeM3u8s = await this.sessionLiveState.get("liveSourceM3U8s");
-          storeM3u8s[liveTargetBandwidth] = {
+          debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader, set latest m3u8s [MSeqRaw: ${this.lastRequestedMediaSeqRaw}] in store`);
+          let liveSourceM3U8s = await this.sessionLiveState.getLiveSourceM3U8s();
+          liveSourceM3U8s[liveTargetBandwidth] = {
             bandwidth: liveTargetBandwidth,
             mediaSeq: this.lastRequestedMediaSeqRaw,
             m3u8: m3u8,
           };
-          await this.sessionLiveState.set("liveSourceM3U8s", storeM3u8s);
+          let storage = await this.sessionLiveState.setLiveSourceM3U8s(liveSourceM3U8s);
+          //debug(`[${this.instanceId}][${this.sessionId}]: Latest m3u8s in store: ${JSON.stringify(storage[liveTargetBandwidth])}`);
         }
 
         resolve({
@@ -611,7 +607,7 @@ class SessionLive {
           m3u8: m3u8,
         });
       } catch (exc) {
-        console.error("ERROR: " + JSON.stringify(exc));
+        console.error("ERROR: " + exc);
         reject({
           message: exc,
           bandwidth: liveTargetBandwidth,
