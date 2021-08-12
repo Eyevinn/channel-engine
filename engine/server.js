@@ -197,9 +197,16 @@ class ChannelEngine {
       if (!this.monitorTimer[channel.id]) {
         this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
       }
+
       await sessions[channel.id].startPlayheadAsync();
     };
-    await Promise.all(newChannels.map(channel => addAsync(channel)));
+
+    const addLiveAsync = async (channel) => {
+      debug(`Adding channel with ID ${channel.id}`);
+      await sessionsLive[channel.id].initAsync();
+      await sessionsLive[channel.id].startPlayheadAsync();
+    };
+    await Promise.all(newChannels.map(channel => addAsync(channel)).concat(newChannels.map(channel => addLiveAsync(channel))));
 
     debug(`Have any channels been removed?`);
     const removedChannels = Object.keys(sessions).filter(channelId => !channelMgr.getChannels().find(ch => ch.id == channelId));
@@ -207,6 +214,7 @@ class ChannelEngine {
       debug(`Removing channel with ID ${channelId}`);
       clearInterval(this.monitorTimer[channelId]);
       await sessions[channelId].stopPlayheadAsync();
+      await sessionsLive[channelId].stopPlayheadAsync();
       delete sessions[channelId];
       delete sessionsLive[channelId];
       delete sessionSwitcher[channelId];
@@ -216,16 +224,24 @@ class ChannelEngine {
 
   start() {
     const startAsync = async (channelId) => {
+      console.log("(1)(1)(1) HEY IM STARTING -> session.startPlayheadAsync()")
       const session = sessions[channelId];
       if (!this.monitorTimer[channelId]) {
         this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session) }, 5000);
       }
       await session.startPlayheadAsync();
     };
+
+    const startLiveAsync = async (channelId) => {
+      const sessionLive = sessionsLive[channelId];
+      console.log("(2)(2)(2) HEY IM STARTING -> sessionLive.startPlayheadAsync()")
+      await sessionLive.startPlayheadAsync();
+    };
+
     (async () => {
       debug("Starting engine");
       await this.updateChannelsAsync(this.options.channelManager, this.options);
-      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)));
+      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)).concat(Object.keys(sessionsLive).map(channelId => startLiveAsync(channelId))));
     })();
   }
 
@@ -369,7 +385,8 @@ class ChannelEngine {
   }
 
   async _handleMediaManifest(req, res, next) {
-    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    //debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    //debug(`++++++++++++++++\n+++++++++++++++\n+++++++++++++++\n${JSON.stringify(req.headers)}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]]; 

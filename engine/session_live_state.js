@@ -24,7 +24,7 @@ class SharedSessionLiveState {
 
   async clearCurrentLiveCache() {
     debug(`[${this.sessionId}]: clearing 'liveSourceM3U8s' cache`);
-    this.cache.liveSourceM3U8s.value = [];
+    this.cache.liveSourceM3U8s.value = {};
   }
 
   async get(key) {
