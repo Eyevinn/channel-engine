@@ -257,6 +257,19 @@ class Session {
     }
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
+
+      let offset = 0;
+      if (!reloadBehind) {
+        
+      }
+      let bandwidths = Object.keys(segments);
+      for (let i = 0; i < segments[bandwidths[0]].length; i++) {
+        if (segments[bandwidths[0]][i].discontinuity) {
+          offset++;
+        }
+      }
+
+
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod();
@@ -269,7 +282,13 @@ class Session {
       await this._playheadState.set("playheadRef", Date.now());
     } else {
       await this._sessionState.clearCurrentVodCache();
+
+      // get datenow in store -> 00.01;
+      // his own datenow -> 00.02;
       debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD!`);
+      // will this work?
+      await timer(2000);
+      debug(`[${this._sessionId}]: Not a leader giving leader some time (2000ms) to write a new currentVod in store!`);
     }
   }
 

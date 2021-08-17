@@ -468,6 +468,7 @@ class SessionLive {
         // BECOME new LEADER...
       }
 
+      attempts = 6;
       // # CHECK AGAIN CASE 2: Store Old
       while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
         debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store...Will check again in 2000ms (Tries left=${attempts})`);
@@ -475,6 +476,10 @@ class SessionLive {
         this.timerCompensation = false;
         leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
         attempts--;
+      }
+
+      if (!leadersMediaSeqRaw) {
+        // BECOME new LEADER...
       }
 
 
@@ -589,7 +594,7 @@ class SessionLive {
     const results = await Promise.all(pushPromises);
         
 
-    // # FOLLOWER - Edge Case: Leader is ahead for Follower. Read latest live segs from store.
+    // # NEW FOLLOWER - Edge Case: Leader is ahead for Follower. Read latest live segs from store.
     if (!isLeader) {
       let leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       let leadersFirstMseqRaw = await this.sessionLiveState.get("firstLiveSourceMseq");
@@ -733,9 +738,9 @@ class SessionLive {
   _parseMediaManifest(m3u, bw, mediaManifestUri, liveTargetBandwidth) {
     return new Promise(async (resolve, reject) => {
       try {
-        let recreateMseq = false;
-        let createNewMseq = false;
-        let mediaSeqCountDiffRaw = 0;
+        //let recreateMseq = false;
+        //let createNewMseq = false;
+        //let mediaSeqCountDiffRaw = 0;
         // List of all bandwidths from the VOD
         const vodBandwidths = Object.keys(this.vodSegments);
         const liveBandwidths = Object.keys(this.liveSegQueue);
@@ -764,24 +769,23 @@ class SessionLive {
         // }
 
         if (this.lastRequestedM3U8 && m3u.get("mediaSequence") === this.lastRequestedMediaSeqRaw && liveTargetBandwidth !== this.lastRequestedM3U8.bandwidth) {
-          // New sequence and/or New Bandwidth
-          // If they are the same sequence but different bw, do not pop! rebuild the manifest with all parts.
           debug(`[${this.sessionId}]: [What To Create?] Creating An Identical Media Sequence, but for new Bandwidth!`);
-          recreateMseq = true;
+          //recreateMseq = true;
         } else {  
+          // # Increment mediaSeqCount - and POP vodSegs and LiveSegs appropriatly
           debug(`[${this.sessionId}]: [What To Create?] Creating a Completely New Media Sequence`);
-          createNewMseq = true;
+          //createNewMseq = true;
 
           // In case this Next sequence is expected to be in a different profile,
           // then we need to use the recreate code.
-          if (this.lastRequestedM3U8 && liveTargetBandwidth === this.lastRequestedM3U8.bandwidth) {
-            recreateMseq = false;
-          } else {
-            recreateMseq = true;
-          }
+          // if (this.lastRequestedM3U8 && liveTargetBandwidth === this.lastRequestedM3U8.bandwidth) {
+          //   recreateMseq = false;
+          // } else {
+          //   recreateMseq = true;
+          // }
 
           // Calculate difference in media sequence count between current and previous Live Manifest
-          mediaSeqCountDiffRaw = this.lastRequestedM3U8 ? m3u.get("mediaSequence") - this.lastRequestedMediaSeqRaw : 1;
+          //mediaSeqCountDiffRaw = this.lastRequestedM3U8 ? m3u.get("mediaSequence") - this.lastRequestedMediaSeqRaw : 1;
 
 
           this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
@@ -821,35 +825,37 @@ class SessionLive {
             //     this.mediaSeqCount++;
             //   }
             //   debug(`[${this.sessionId}]: Success! We shrunk manifest segment amount by ${extraSegments}_units`);
-            // }     
+            // }
           }
-
           debug(`[${this.sessionId}]: Time to make MEDIA-SEQUENCE number: [${this.mediaSeqCount}]`);
         }
+
+
+
         // Switch out relative URIs if they are used, with absolute URLs
         if (mediaManifestUri) {
           // -= CREATE NEW MANIFEST =-
 
           // (Hey!) - Do we really need to calc startIdx in 2different ways?
           //          won't pushAmount suffice?
-          
-          let startIdx;
-          if (!recreateMseq) {
-            // CASE: Live source is more than 1 sequence ahead push all "new" segments
-            startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
-          } else {
-            if (mediaSeqCountDiffRaw === 0) {
-              // # Check if all bandwidths are on the same page, or if anyone is ahead a segment.
-              let segCounts = Object.keys(this.liveSegQueue).map( bw => this.liveSegQueue[bw].length);
-              // # Get largest count of segments amongst bws.
-              const maxSegCount = Math.max(...segCounts);
-              // # Then, check if counts for this bw is equal or less than the max.
-              mediaSeqCountDiffRaw = maxSegCount - this.liveSegQueue[liveTargetBandwidth].length;
-            }
 
+          let startIdx;
+          // if (!recreateMseq) {
             // CASE: Live source is more than 1 sequence ahead push all "new" segments
-            startIdx = m3u.items.PlaylistItem.length - mediaSeqCountDiffRaw;
-          }
+          startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
+          // } else {
+          //   if (mediaSeqCountDiffRaw === 0) {
+          //     // # Check if all bandwidths are on the same page, or if anyone is ahead a segment.
+          //     let segCounts = Object.keys(this.liveSegQueue).map( bw => this.liveSegQueue[bw].length);
+          //     // # Get largest count of segments amongst bws.
+          //     const maxSegCount = Math.max(...segCounts);
+          //     // # Then, check if counts for this bw is equal or less than the max.
+          //     mediaSeqCountDiffRaw = maxSegCount - this.liveSegQueue[liveTargetBandwidth].length;
+          //   }
+
+          //   // CASE: Live source is more than 1 sequence ahead push all "new" segments
+          //   startIdx = m3u.items.PlaylistItem.length - mediaSeqCountDiffRaw;
+          // }
 
           if (startIdx < 0) {
             startIdx = 0;
@@ -959,19 +965,19 @@ class SessionLive {
       }
     }
 
-    // (!) Hey, maybe we should read raw-targetduration from store instead?
-    // Determine if LIVE segments influence targetDuration
-    let allLiveSegDurations = this.liveSegQueue[Object.keys(this.liveSegQueue)[0]].map( seg => seg.duration );
-    let maxDuration = Math.max(...allLiveSegDurations);
+    // // (!) Hey, maybe we should read raw-targetduration from store instead?
+    // // Determine if LIVE segments influence targetDuration
+    // let allLiveSegDurations = this.liveSegQueue[Object.keys(this.liveSegQueue)[0]].map( seg => seg.duration );
+    // let maxDuration = Math.max(...allLiveSegDurations);
 
-    // Reset the TargetDuration if there are no more vodSegments
-    if (this.vodSegments[vodTargetBandwidth].length === 0) {
-      this.targetDuration = 0;
-    }
-    // Change targetDuration if appropriate
-    if (maxDuration > this.targetDuration) {
-      this.targetDuration = Math.round(maxDuration);
-    }
+    // // Reset the TargetDuration if there are no more vodSegments
+    // if (this.vodSegments[vodTargetBandwidth].length === 0) {
+    //   this.targetDuration = 0;
+    // }
+    // // Change targetDuration if appropriate
+    // if (maxDuration > this.targetDuration) {
+    //   this.targetDuration = Math.round(maxDuration);
+    // }
 
     let m3u8FromNode = "FOLLOWER";
     if (isLeader) {
