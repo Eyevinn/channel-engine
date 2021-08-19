@@ -51,7 +51,7 @@ class ChannelEngine {
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
 
-    this.streamSwitchTimeIntervalMs = 3000; // {-.-}
+    this.streamSwitchTimeIntervalMs = 3000;
 
     this.sessionStore = {
       sessionStateStore: new SessionStateStore({
@@ -151,7 +151,6 @@ class ChannelEngine {
           const switcher = sessionSwitcher[chId];
           switchSession[chId] = null;
           switchSession[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
-          timeIntervalsMs.push(await switcher.getTimeDiff());
         }
       }
     }, this.streamSwitchTimeIntervalMs);
@@ -183,7 +182,6 @@ class ChannelEngine {
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
-        instanceId: this.sessionLiveStore.instanceId,
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,
@@ -199,7 +197,7 @@ class ChannelEngine {
       await sessions[channel.id].initAsync();
       await sessionsLive[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
-        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
+        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id], sessionsLive[channel.id]) }, 5000);
       }
 
       await sessions[channel.id].startPlayheadAsync();
@@ -228,17 +226,16 @@ class ChannelEngine {
 
   start() {
     const startAsync = async (channelId) => {
-      console.log("(1)(1)(1) HEY IM STARTING -> session.startPlayheadAsync()")
       const session = sessions[channelId];
+      const sessionLive = sessionsLive[channelId];
       if (!this.monitorTimer[channelId]) {
-        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session) }, 5000);
+        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session, sessionLive) }, 5000);
       }
-      await session.startPlayheadAsync();
+      session.startPlayheadAsync();
+      await sessionLive.startPlayheadAsync();
     };
-
     const startLiveAsync = async (channelId) => {
       const sessionLive = sessionsLive[channelId];
-      console.log("(2)(2)(2) HEY IM STARTING -> sessionLive.startPlayheadAsync()")
       await sessionLive.startPlayheadAsync();
     };
 
@@ -267,14 +264,22 @@ class ChannelEngine {
     return Object.keys(sessions).filter(sessionId => sessions[sessionId].hasPlayhead()).length;
   }
 
-  async _monitorAsync(session) {
-    const status = await session.getStatusAsync();
-    debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
-    if (status.playhead.state === 'crashed') {
-      debug(`[${status.sessionId}]: Playhead crashed, restarting`);
+  async _monitorAsync(session, sessionLive) {
+    const statusSessionLive = sessionLive.getStatus();
+    const statusSession = await session.getStatusAsync();
+
+    debug(`MONITOR (${new Date().toISOString()}) [${statusSession.sessionId}]: playhead: ${statusSession.playhead.state}`);
+    debug(`MONITOR (${new Date().toISOString()}) [${statusSessionLive.sessionId}]: live-playhead: ${statusSessionLive.playhead.state}`);
+
+    if (statusSessionLive.playhead.state === 'crashed') {
+      debug(`[${statusSessionLive.sessionId}]: SessionLive-Playhead crashed, restarting`);
+      await sessionLive.restartPlayheadAsync();
+    }
+    if (statusSession.playhead.state === 'crashed') {
+      debug(`[${statusSession.sessionId}]: Session-Playhead crashed, restarting`);
       await session.restartPlayheadAsync();
-    } else if (status.playhead.state === 'idle') {
-      debug(`[${status.sessionId}]: Starting playhead`);
+    } else if (statusSession.playhead.state === 'idle') {
+      debug(`[${statusSession.sessionId}]: Starting playhead`);
       await session.startPlayheadAsync();
     }
   }
@@ -390,27 +395,27 @@ class ChannelEngine {
 
   async _handleMediaManifest(req, res, next) {
     //debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
-    //debug(`++++++++++++++++\n+++++++++++++++\n+++++++++++++++\n${JSON.stringify(req.headers)}`);
     debug(req.params);
     const session = sessions[req.params[1]];
-    const sessionLive = sessionsLive[req.params[1]]; 
+    const sessionLive = sessionsLive[req.params[1]];
     if (session && sessionLive) {
       try {
-        while(switchSession[req.params[1]] === null){
-          debug(`[${req.params[1]}]: Waiting for streamSwitcher to finish switching session`);
+        while(switchSession[req.params[1]] === null || switchSession[req.params[1]] === undefined) {
+          debug(`[${req.params[1]}]: Waiting for streamSwitcher to respond`);
           await timer(500);
         }
         let body = null;
+        debug(`switchSession[req.params[1]]=[${switchSession[req.params[1]]}]`);
         if (switchSession[req.params[1]]) {
-          debug(`[${req.params[1]}]: Responding with Altered-Live stream manifest`);
+          debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {
-          debug(`[${req.params[1]}]: Responding with VOD2Live stream manifest`);
+          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         }
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,

@@ -257,19 +257,6 @@ class Session {
     }
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
-
-      let offset = 0;
-      if (!reloadBehind) {
-        
-      }
-      let bandwidths = Object.keys(segments);
-      for (let i = 0; i < segments[bandwidths[0]].length; i++) {
-        if (segments[bandwidths[0]][i].discontinuity) {
-          offset++;
-        }
-      }
-
-
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod();
