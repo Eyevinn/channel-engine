@@ -400,7 +400,7 @@ class ChannelEngine {
     const sessionLive = sessionsLive[req.params[1]];
     if (session && sessionLive) {
       try {
-        while(switchSession[req.params[1]] === null || switchSession[req.params[1]] === undefined) {
+        while (switchSession[req.params[1]] === null || switchSession[req.params[1]] === undefined) {
           debug(`[${req.params[1]}]: Waiting for streamSwitcher to respond`);
           await timer(500);
         }

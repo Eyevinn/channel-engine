@@ -232,8 +232,8 @@ class SessionLive {
     if (isLeader) {
       this.allowedToSet = false;
     } else {
-      let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
-      if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+      const leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+      if (leadersMediaSeqRaw > this.lastRequestedMediaSeqRaw) {
         // Follower updates its manifest ingedients (segment holders & counts)
         this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
         this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
@@ -301,9 +301,9 @@ class SessionLive {
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     // TODO: Remove this
     if (isLeader) {
-      debug(`[${this.sessionId}]: LEADER-> Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]\n\n`);
+      debug(`[${this.sessionId}]: LEADER: Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]\n\n`);
     } else {
-      debug(`[${this.sessionId}]: FOLLOWER-> Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]\n\n`);
+      debug(`[${this.sessionId}]: FOLLOWER: Sending requested manifest to client [${JSON.stringify(this.lastRequestedM3U8.m3u8)}]\n\n`);
     }
     return this.lastRequestedM3U8.m3u8;
   }
@@ -540,7 +540,6 @@ class SessionLive {
 
       // Handle if mediaSeqCounts are NOT synced up!
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
-        //
         debug(`[${this.sessionId}]: Live Mseq counts=${allMediaSeqCounts}`);
         //  Decement fetch counter.
         --FETCH_ATTEMPTS;
@@ -555,10 +554,7 @@ class SessionLive {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
         let tries = 20;
 
-        while (
-          !leadersFirstSeqCounts.liveSourceMseqCount ||
-          (leadersFirstSeqCounts.liveSourceMseqCount === 0 && tries > 0)
-        ) {
+        while (!leadersFirstSeqCounts.liveSourceMseqCount || (leadersFirstSeqCounts.liveSourceMseqCount === 0 && tries > 0)) {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstLiveSourceMseq' in store! Will look again after 1000ms`);
           await timer(1000);
           leadersFirstSeqCounts = await this.sessionLiveState.get(
@@ -579,17 +575,33 @@ class SessionLive {
         // Prepare to load segments...
         debug(`[${this.instanceId}]: newest mseq from LIVE=${allMediaSeqCounts[0]}__ 1st mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
         if (allMediaSeqCounts[0] === leadersFirstSeqCounts.liveSourceMseqCount) {
-          this.pushAmount = 1;
+          this.pushAmount = 1; // Follower from start
         } else {
-          this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount;
+          this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount; // Respawned
+          // Remove unnecessary vod segments...
+          const vodBandwidths = Object.keys(this.vodSegments);
+          for (let k = 0; k < this.pushAmount; k++) {
+            for (let i = 0; i < vodBandwidths.length; i++) {
+              let seg = this.vodSegments[vodBandwidths[i]].pop();
+              if (seg && seg.discontinuity) {
+                this.vodSegments[vodBandwidths[i]].pop();
+              }
+            }
+          }
+          let lastIdx = this.vodSegments[vodBandwidths[0]].length - 1;
+          if (this.vodSegments[vodBandwidths[0]][lastIdx] && !this.vodSegments[vodBandwidths[0]][lastIdx].discontinuity) {
+            for (let i = 0; i < vodBandwidths.length; i++) {
+              this.vodSegments[vodBandwidths[i]][lastIdx].push({ discontinuity: true});
+            }
+          }
         }
         debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
       } else {
         //  LEADER calculates pushAmount differently...
         if (!this.lastRequestedM3U8 || this.lastRequestedMediaSeqRaw === 0) {
-          this.pushAmount = 1;
+          this.pushAmount = 1; // Leader from start
         } else {
-          this.pushAmount = allMediaSeqCounts[0] - this.lastRequestedMediaSeqRaw;
+          this.pushAmount = allMediaSeqCounts[0] - this.lastRequestedMediaSeqRaw; // Respawned
         }
         debug(`[${this.sessionId}]: ...pushAmount=${allMediaSeqCounts[0]} - ${this.lastRequestedMediaSeqRaw}`);
         break;
@@ -753,7 +765,7 @@ class SessionLive {
       try {
         // List of all bandwidths from the VOD
         const vodBandwidths = Object.keys(this.vodSegments);
-        const liveBandwidths = Object.keys(this.liveSegQueue);
+        //const liveBandwidths = Object.keys(this.liveSegQueue);
 
         if (!this.liveSegQueue[liveTargetBandwidth]) {
           this.liveSegQueue[liveTargetBandwidth] = [];
@@ -794,10 +806,16 @@ class SessionLive {
             // Increase Discontinuity count if top segment is a discontinuity segment
             if (this.vodSegments[vodBandwidths[0]].length != 0 && this.vodSegments[vodBandwidths[0]][0].discontinuity) {
               this.discSeqCount++;
+              let firstCounts = await this.sessionLiveState.get("firstCounts");
+              firstCounts.discSeqCount = this.discSeqCount;
+              await this.sessionLiveState.set("firstCounts", firstCounts);
             }
             // Shift the top vod segment
             for (let i = 0; i < vodBandwidths.length; i++) {
-              this.vodSegments[vodBandwidths[i]].shift();
+              let seg = this.vodSegments[vodBandwidths[i]].shift();
+              if (seg && seg.discontinuity) {
+                this.vodSegments[vodBandwidths[i]].shift();
+              }
             }
 
             // LASTLY: SHRINK IF NEEDED. (should only happen once if ever.)

@@ -96,11 +96,9 @@ class StreamSwitcher {
     }
     const validURI = await this._validURI(scheduleObj.uri);
     if (!validURI) {
-      debug(`[${this.sessionId}]: Unreachable URI`);
+      debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
-        debug(
-          `[${this.sessionId}]: Switching back to VOD2Live due to unreachable URI`
-        );
+        debug(`[${this.sessionId}]: Switching back to VOD2Live due to unreachable URI`);
         await this._initSwitching(
           SwitcherState.LIVE_TO_V2L,
           session,
@@ -149,9 +147,7 @@ class StreamSwitcher {
       }
       if (!this.streamTypeLive) {
         if (!scheduleObj.duration) {
-          debug(
-            `[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`
-          );
+          debug(`[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`);
           return false;
         }
         if (this.eventId !== scheduleObj.eventId) {
@@ -182,14 +178,9 @@ class StreamSwitcher {
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         currVodSegments = await session.getCurrentMediaSequenceSegments();
 
-        await sessionLive.setCurrentMediaAndDiscSequenceCount(
-          currVodCounts.mediaSeq,
-          currVodCounts.discSeq
-        );
+        await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
-
-        //await sessionLive.getCurrentMediaManifestAsync(1313000); // currently a hack
 
         this.working = false;
         this.streamTypeLive = true;
@@ -199,15 +190,9 @@ class StreamSwitcher {
         this.working = true;
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-        eventSegments = await session.getTruncatedVodSegments(
-          scheduleObj.uri,
-          scheduleObj.duration / 1000
-        );
+        eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
-        await session.setCurrentMediaAndDiscSequenceCount(
-          currVodCounts.mediaSeq,
-          currVodCounts.discSeq
-        );
+        await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
 
         this.working = false;
@@ -222,17 +207,10 @@ class StreamSwitcher {
         await sessionLive.resetSessionAsync();
 
         if (scheduleObj && !scheduleObj.duration) {
-          debug(
-            `[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`
-          );
+          debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
         }
-        //debug(`[${this.sessionId}]: SESSION received these counts: ${JSON.stringify(liveCounts)}`);
-        //debug(`[${this.sessionId}]: SESSION received first & last segments: \n${liveSegments[Object.keys(liveSegments)[0]][0].uri}\n ${liveSegments[Object.keys(liveSegments)[0]][liveSegments[Object.keys(liveSegments)[0]].length - 1 - 1].uri}`);
 
-        await session.setCurrentMediaAndDiscSequenceCount(
-          liveCounts.mediaSeq,
-          liveCounts.discSeq
-        );
+        await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments);
 
         this.working = false;
@@ -246,15 +224,9 @@ class StreamSwitcher {
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         await sessionLive.resetSessionAsync();
 
-        eventSegments = await session.getTruncatedVodSegments(
-          scheduleObj.uri,
-          scheduleObj.duration / 1000
-        );
+        eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
-        await session.setCurrentMediaAndDiscSequenceCount(
-          liveCounts.mediaSeq - 1,
-          liveCounts.discSeq - 1
-        );
+        await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
         await session.setCurrentMediaSequenceSegments(liveSegments);
         await session.setCurrentMediaSequenceSegments(eventSegments, true);
 
@@ -266,14 +238,10 @@ class StreamSwitcher {
         this.working = true;
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
-        currLiveCounts =
-          await sessionLive.getCurrentMediaAndDiscSequenceCount();
+        currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
         await sessionLive.resetSessionAsync();
 
-        await sessionLive.setCurrentMediaAndDiscSequenceCount(
-          currLiveCounts.mediaSeq + 1,
-          currLiveCounts.discSeq
-        );
+        await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq + 1, currLiveCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(eventSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
 
