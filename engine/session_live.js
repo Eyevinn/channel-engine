@@ -9,13 +9,13 @@ const { m3u8Header } = require("./util.js");
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
 const DELAY_FACTOR = 0.5;
 const RESET_DELAY = 5000;
-
 const PlayheadState = Object.freeze({
   RUNNING: 1,
   STOPPED: 2,
   CRASHED: 3,
   IDLE: 4,
 });
+
 class SessionLive {
   constructor(config, sessionLiveStore) {
     this.sessionId = crypto.randomBytes(20).toString("hex");
@@ -61,11 +61,13 @@ class SessionLive {
     await timer(RESET_DELAY);
     await this.sessionLiveState.set("liveSegsForFollowers", null);
     await this.sessionLiveState.set("lastRequestedMediaSeqRaw", null);
+    await this.sessionLiveState.set("transitSegs", null);
     await this.sessionLiveState.set("firstCounts", {
       liveSourceMseqCount: null,
       mediaSeqCount: null,
       discSeqCount: null,
     });
+    debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader and have cleared the local store.`);
   }
 
   async resetSessionAsync() {
@@ -80,7 +82,6 @@ class SessionLive {
     this.lastRequestedMediaSeqRaw = 0;
     this.targetNumSeg = 0;
     this.liveSourceM3Us = {};
-    this.playheadState = PlayheadState.IDLE;
     this.liveSegsForFollowers = {};
     this.timerCompensation = null;
     this.firstTime = true;
@@ -92,7 +93,7 @@ class SessionLive {
       this._resetLiveStoreAsync();
       debug(`[${this.instanceId}][${this.sessionId}]: I'm the Leader resetting local Live Session and store`);
     } else {
-      debug(`[${this.instanceId}][${this.sessionId}]: Follower resetting local Live Session`);
+      debug(`[${this.instanceId}][${this.sessionId}]: I'm not the Leader only resetting local Live Session`);
     }
   }
 
@@ -111,7 +112,8 @@ class SessionLive {
 
         // End the loop is state==STOPPED
         if (this.playheadState === PlayheadState.STOPPED) {
-          debug(`[${this.sessionId}]: Playhead has Stopped.`);
+          debug(`[${this.sessionId}]: Playhead has Stopped, clearing local session and store.`);
+          this.resetSessionAsync();
           return;
         }
 
@@ -143,8 +145,6 @@ class SessionLive {
         }
         debug(`[${this.sessionId}]: SessionLive-Playhead going to ping again after ${timerValueMs}ms`);
         await timer(timerValueMs);
-
-        this.firstTime = false;
       } catch (err) {
         debug(`[${this.sessionId}]: SessionLive-Playhead consumer crashed (1)`);
         console.error(`[${this.sessionId}]: ${err.message}`);
@@ -165,13 +165,15 @@ class SessionLive {
   }
 
   async setLiveUri(liveUri) {
-    // Load & Parse all Media Manifest uris from Master.
+    // Load & Parse all Media Manifest uris from Master
     await this._loadMasterManifest(liveUri);
-    // This will let playhead call Live Source for manifests.
+    // This will let playhead call Live Source for manifests
     this.masterManifestUri = liveUri;
+    this.firstTime = true;
   }
 
   async setCurrentMediaSequenceSegments(segments) {
+    let discCount = 0;
     const allBws = Object.keys(segments);
     for (let i = 0; i < allBws.length; i++) {
       const bw = allBws[i];
@@ -182,15 +184,20 @@ class SessionLive {
         segments[bw].shift();
       }
 
-      const segLen = segments[bw].length;
-      for (let segIdx = segLen - segLen; segIdx < segLen; segIdx++) {
+      for (let segIdx = 0; segIdx < segments[bw].length; segIdx++) {
         this.vodSegments[bw].push(segments[bw][segIdx]);
       }
-      if (!segments[bw][segLen - 1].discontinuity) {
+      if (!segments[bw][segments[bw].length - 1].discontinuity) {
         this.vodSegments[bw].push({ discontinuity: true });
       }
     }
-    this.targetNumSeg = this.vodSegments[allBws[0]].length;
+
+    for (let segIdx = 0; segIdx < segments[allBws[0]].length; segIdx++) {
+      if (segments[allBws[0]][segIdx].discontinuity) {
+        discCount++;
+      }
+    }
+    this.targetNumSeg = this.vodSegments[allBws[0]].length - discCount;
     debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: ${this.vodSegments[allBws[0]][0].uri}`);
   }
 
@@ -199,8 +206,8 @@ class SessionLive {
     this.mediaSeqCount = mediaSeq;
     this.discSeqCount = discSeq;
 
-    // IN CASE: New/Respawned Node Joins the Live Party.
-    // Don't use what Session gave you. Use the Leaders number if it's available.
+    // IN CASE: New/Respawned Node Joins the Live Party
+    // Don't use what Session gave you. Use the Leaders number if it's available
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
       const liveCounts = await this.sessionLiveState.get("firstCounts");
@@ -368,16 +375,16 @@ class SessionLive {
     const liveBws = Object.keys(this.liveSegsForFollowers);
     const size = this.liveSegsForFollowers[liveBws[0]].length;
     debug(`[${this.sessionId}]: [__size=${size}__]->this.liveSegsForFollowers=${ Object.keys(this.liveSegsForFollowers)} `);
-    // # -REMOVE- transitional segs & -ADD- live source segs collected from store
+    // Remove transitional segs & add live source segs collected from store
     for (let k = 0; k < size; k++) {
       // Increase Discontinuity count if top segment is a discontinuity segment
       if (this.vodSegments[vodBws[0]].length !== 0 && this.vodSegments[vodBws[0]][0].discontinuity) {
         this.discSeqCount++;
       }
-      if (true) {
-        //this.lastRequestedM3U8) {
-        // Shift the top vod segment on all variants
-        for (let i = 0; i < vodBws.length; i++) {
+      // Shift the top vod segment on all variants
+      for (let i = 0; i < vodBws.length; i++) {
+        let seg = this.vodSegments[vodBws[i]].shift();
+        if (seg && seg.discontinuity) {
           this.vodSegments[vodBws[i]].shift();
         }
       }
@@ -444,10 +451,8 @@ class SessionLive {
     if (!isLeader && this.lastRequestedMediaSeqRaw !== 0) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
-      let leadersMediaSeqRaw = await this.sessionLiveState.get(
-        "lastRequestedMediaSeqRaw"
-      );
-      let attempts = 6;
+      let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+      let attempts = 5;
 
       /**
        * (HEY!) these two while loops can be one if we init lastRequestedMediaSeqRaw=0 in store!
@@ -457,9 +462,7 @@ class SessionLive {
         debug(`[${this.sessionId}]: FOLLOWER: Leader has not put anything in store...Will check again in 2000ms (Tries left=${attempts})`);
         await timer(2000);
         this.timerCompensation = false;
-        leadersMediaSeqRaw = await this.sessionLiveState.get(
-          "lastRequestedMediaSeqRaw"
-        );
+        leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
         attempts--;
       }
 
@@ -470,10 +473,11 @@ class SessionLive {
           return;
         } else {
           debug(`[${this.instanceId}]: The leader is still alive`);
+          return;
         }
       }
 
-      attempts = 6;
+      attempts = 5;
       //  CHECK AGAIN CASE 2: Store Old
       while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
         debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store...Will check again in 2000ms (Tries left=${attempts})`);
@@ -490,6 +494,7 @@ class SessionLive {
           return;
         } else {
           debug(`[${this.instanceId}]: The leader is still alive`);
+          return
         }
       }
 
@@ -555,11 +560,9 @@ class SessionLive {
         let tries = 20;
 
         while (!leadersFirstSeqCounts.liveSourceMseqCount || (leadersFirstSeqCounts.liveSourceMseqCount === 0 && tries > 0)) {
-          debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstLiveSourceMseq' in store! Will look again after 1000ms`);
+          debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms`);
           await timer(1000);
-          leadersFirstSeqCounts = await this.sessionLiveState.get(
-            "firstCounts"
-          );
+          leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
           tries--;
         }
 
@@ -571,7 +574,7 @@ class SessionLive {
             debug(`[${this.instanceId}]: The leader is still alive`);
           }
         }
-
+        // if (leadersFirstSeqCounts): DO THIS
         // Prepare to load segments...
         debug(`[${this.instanceId}]: newest mseq from LIVE=${allMediaSeqCounts[0]}__ 1st mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
         if (allMediaSeqCounts[0] === leadersFirstSeqCounts.liveSourceMseqCount) {
@@ -579,21 +582,28 @@ class SessionLive {
         } else {
           this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount; // Respawned
           // Remove unnecessary vod segments...
-          const vodBandwidths = Object.keys(this.vodSegments);
-          for (let k = 0; k < this.pushAmount; k++) {
-            for (let i = 0; i < vodBandwidths.length; i++) {
-              let seg = this.vodSegments[vodBandwidths[i]].pop();
-              if (seg && seg.discontinuity) {
-                this.vodSegments[vodBandwidths[i]].pop();
-              }
+          if (this.pushAmount < this.targetNumSeg) {
+            const transitSegs = this.sessionLiveState.get("transitSegs");
+            debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found. ->${JSON.stringify(transitSegs)}`);
+            if (transitSegs) {
+              this.vodSegments = transitSegs;
             }
           }
-          let lastIdx = this.vodSegments[vodBandwidths[0]].length - 1;
-          if (this.vodSegments[vodBandwidths[0]][lastIdx] && !this.vodSegments[vodBandwidths[0]][lastIdx].discontinuity) {
-            for (let i = 0; i < vodBandwidths.length; i++) {
-              this.vodSegments[vodBandwidths[i]][lastIdx].push({ discontinuity: true});
-            }
-          }
+          // const vodBandwidths = Object.keys(this.vodSegments);
+          // for (let k = 0; k < this.pushAmount; k++) {
+          //   for (let i = 0; i < vodBandwidths.length; i++) {
+          //     let seg = this.vodSegments[vodBandwidths[i]].pop();
+          //     if (seg && seg.discontinuity) {
+          //       this.vodSegments[vodBandwidths[i]].pop();
+          //     }
+          //   }
+          // }
+          // let lastIdx = this.vodSegments[vodBandwidths[0]].length - 1;
+          // if (this.vodSegments[vodBandwidths[0]][lastIdx] && !this.vodSegments[vodBandwidths[0]][lastIdx].discontinuity) {
+          //   for (let i = 0; i < vodBandwidths.length; i++) {
+          //     this.vodSegments[vodBandwidths[i]][lastIdx].push({ discontinuity: true});
+          //   }
+          // }
         }
         debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
       } else {
@@ -678,11 +688,15 @@ class SessionLive {
         };
         debug(`[${this.sessionId}]: LEADER: I am adding 'firstCounts'=${JSON.stringify(firstCounts)} to Store for future followers`);
         await this.sessionLiveState.set("firstCounts", firstCounts);
+        debug(`[${this.sessionId}]: LEADER: I am adding 'transitSegs'=${JSON.stringify(this.vodSegments)} to Store for future followers`);
+        await this.sessionLiveState.set("transitSegs", this.vodSegments);
       }
       debug(`[${this.sessionId}]: LEADER: I am using segs from Mseq=${this.lastRequestedMediaSeqRaw}`);
     } else {
       debug(`[${this.sessionId}]: NEW FOLLOWER: I am using segs from Mseq=${this.lastRequestedMediaSeqRaw}`);
     }
+
+    this.firstTime = false;
     debug(`[${this.sessionId}]: Got all needed segments from all live-source bandwidths. We are now able to build a Live Manifest`);
 
     return;

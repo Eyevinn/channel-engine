@@ -178,6 +178,8 @@ class StreamSwitcher {
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         currVodSegments = await session.getCurrentMediaSequenceSegments();
 
+        // TODO: In risk that the SL-playhead might have updated some data after 
+        // we reset last time.... we sohuld Reset SessionLive before sending new data. 
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
@@ -215,7 +217,7 @@ class StreamSwitcher {
 
         this.working = false;
         this.streamTypeLive = false;
-        debug(`[${this.sessionId}]: Switching from LIVE->V2L`);
+        debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
         break;
       case SwitcherState.LIVE_TO_VOD:
         this.working = true;

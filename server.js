@@ -77,7 +77,7 @@ class RefAssetManager {
       this.assets = {
         '1': [
           { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" }, //uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
           { id: 3, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
           { id: 4, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
           { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
@@ -177,7 +177,7 @@ class StreamSwitchManager {
 
   getSchedule() {
     const tsNow = Date.now();
-    const streamDuration = 1 * 60 * 1000;
+    const streamDuration = 2 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts
@@ -190,11 +190,11 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: startOffset,//tsNow,
+        start_time: tsNow + 1*60*1000,
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
-      {
+      /*{
         eventId: this.generateID(),
         assetId: this.generateID(),
         title: "Scheduled VOD test",
@@ -203,9 +203,18 @@ class StreamSwitchManager {
         end_time: (endTime + 100*1000) + streamDuration,
         uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
-      }
+      }*/
       );
       // console.log(JSON.stringify(this.schedule));
+    }
+
+    if(Date.now() > (this.schedule[0].start_time + 20*1000)) {
+      console.log("We are now setting a faulty URI");
+      this.schedule[0].uri = "https://www.google.com/nothere";
+    }
+    if(Date.now() > (this.schedule[0].start_time + 30*1000)) {
+      console.log("We are now setting a working URI");
+      this.schedule[0].uri = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
     }
     return this.schedule;
   }

@@ -36,6 +36,7 @@ class SessionLiveStateStore extends SharedStateStore {
       },
       lastRequestedMediaSeqRaw: null,
       liveSegsForFollowers: null,
+      transitSegs: null,
     });
 
     if (opts && opts.cacheTTL) {
