@@ -25,6 +25,7 @@ class StreamSwitcher {
     this.eventId = null;
     this.working = false;
     this.timeDiff = null;
+    this.switchTimestamp = null;
 
     if (config) {
       if (config.sessionId) {
@@ -94,8 +95,10 @@ class StreamSwitcher {
       this.working = false;
       return false;
     }
+
     const validURI = await this._validURI(scheduleObj.uri);
     if (!validURI) {
+      this.switchTimestamp = tsNow;
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
         debug(`[${this.sessionId}]: Switching back to VOD2Live due to unreachable URI`);
@@ -109,6 +112,13 @@ class StreamSwitcher {
       }
       return false;
     }
+    if (this.switchTimestamp && (tsNow - this.switchTimestamp) <= 10000) {
+      // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
+      // Stay on V2L to give live session some time to prepare before switching back to live.
+      return false;
+    }
+    this.switchTimestamp = null;
+
     if (this.streamTypeLive) {
       if (
         tsNow >= scheduleObj.start_time &&
@@ -195,7 +205,7 @@ class StreamSwitcher {
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
         await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
-        await session.setCurrentMediaSequenceSegments(eventSegments, true);
+        await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
         this.working = false;
         debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
@@ -213,7 +223,7 @@ class StreamSwitcher {
         }
 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
-        await session.setCurrentMediaSequenceSegments(liveSegments);
+        await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
 
         this.working = false;
         this.streamTypeLive = false;
@@ -230,7 +240,7 @@ class StreamSwitcher {
 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
         await session.setCurrentMediaSequenceSegments(liveSegments);
-        await session.setCurrentMediaSequenceSegments(eventSegments, true);
+        await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, true);
 
         this.working = false;
         this.streamTypeLive = false;

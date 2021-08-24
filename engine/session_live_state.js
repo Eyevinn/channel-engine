@@ -14,6 +14,9 @@ class SharedSessionLiveState {
 
   async set(key, value) {
     if (await this.store.isLeader(this.instanceId)) {
+      if (key === "transitSegs") {
+        console.log(`[${this.sessionId}][${this.instanceId}]: setting [${key}]:[${JSON.stringify(value)}] in store`);
+      }
       return await this.store.set(this.sessionId, key, value);
     } else {
       return await this.store.get(this.sessionId, key);

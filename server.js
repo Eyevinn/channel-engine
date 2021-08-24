@@ -176,8 +176,8 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow = Date.now();
-    const streamDuration = 2 * 60 * 1000;
+    const tsNow =  Date.now(); //1629814674836;
+    const streamDuration = 1 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts
@@ -190,11 +190,11 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: tsNow + 1*60*1000,
+        start_time: startOffset,
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
-      /*{
+      {
         eventId: this.generateID(),
         assetId: this.generateID(),
         title: "Scheduled VOD test",
@@ -203,17 +203,15 @@ class StreamSwitchManager {
         end_time: (endTime + 100*1000) + streamDuration,
         uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
-      }*/
-      );
-      // console.log(JSON.stringify(this.schedule));
+      });
     }
 
     if(Date.now() > (this.schedule[0].start_time + 20*1000)) {
-      console.log("We are now setting a faulty URI");
+      //console.log("faulty URI");
       this.schedule[0].uri = "https://www.google.com/nothere";
     }
     if(Date.now() > (this.schedule[0].start_time + 30*1000)) {
-      console.log("We are now setting a working URI");
+      console.log("working URI");
       this.schedule[0].uri = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
     }
     return this.schedule;

@@ -22,7 +22,7 @@ class Session {
   /**
    *
    * config: {
-   *   startWithId,
+   *   startWithId,ß
    * }
    *
    */
@@ -251,7 +251,7 @@ class Session {
     return vodSegments;
   }
 
-  async setCurrentMediaSequenceSegments(segments, reloadBehind) {
+  async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
@@ -260,7 +260,11 @@ class Session {
       debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod();
-      await currentVod.reload(playheadState.vodMediaSeqVideo, segments, null, reloadBehind);
+      let currentMseq = playheadState.vodMediaSeqVideo + mSeqOffset;
+      
+      // TODO: If with the offset we are out-of-bounds then cap it!  
+
+      await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
