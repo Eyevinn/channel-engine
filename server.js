@@ -207,11 +207,9 @@ class StreamSwitchManager {
     }
 
     if(Date.now() > (this.schedule[0].start_time + 20*1000)) {
-      //console.log("faulty URI");
       this.schedule[0].uri = "https://www.google.com/nothere";
     }
     if(Date.now() > (this.schedule[0].start_time + 30*1000)) {
-      console.log("working URI");
       this.schedule[0].uri = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
     }
     return this.schedule;
