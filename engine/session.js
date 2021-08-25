@@ -22,7 +22,7 @@ class Session {
   /**
    *
    * config: {
-   *   startWithId,ß
+   *   startWithId,
    * }
    *
    */
