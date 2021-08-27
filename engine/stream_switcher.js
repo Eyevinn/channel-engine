@@ -115,6 +115,7 @@ class StreamSwitcher {
     if (this.switchTimestamp && (tsNow - this.switchTimestamp) <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
       // Stay on V2L to give live session some time to prepare before switching back to live.
+      debug(`[${this.sessionId}]: Waiting [${(tsNow - this.switchTimestamp)}ms] before switching back to Live due to unreachable URI`);
       return false;
     }
     this.switchTimestamp = null;
@@ -180,6 +181,7 @@ class StreamSwitcher {
     let currLiveCounts = 0;
     let currVodSegments = null;
     let eventSegments = null;
+    const RESET_DELAY = 5000;
 
     switch (state) {
       case SwitcherState.V2L_TO_LIVE:
@@ -190,6 +192,7 @@ class StreamSwitcher {
 
         // TODO: In risk that the SL-playhead might have updated some data after 
         // we reset last time.... we sohuld Reset SessionLive before sending new data. 
+        await sessionLive.resetLiveStoreAsync(0);
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         await sessionLive.setLiveUri(scheduleObj.uri);
@@ -216,7 +219,8 @@ class StreamSwitcher {
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
-        await sessionLive.resetSessionAsync();
+        sessionLive.resetSession();
+        sessionLive.resetLiveStoreAsync(RESET_DELAY); // In paralell
 
         if (scheduleObj && !scheduleObj.duration) {
           debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
@@ -234,7 +238,8 @@ class StreamSwitcher {
         this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-        await sessionLive.resetSessionAsync();
+        sessionLive.resetSession();
+        sessionLive.resetLiveStoreAsync(RESET_DELAY); // In paralell
 
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
@@ -251,10 +256,12 @@ class StreamSwitcher {
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
         currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-        await sessionLive.resetSessionAsync();
 
-        await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq + 1, currLiveCounts.discSeq);
-        await sessionLive.setCurrentMediaSequenceSegments(eventSegments);
+        sessionLive.resetSession();
+        await sessionLive.resetLiveStoreAsync(0);
+
+        await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
+        await sessionLive.setCurrentMediaSequenceSegments(eventSegments.currMseqSegs);
         await sessionLive.setLiveUri(scheduleObj.uri);
 
         this.working = false;

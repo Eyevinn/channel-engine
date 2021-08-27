@@ -65,10 +65,11 @@ class RefAssetManager {
         this.assets[channelId] = [
           { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
           { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },//uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+          { id: 3, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
           { id: 4, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
           { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 6, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 6, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+          
         ];
         //this.pos[channelId] = Math.floor(Math.random() * this.assets[channelId].length);
         this.pos[channelId] = 2;
@@ -199,18 +200,11 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Scheduled VOD test",
         type: StreamType.VOD,
-        start_time: endTime + 100*1000,
+        start_time: (endTime + 100*1000),
         end_time: (endTime + 100*1000) + streamDuration,
         uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
         duration: streamDuration,
       });
-    }
-
-    if(Date.now() > (this.schedule[0].start_time + 20*1000)) {
-      this.schedule[0].uri = "https://www.google.com/nothere";
-    }
-    if(Date.now() > (this.schedule[0].start_time + 30*1000)) {
-      this.schedule[0].uri = "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8";
     }
     return this.schedule;
   }

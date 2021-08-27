@@ -255,41 +255,55 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+
+    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (!isLeader) {
+      debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
+      await this._sessionState.clearCurrentVodCache();
+      let vodReloaded = await this._sessionState.get("vodReloaded");
+      if (!vodReloaded) {
+        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (5000ms) for LEADER to relaod currentVod in store!`);
+        await timer(5000);
+        isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+        vodReloaded = await this._sessionState.get("vodReloaded");
+        if (!isLeader || vodReloaded) {
+          debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has updated currentVod`);
+          return;
+        }
+      }
+    }
     if (isLeader) {
-      debug(`[${this._sessionId}]: I am leader, making changes to current Vod. I will also update the vod in store.`);
+      debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
       let currentVod = await this._sessionState.getCurrentVod();
       let currentMseq = playheadState.vodMediaSeqVideo + mSeqOffset;
-      
-      // TODO: If with the offset we are out-of-bounds then cap it!  
+      if (currentMseq > currentVod.getLiveMediaSequencesCount() - 1) {
+        currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
+      }
+      let targetBws = this._sessionProfile.map( profile => profile.bw );
+      // TODO: Support reloading with audioSegments as well
 
-      await currentVod.reload(currentMseq, segments, null, reloadBehind);
+      await currentVod.reload(currentMseq, segments, null, targetBws, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
+      await this._sessionState.set("vodReloaded", 1);
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("vodMediaSeqVideo", 0);
       await this._playheadState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("playheadRef", Date.now());
-    } else {
-      await this._sessionState.clearCurrentVodCache();
-
-      // get datenow in store -> 00.01;
-      // his own datenow -> 00.02;
-      debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD!`);
-      // will this work?
-      await timer(2000);
-      debug(`[${this._sessionId}]: Not a leader giving leader some time (2000ms) to write a new currentVod in store!`);
-    }
+    } 
   }
 
   async getCurrentMediaSequenceSegments() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (isLeader) {
+      await this._sessionState.set("vodReloaded", 0);
+    }
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
-      const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store

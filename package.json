@@ -19,7 +19,6 @@
   "repository": "https://github.com/Eyevinn/channel-engine",
   "license": "Apache-2.0",
   "dependencies": {
-    "@eyevinn/hls-vodtolive": "^1.16.1",
     "@eyevinn/hls-repeat": "^0.1.1",
     "@eyevinn/hls-truncate": "^0.1.0",
     "@eyevinn/hls-vodtolive": "^1.16.1",
