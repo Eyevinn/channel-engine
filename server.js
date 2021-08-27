@@ -78,10 +78,10 @@ class RefAssetManager {
       this.assets = {
         '1': [
           { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" }, //uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
-          { id: 4, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
-          { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 2, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },//uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 4, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+          { id: 5, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
           { id: 6, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
         ]
       };
@@ -177,7 +177,7 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow =  Date.now(); //1629814674836;
+    const tsNow = 1630076101350;
     const streamDuration = 1 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
@@ -191,7 +191,7 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: startOffset,
+        start_time: tsNow + 60000,//startOffset,
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },

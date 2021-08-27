@@ -243,11 +243,8 @@ class Session {
   async getTruncatedVodSegments(vodUri, duration) {
     const hlsVod = await this._truncateSlate(null, duration, vodUri);
     let vodSegments = hlsVod.getMediaSegments();
-    const bandwidths = Object.keys(vodSegments);
+    Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true }));
 
-    bandwidths.forEach(bw => {
-      vodSegments[bw].unshift({ discontinuity: true });
-    });
     return vodSegments;
   }
 
@@ -257,13 +254,24 @@ class Session {
     }
 
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    // TODO: Remove this
+    // let test = true;
+    // if (isLeader && test) {
+    //   test = false;
+    //   let attempts = 10;
+    //   while (attempts > 0) {
+    //     debug(`\n [${this._sessionId}]: LEADER: I'm stalling! KILL ME NOW! \n`)
+    //     await timer(1000)
+    //     attempts--;
+    //   }
+    // }
     if (!isLeader) {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
       await this._sessionState.clearCurrentVodCache();
       let vodReloaded = await this._sessionState.get("vodReloaded");
       if (!vodReloaded) {
-        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (5000ms) for LEADER to relaod currentVod in store!`);
-        await timer(5000);
+        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (8500ms) for LEADER to relaod currentVod in store!`);
+        await timer(8500);
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         vodReloaded = await this._sessionState.get("vodReloaded");
         if (!isLeader || vodReloaded) {
@@ -280,10 +288,8 @@ class Session {
       if (currentMseq > currentVod.getLiveMediaSequencesCount() - 1) {
         currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
       }
-      let targetBws = this._sessionProfile.map( profile => profile.bw );
       // TODO: Support reloading with audioSegments as well
-
-      await currentVod.reload(currentMseq, segments, null, targetBws, reloadBehind);
+      await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodReloaded", 1);
       await this._sessionState.set("vodMediaSeqVideo", 0);
