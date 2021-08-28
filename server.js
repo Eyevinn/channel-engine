@@ -177,7 +177,7 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow = 1630076101350;
+    const tsNow = Date.now();
     const streamDuration = 1 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;

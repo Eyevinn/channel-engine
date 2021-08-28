@@ -100,7 +100,7 @@ class SessionLive {
         this.timerCompensation = true;
         // Nothing to do if we have no Live Source to probe
         if (!this.masterManifestUri) {
-          debug(`[${this.sessionId}]: SessionLive-Playhead running, but has no content to work with. Will try again after 3000ms`);
+          //debug(`[${this.sessionId}]: SessionLive-Playhead running, but has no content to work with. Will try again after 3000ms`);
           await timer(3000);
           continue;
         }
