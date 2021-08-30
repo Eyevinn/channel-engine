@@ -239,8 +239,7 @@ fdescribe("The Stream Switcher", () => {
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
-
-    await sessionLive.startPlayheadAsync();
+    sessionLive.startPlayheadAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
@@ -250,8 +249,6 @@ fdescribe("The Stream Switcher", () => {
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(TestStreamSwitcher.getEventId()).toBe("live-0");
 
-
-    await sessionLive.getCurrentMediaManifestAsync(180000);
     jasmine.clock().tick((25 * 1000) + (10 * 1000));
     spyOn(switchMgr, "getSchedule").and.returnValue([{
       eventId: "live-0",

@@ -39,7 +39,6 @@ class SessionLive {
     this.allowedToSet = false;
     this.pushAmount = 0;
     this.waitForPlayhead = true;
-    this.waitForGenerateManifest = true;
 
     if (config) {
       if (config.sessionId) {
@@ -81,8 +80,8 @@ class SessionLive {
      * running code. If a reset occurs just before playhead wants to read from this.something,
      * then it will generate a TypeError, depending on fucntion.
      */
-    while (this.waitForPlayhead || this.waitForGenerateManifest) {
-      debug(`[${this.sessionId}]: Session-Live RESET requested. Waiting for Playhead to finish a parse job.`);
+    while (this.waitForPlayhead) {
+      debug(`[${this.sessionId}]: SessionLive RESET requested. Waiting for Playhead to finish a parse job.`);
       await timer(1000);
     }
 
@@ -102,7 +101,6 @@ class SessionLive {
     this.pushAmount = 0;
     this.allowedToSet = false;
     this.waitForPlayhead = true;
-    this.waitForGenerateManifest = true;
 
     debug(`[${this.instanceId}][${this.sessionId}]: Resetting all proprerty values in sessionLive`);
   }
@@ -115,7 +113,6 @@ class SessionLive {
         this.timerCompensation = true;
         // Nothing to do if we have no Live Source to probe
         if (!this.masterManifestUri) {
-          debug(`[${this.sessionId}]: No master manifest URI available [${this.masterManifestUri}]`);
           await timer(3000);
           continue;
         }
@@ -293,7 +290,7 @@ class SessionLive {
       // In case we switch back before we've depleted all transitional segments
       currentMediaSequenceSegments[liveTargetBandwidth] = this.vodSegments[vodTargetBandwidth].concat(this.liveSegQueue[liveTargetBandwidth]);
       currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true });
-      debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=${bw}`);
+      debug(`[${this.sessionId}]: Getting current media segments for bw=${bw}`);
     }
 
     this.discSeqCount += increment;
@@ -332,16 +329,18 @@ class SessionLive {
     let m3u8 = null;
     while (!m3u8 && attempts > 0) {
       attempts--;
-      this.waitForGenerateManifest = true;
-      m3u8 = await this._GenerateLiveManifest(bw);
-      this.waitForGenerateManifest = false;
-      if (!m3u8) {
-        debug(`[${this.sessionId}]: No manifest available yet, will try again after 1000ms`);
-        await timer(1000);
+      try {
+        m3u8 = await this._GenerateLiveManifest(bw);
+        if (!m3u8) {
+          debug(`[${this.sessionId}]: No manifest available yet, will try again after 1000ms`);
+          await timer(1000);
+        }
+      } catch {
+        throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest. Live Session might have ended already.`);
       }
     }
     if (!m3u8) {
-      throw new Error(`[${this.instanceId}][${this.sessionId}] Failed to generate manifest after 10000ms`);
+      throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest after 10000ms`);
     }
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
