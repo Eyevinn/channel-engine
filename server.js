@@ -177,8 +177,8 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow = Date.now();//1630076101350;
-    const streamDuration = 5 * 60 * 1000;
+    const tsNow = Date.now();
+    const streamDuration = 1 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts
