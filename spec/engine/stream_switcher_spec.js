@@ -197,7 +197,7 @@ const mockLiveSegments = {
   {discontinuity: true }]
 };
 
-fdescribe("The Stream Switcher", () => {
+describe("The Stream Switcher", () => {
   let sessionStore = undefined;
   let sessionLiveStore = undefined;
 
@@ -230,12 +230,14 @@ fdescribe("The Stream Switcher", () => {
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  fit("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
+  it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
     const switchMgr = new TestSwitchManager(0);
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
-    spyOn(sessionLive, "_loadAllMediaManifests").and.callFake( () => mockLiveSegments );
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
@@ -267,9 +269,13 @@ fdescribe("The Stream Switcher", () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
+    sessionLive.startPlayheadAsync();
 
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
@@ -285,10 +291,14 @@ fdescribe("The Stream Switcher", () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
-    spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
+    sessionLive.startPlayheadAsync();
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -296,7 +306,6 @@ fdescribe("The Stream Switcher", () => {
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(TestStreamSwitcher.getEventId()).toBe("live-0");
     jasmine.clock().tick((60 * 1000 + 25 * 1000));
-    await sessionLive.getCurrentMediaManifestAsync(180000);
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
@@ -348,7 +357,7 @@ fdescribe("The Stream Switcher", () => {
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  it("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
+  xit("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
      "\nThen directly to event-vod (session) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(2);
     const assetMgr = new TestAssetManager();
@@ -373,7 +382,7 @@ fdescribe("The Stream Switcher", () => {
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });
 
-  it("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
+  xit("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
      "\nThen directly to 2nd event-livestream (sessionLive) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(3);
     const assetMgr = new TestAssetManager();
@@ -405,10 +414,15 @@ fdescribe("The Stream Switcher", () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
-    spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
+    sessionLive.startPlayheadAsync();
+
     const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -419,7 +433,6 @@ fdescribe("The Stream Switcher", () => {
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(TestStreamSwitcher.getEventId()).toBe("live-4");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)) + (60*1000));
-    await sessionLive.getCurrentMediaManifestAsync(180000);
     expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(TestStreamSwitcher.getEventId()).toBe(null);
   });

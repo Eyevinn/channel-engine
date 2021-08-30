@@ -254,22 +254,12 @@ class Session {
     }
 
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-    // TODO: Remove this
-    // let test = true;
-    // if (isLeader && test) {
-    //   test = false;
-    //   let attempts = 10;
-    //   while (attempts > 0) {
-    //     debug(`\n [${this._sessionId}]: LEADER: I'm stalling! KILL ME NOW! \n`)
-    //     await timer(1000)
-    //     attempts--;
-    //   }
-    // }
     if (!isLeader) {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
       await this._sessionState.clearCurrentVodCache();
       let vodReloaded = await this._sessionState.get("vodReloaded");
       if (!vodReloaded) {
+        // 8500ms since streamSwitcher has set interval=3000ms and setVolatile has TTL=5000ms
         debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (8500ms) for LEADER to relaod currentVod in store!`);
         await timer(8500);
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
@@ -289,7 +279,6 @@ class Session {
         currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
       }
       // TODO: Support reloading with audioSegments as well
-      
       await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodReloaded", 1);

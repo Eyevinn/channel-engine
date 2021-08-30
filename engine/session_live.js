@@ -294,7 +294,7 @@ class SessionLive {
     }
 
     this.discSeqCount += increment;
-    return { 
+    return {
       currMseqSegs: currentMediaSequenceSegments,
       segCount: segmentCount,
     };

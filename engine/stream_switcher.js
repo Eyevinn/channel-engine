@@ -230,6 +230,7 @@ class StreamSwitcher {
           break;
         }
 
+        console.log(JSON.stringify(liveSegments.currMseqSegs));
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
 

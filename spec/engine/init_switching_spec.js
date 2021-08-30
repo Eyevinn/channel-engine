@@ -278,7 +278,7 @@ class TestAssetManager {
   }
 }
 
-describe("The initialize switching", () => {
+fdescribe("The initialize switching", () => {
   let sessionStore = undefined;
   let sessionLiveStore = undefined;
   beforeEach(() => {
@@ -347,9 +347,8 @@ describe("The initialize switching", () => {
     await sessionLive.setLiveUri(mockLiveUri);
     let counts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     let tSegments = await sessionLive.getTransitionalSegments();
-    await sessionLive.getCurrentMediaManifestAsync(180000);
     expect(counts).toEqual({
-      mediaSeq: 1,
+      mediaSeq: 2,
       discSeq: 0,
     });
     expect(Object.keys(tSegments)).toEqual(Object.keys(currVodSegments));
@@ -358,7 +357,7 @@ describe("The initialize switching", () => {
     nock.cleanAll();
   });
 
-  it("should give correct segments and sequence counts from sessionLive to session (case: LIVE->V2L)", async () => {
+  fit("should give correct segments and sequence counts from sessionLive to session (case: LIVE->V2L)", async () => {
     nock(mockBaseUri)
       .persist()
       .get("/live/master.m3u8")
@@ -379,20 +378,25 @@ describe("The initialize switching", () => {
     }
     await sessionLive.initAsync();
 
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({
+      currMseqSegs: mockLiveSegments,
+      segCount: 8,
+    });
+
     await sessionLive.setCurrentMediaAndDiscSequenceCount(13, 1);
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
     await sessionLive.setLiveUri(mockLiveUri);
-    await sessionLive.getCurrentMediaManifestAsync(180000);
 
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
-    await sessionLive.resetSessionAsync();
 
     await session.setCurrentMediaAndDiscSequenceCount(
       currCounts.mediaSeq + 1,
       currCounts.discSeq
     );
-    await session.setCurrentMediaSequenceSegments(currSegments);
+    await session.setCurrentMediaSequenceSegments(currSegments.currMseqSegs, currSegments.segCount);
     currCounts.mediaSeq = currCounts.mediaSeq + 2;
     await session.incrementAsync();
 
@@ -409,7 +413,7 @@ describe("The initialize switching", () => {
     });
     expect(sessionCurrentSegs["1313000"][size - 1]).toEqual({
       duration: 7.5,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00005.ts",
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00014.ts",
       timelinePosition: null,
       cue: null,
     });
