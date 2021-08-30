@@ -297,7 +297,7 @@ describe("The initialize switching", () => {
     jasmine.clock().uninstall();
   });
 
-  fit("should give correct segments and sequence counts from session to sessionLive (case: V2L->LIVE)", async () => {
+  it("should give correct segments and sequence counts from session to sessionLive (case: V2L->LIVE)", async () => {
     nock(mockBaseUri)
       .persist()
       .get("/live/master.m3u8")

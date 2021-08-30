@@ -38,6 +38,8 @@ class SessionLive {
     this.firstTime = true;
     this.allowedToSet = false;
     this.pushAmount = 0;
+    this.waitForPlayhead = true;
+    this.waitForGenerateManifest = true;
 
     if (config) {
       if (config.sessionId) {
@@ -73,13 +75,17 @@ class SessionLive {
     debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader and have cleared the local store after ${resetDelay}ms`);
   }
 
-  resetSession() {
+  async resetSession() {
     /*
-    *  ISSUE: fucntion can be called at anytime no matter where the playhead is 
-      running code. If a reset occurs just before playhead wants to read from this.something,
-      then it will generate a TypeError, depending on fucntion.
-     * 
+     * ISSUE: fucntion can be called at anytime no matter where the playhead is 
+     * running code. If a reset occurs just before playhead wants to read from this.something,
+     * then it will generate a TypeError, depending on fucntion.
      */
+    while (this.waitForPlayhead || this.waitForGenerateManifest) {
+      debug(`[${this.sessionId}]: Session-Live RESET requested. Waiting for Playhead to finish a parse job.`);
+      await timer(1000);
+    }
+
     this.mediaSeqCount = 0;
     this.discSeqCount = 0;
     this.targetDuration = 0;
@@ -95,7 +101,10 @@ class SessionLive {
     this.firstTime = true;
     this.pushAmount = 0;
     this.allowedToSet = false;
-    debug(`[${this.instanceId}][${this.sessionId}]: resetting sessionLive`);
+    this.waitForPlayhead = true;
+    this.waitForGenerateManifest = true;
+
+    debug(`[${this.instanceId}][${this.sessionId}]: Resetting all proprerty values in sessionLive`);
   }
 
   async startPlayheadAsync() {
@@ -106,12 +115,14 @@ class SessionLive {
         this.timerCompensation = true;
         // Nothing to do if we have no Live Source to probe
         if (!this.masterManifestUri) {
+          debug(`[${this.sessionId}]: No master manifest URI available [${this.masterManifestUri}]`);
           await timer(3000);
           continue;
         }
         if (this.playheadState === PlayheadState.STOPPED) {
           debug(`[${this.sessionId}]: Playhead has Stopped, clearing local session and store.`);
-          this.resetSession();
+          this.waitForPlayhead = false;
+          await this.resetSession();
           this.resetLiveStoreAsync(RESET_DELAY);
           return;
         }
@@ -127,9 +138,12 @@ class SessionLive {
 
         // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
         // And also compensate for processing time
+
+        this.waitForPlayhead = true;
         const tsIncrementBegin = Date.now();
-        const manifest = await this._loadAllMediaManifests(); // could set 'timerCompensation'=false
+        await this._loadAllMediaManifests();
         const tsIncrementEnd = Date.now();
+        this.waitForPlayhead = false;
 
         // Set the timer
         let timerValueMs = 0;
@@ -254,7 +268,6 @@ class SessionLive {
     if (!isLeader) {
       const leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       if (leadersMediaSeqRaw > this.lastRequestedMediaSeqRaw) {
-        // Follower updates its manifest ingedients (segment holders & counts)
         this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
         this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
         this._updateLiveSegQueue();
@@ -320,14 +333,16 @@ class SessionLive {
     let m3u8 = null;
     while (!m3u8 && attempts > 0) {
       attempts--;
+      this.waitForGenerateManifest = true;
       m3u8 = await this._GenerateLiveManifest(bw);
+      this.waitForGenerateManifest = false;
       if (!m3u8) {
         debug(`[${this.sessionId}]: No manifest available yet, will try again after 1000ms`);
         await timer(1000);
       }
     }
     if (!m3u8) {
-      throw new Error("Failed to generate manifest after 10000ms");
+      throw new Error(`[${this.instanceId}][${this.sessionId}] Failed to generate manifest after 10000ms`);
     }
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
@@ -695,7 +710,7 @@ class SessionLive {
     }
 
     this.firstTime = false;
-    debug(`[${this.sessionId}]: Got all needed segments from all live-source bandwidths. We are now able to build a Live Manifest`);
+    debug(`[${this.sessionId}]: Got all needed segments from live-source (from all bandwidths).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`);
 
     return;
   }
