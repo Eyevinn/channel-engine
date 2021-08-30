@@ -223,6 +223,13 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
         }
 
+        if (this._isEmpty(liveSegments.currMseqSegs)) {
+          this.working = false;
+          this.streamTypeLive = false;
+          debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
+          break;
+        }
+
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
 
@@ -231,6 +238,7 @@ class StreamSwitcher {
         debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
         break;
       case SwitcherState.LIVE_TO_VOD:
+        // TODO: Not yet supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -240,13 +248,15 @@ class StreamSwitcher {
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
-        await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, true);
+        await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+        await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
         this.working = false;
         this.streamTypeLive = false;
         debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
         break;
       case SwitcherState.LIVE_TO_LIVE:
+        // TODO: Not yet supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
         currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -268,6 +278,18 @@ class StreamSwitcher {
         this.eventId = null;
         break;
     }
+  }
+
+  _isEmpty(obj) {
+    if (!obj) {
+      return true;
+    }
+    for (var key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   async _validURI(uri) {

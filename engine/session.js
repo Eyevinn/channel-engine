@@ -289,6 +289,7 @@ class Session {
         currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
       }
       // TODO: Support reloading with audioSegments as well
+      
       await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, {ttl: (currentVod.getDuration() * 1000)});
       await this._sessionState.set("vodReloaded", 1);

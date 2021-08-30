@@ -178,7 +178,7 @@ class SessionLive {
   }
 
   async setLiveUri(liveUri) {
-    // Load & Parse all Media Manifest uris from Master
+    // Load & Parse all Media Manifest URIs from Master
     await this._loadMasterManifest(liveUri);
     // This will let playhead call Live Source for manifests
     this.masterManifestUri = liveUri;
@@ -186,7 +186,6 @@ class SessionLive {
   }
 
   async setCurrentMediaSequenceSegments(segments) {
-
     // Make it possible to add & share new segments
     this.allowedToSet = true;
 
