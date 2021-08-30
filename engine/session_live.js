@@ -70,7 +70,7 @@ class SessionLive {
       mediaSeqCount: null,
       discSeqCount: null,
     });
-    debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader and have cleared the local store`);
+    debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader and have cleared the local store after ${resetDelay}ms`);
   }
 
   resetSession() {
@@ -100,7 +100,6 @@ class SessionLive {
         this.timerCompensation = true;
         // Nothing to do if we have no Live Source to probe
         if (!this.masterManifestUri) {
-          //debug(`[${this.sessionId}]: SessionLive-Playhead running, but has no content to work with. Will try again after 3000ms`);
           await timer(3000);
           continue;
         }
@@ -120,8 +119,8 @@ class SessionLive {
           liveSegmentDurationMs = this.liveSegQueue[liveBws[0]][0].duration * 1000;
         }
 
-        // Fetch Live-Source Segments, and get ready for on-the-fly manifest generaion.
-        // And also compensate for processing time.
+        // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
+        // And also compensate for processing time
         const tsIncrementBegin = Date.now();
         const manifest = await this._loadAllMediaManifests(); // could set 'timerCompensation'=false
         const tsIncrementEnd = Date.now();
@@ -133,8 +132,8 @@ class SessionLive {
             timerValueMs = liveSegmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
           }
         } else {
-          // DO NOT compensate if manifest fetching was out-of-sync.
-          // It means that Live Source and Channel-Engine were awkwardly time-synced.
+          // DO NOT compensate if manifest fetching was out-of-sync
+          // It means that Live Source and Channel-Engine were awkwardly time-synced
           timerValueMs = liveSegmentDurationMs;
         }
         debug(`[${this.sessionId}]: SessionLive-Playhead going to ping again after ${timerValueMs}ms`);
@@ -313,7 +312,7 @@ class SessionLive {
     debug(`[${this.sessionId}]: ...Loading the selected Live Media Manifest`);
     let attempts = 10;
     let m3u8 = null;
-    while (!m3u8 || attempts > 0) {
+    while (!m3u8 && attempts > 0) {
       attempts--;
       m3u8 = await this._GenerateLiveManifest(bw);
       if (!m3u8) {
@@ -672,9 +671,9 @@ class SessionLive {
         await this.sessionLiveState.set("lastRequestedMediaSeqRaw", this.lastRequestedMediaSeqRaw);
       }
 
-      // [LASTLY]: LEADER does this for respawn-FOLLOWERS' sake.
+      // [LASTLY]: LEADER does this for respawned-FOLLOWERS' sake.
       if (this.firstTime) {
-        // Buy some time for Followers (NOT Respawners) to fetch their own L.S m3u8.
+        // Buy some time for Followers (NOT Respawned) to fetch their own L.S m3u8.
         await timer(1000);
         const firstCounts = {
           liveSourceMseqCount: this.lastRequestedMediaSeqRaw,
