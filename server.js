@@ -177,8 +177,8 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow = 1630076101350;
-    const streamDuration = 1 * 60 * 1000;
+    const tsNow = Date.now();//1630076101350;
+    const streamDuration = 5 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts
@@ -191,7 +191,7 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: tsNow + 60000,//startOffset,
+        start_time: startOffset,
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },

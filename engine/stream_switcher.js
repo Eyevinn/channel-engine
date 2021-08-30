@@ -244,7 +244,6 @@ class StreamSwitcher {
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
-        await session.setCurrentMediaSequenceSegments(liveSegments);
         await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, true);
 
         this.working = false;

@@ -74,6 +74,12 @@ class SessionLive {
   }
 
   resetSession() {
+    /*
+    *  ISSUE: fucntion can be called at anytime no matter where the playhead is 
+      running code. If a reset occurs just before playhead wants to read from this.something,
+      then it will generate a TypeError, depending on fucntion.
+     * 
+     */
     this.mediaSeqCount = 0;
     this.discSeqCount = 0;
     this.targetDuration = 0;
@@ -313,7 +319,7 @@ class SessionLive {
     debug(`[${this.sessionId}]: ...Loading the selected Live Media Manifest`);
     let attempts = 10;
     let m3u8 = null;
-    while (!m3u8 || attempts > 0) {
+    while (!m3u8 && attempts > 0) {
       attempts--;
       m3u8 = await this._GenerateLiveManifest(bw);
       if (!m3u8) {
@@ -507,7 +513,7 @@ class SessionLive {
           return;
         } else {
           debug(`[${this.instanceId}]: The leader is still alive`);
-          return
+          return;
         }
       }
 
