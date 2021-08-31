@@ -177,11 +177,12 @@ class SessionLive {
   async setLiveUri(liveUri) {
     // Load & Parse all Media Manifest URIs from Master
     try {
+      debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`)
       await this._loadMasterManifest(liveUri);
       this.masterManifestUri = liveUri;
     } catch (err) {
       this.masterManifestUri = null;
-      debug(`[${this.instanceId}][${this.sessionId}]: Failed to fetch master manifest! ${err}`);
+      debug(`[${this.instanceId}][${this.sessionId}]: Failed to fetch Live Master Manifest! ${err}`);
     }
     // This will let playhead call Live Source for manifests
     this.firstTime = true;
@@ -763,6 +764,7 @@ class SessionLive {
     const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth];
     const parser = m3u8.createStream();
     try {
+      debug(`[${this.sessionId}]: Gonna REQUEST on uri=${mediaManifestUri}`)// TODO: DELETE THIS
       request({ uri: mediaManifestUri, gzip: true, timeout: 20000 })
       .on("error", exc => {
         debug(`ON ERROR: ${JSON.stringify(exc)}`);
@@ -1039,7 +1041,9 @@ class SessionLive {
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       if (!seg.discontinuity) {
-        max = seg.duration > max ? seg.duration : max;
+        if (seg.duration > max) {
+          max = seg.duration;
+        }
       }
     }
     return max;

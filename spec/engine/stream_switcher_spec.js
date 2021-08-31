@@ -237,7 +237,7 @@ describe("The Stream Switcher", () => {
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
@@ -271,7 +271,7 @@ describe("The Stream Switcher", () => {
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
@@ -298,7 +298,7 @@ describe("The Stream Switcher", () => {
     sessionLive.startPlayheadAsync();
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
     let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
@@ -420,7 +420,7 @@ describe("The Stream Switcher", () => {
     await sessionLive.initAsync();
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue(mockLiveSegments);
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
     sessionLive.startPlayheadAsync();
 
     const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});

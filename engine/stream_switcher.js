@@ -120,10 +120,7 @@ class StreamSwitcher {
     this.switchTimestamp = null;
 
     if (this.streamTypeLive) {
-      if (
-        tsNow >= scheduleObj.start_time &&
-        this.eventId !== scheduleObj.eventId
-      ) {
+      if (tsNow >= scheduleObj.start_time && this.eventId !== scheduleObj.eventId) {
         if (scheduleObj.type === StreamType.LIVE) {
           await this._initSwitching(
             SwitcherState.LIVE_TO_LIVE,
@@ -185,6 +182,7 @@ class StreamSwitcher {
 
     switch (state) {
       case SwitcherState.V2L_TO_LIVE:
+        debug(`[${this.sessionId}]: [ Switching from V2L->LIVE ]`);
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         currVodSegments = await session.getCurrentMediaSequenceSegments();
@@ -198,9 +196,10 @@ class StreamSwitcher {
 
         this.working = false;
         this.streamTypeLive = true;
-        debug(`[${this.sessionId}]: [ Switching from V2L->LIVE ]`);
+        debug(`[${this.sessionId}]: [ Switched from V2L->LIVE ]`);
         break;
       case SwitcherState.V2L_TO_VOD:
+        debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
@@ -209,9 +208,11 @@ class StreamSwitcher {
         await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
         this.working = false;
-        debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
+        this.streamTypeLive = false;
+        debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
         break;
       case SwitcherState.LIVE_TO_V2L:
+        debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
         this.eventId = null;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -226,19 +227,19 @@ class StreamSwitcher {
         if (this._isEmpty(liveSegments.currMseqSegs)) {
           this.working = false;
           this.streamTypeLive = false;
-          debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
+          debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
           break;
         }
 
-        console.log(JSON.stringify(liveSegments.currMseqSegs));
         await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
 
         this.working = false;
         this.streamTypeLive = false;
-        debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
+        debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
         break;
       case SwitcherState.LIVE_TO_VOD:
+        debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
         // TODO: Not yet supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
@@ -254,9 +255,10 @@ class StreamSwitcher {
 
         this.working = false;
         this.streamTypeLive = false;
-        debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
+        debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
         break;
       case SwitcherState.LIVE_TO_LIVE:
+        debug(`[${this.sessionId}]: Switching from LIVE->LIVE`);
         // TODO: Not yet supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
@@ -270,7 +272,7 @@ class StreamSwitcher {
         await sessionLive.setLiveUri(scheduleObj.uri);
 
         this.working = false;
-        debug(`[${this.sessionId}]: Switching from LIVE->LIVE`);
+        debug(`[${this.sessionId}]: Switched from LIVE->LIVE`);
         break;
       default:
         debug(`[${this.sessionId}]: SwitcherState [${state}] not implemented`);
