@@ -125,19 +125,19 @@ segment_1_7.ts
 #EXT-X-TARGETDURATION:6
 #EXT-X-MEDIA-SEQUENCE:12
 #EXTINF:6.000000,
-segment_0_2.ts
+segment_1_2.ts
 #EXTINF:6.000000,
-segment_0_3.ts
+segment_1_3.ts
 #EXTINF:6.000000,
-segment_0_4.ts
+segment_1_4.ts
 #EXTINF:6.000000,
-segment_0_5.ts
+segment_1_5.ts
 #EXTINF:6.000000,
-segment_0_6.ts
+segment_1_6.ts
 #EXTINF:6.000000,
-segment_0_7.ts
+segment_1_7.ts
 #EXTINF:6.000000,
-segment_0_8.ts
+segment_1_8.ts
 `,
 ];
 const mockMediaM3U8_2 = [

@@ -265,7 +265,7 @@ class Session {
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         vodReloaded = await this._sessionState.get("vodReloaded");
         if (!isLeader || vodReloaded) {
-          debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has updated currentVod`);
+          debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod`);
           return;
         }
       }

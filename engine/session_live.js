@@ -71,7 +71,7 @@ class SessionLive {
       mediaSeqCount: null,
       discSeqCount: null,
     });
-    debug(`[${this.instanceId}][${this.sessionId}]: I'm the leader and have cleared the local store after ${resetDelay}ms`);
+    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Cleared the local store after ${resetDelay}ms`);
   }
 
   async resetSession() {
@@ -373,9 +373,12 @@ class SessionLive {
     return new Promise((resolve, reject) => {
       const parser = m3u8.createStream();
       try {
-        request({ uri: masterManifestURI, gzip: true, timeout: 20000 })
+        request({ uri: masterManifestURI, gzip: true, timeout: 30000 })
         .on("error", (exc) => {
           debug(`ON ERROR: ${JSON.stringify(exc)}`);
+          if (exc.code === "ETIMEDOUT") {
+            debug(`[${this.sessionId}]: Failure connecting to ${masterManifestURI}`);
+          }
           reject(exc);
         })
         .pipe(parser);
@@ -481,7 +484,7 @@ class SessionLive {
    * @returns Nothing, but gives data to certain class-variables
    */
   async _loadAllMediaManifests() {
-    debug(`[${this.sessionId}]: ...Attempting to load all media manifest URIs in=${Object.keys(this.mediaManifestURIs)}`);
+    debug(`[${this.sessionId}]: Attempting to load all media manifest URIs in=${Object.keys(this.mediaManifestURIs)}`);
 
     // -------------------------------------
     //  If I am a Follower-node then my job
@@ -569,8 +572,16 @@ class SessionLive {
 
       // Fetech From Live Source
       debug(`[${this.sessionId}]: Executing Promises I: Fetech From Live Source`);
-      const manifestList = await allSettled(livePromises);
-      livePromises = [];
+      let manifestList;
+      try {
+        manifestList = await allSettled(livePromises);
+        livePromises = [];
+      } catch (err) {
+        debug(`[${this.sessionId}]: Promises I: FAILURE!\n${err}\nTrying again after (1000)ms`);
+        livePromises = [];
+        await timer(1000);
+        continue;
+      }
 
       // Extract the media sequence count from promise results
       const allMediaSeqCounts = manifestList.map((item) => {
@@ -611,7 +622,7 @@ class SessionLive {
             debug(`[${this.instanceId}]: The leader is still alive`);
           }
         }
-        // if (leadersFirstSeqCounts):
+
         // Prepare to load segments...
         debug(`[${this.instanceId}]: newest mseq from LIVE=${allMediaSeqCounts[0]} first mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
         if (allMediaSeqCounts[0] === leadersFirstSeqCounts.liveSourceMseqCount) {
@@ -648,6 +659,11 @@ class SessionLive {
       break;
     }
 
+    if (FETCH_ATTEMPTS === 0) {
+      debug(`[${this.sessionId}]: Fetching from Live-Source did not work! Returning to Playhead Loop...`)
+      return;
+    }
+
     isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     // NEW FOLLOWER - Edge Case: One Instance is ahead of another. Read latest live segs from store
     if (!isLeader) {
@@ -655,7 +671,7 @@ class SessionLive {
       const counts = await this.sessionLiveState.get("firstCounts");
       const leadersFirstMseqRaw = counts.liveSourceMseqCount;
       if (leadersCurrentMseqRaw && leadersCurrentMseqRaw !== this.lastRequestedMediaSeqRaw) {
-        // if leader never had any segs from prev mseq...
+        // if leader never had any segs from prev mseq
         if (leadersFirstMseqRaw && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
           // Follower updates it's manifest ingedients (segment holders & counts)
           this.lastRequestedMediaSeqRaw = leadersCurrentMseqRaw;
@@ -679,7 +695,7 @@ class SessionLive {
 
       // Segment Pushing
       debug(`[${this.sessionId}]: Executing Promises II: Segment Pushing`);
-      const results = await Promise.all(pushPromises);
+      await Promise.all(pushPromises);
       // UPDATE COUNTS, & Shift Segments in vodSegments
       await this._incrementAndShift();
     }
@@ -699,7 +715,7 @@ class SessionLive {
       // [LASTLY]: LEADER does this for respawned-FOLLOWERS' sake.
       if (this.firstTime) {
         // Buy some time for Followers (NOT Respawned) to fetch their own L.S m3u8.
-        await timer(1000);
+        await timer(1000); // maybe remove
         const firstCounts = {
           liveSourceMseqCount: this.lastRequestedMediaSeqRaw,
           mediaSeqCount: this.mediaSeqCount,
@@ -765,12 +781,15 @@ class SessionLive {
     const parser = m3u8.createStream();
     try {
       debug(`[${this.sessionId}]: Gonna REQUEST on uri=${mediaManifestUri}`)// TODO: DELETE THIS
-      request({ uri: mediaManifestUri, gzip: true, timeout: 20000 })
+      request({ uri: mediaManifestUri, gzip: true, timeout: 30000 })
       .on("error", exc => {
         debug(`ON ERROR: ${JSON.stringify(exc)}`);
         return new Promise((resolve, reject) => {
+          if (exc.code === "ETIMEDOUT") {
+            debug(`[${this.sessionId}]: Failure connecting to: [${mediaManifestUri}]`);
+          }
           reject({
-            message: exc,
+            message: JSON.stringify(exc),
             bandwidth: liveTargetBandwidth,
             m3u8: null,
             mediaSeq: -1,
@@ -973,7 +992,6 @@ class SessionLive {
     m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
     m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
-
     if (Object.keys(this.vodSegments).length !== 0) {
       // # Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegments[vodTargetBandwidth].length}) VOD segments to manifest`);
