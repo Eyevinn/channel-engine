@@ -176,9 +176,14 @@ class SessionLive {
 
   async setLiveUri(liveUri) {
     // Load & Parse all Media Manifest URIs from Master
-    await this._loadMasterManifest(liveUri);
+    try {
+      await this._loadMasterManifest(liveUri);
+      this.masterManifestUri = liveUri;
+    } catch (err) {
+      this.masterManifestUri = null;
+      debug(`[${this.instanceId}][${this.sessionId}]: Failed to fetch master manifest! ${err}`);
+    }
     // This will let playhead call Live Source for manifests
-    this.masterManifestUri = liveUri;
     this.firstTime = true;
   }
 
@@ -367,14 +372,14 @@ class SessionLive {
     return new Promise((resolve, reject) => {
       const parser = m3u8.createStream();
       try {
-        request({ uri: masterManifestURI, gzip: true })
+        request({ uri: masterManifestURI, gzip: true, timeout: 20000 })
         .on("error", (exc) => {
-          debug(`ERROR: ${Object.keys(exc)}`);
+          debug(`ON ERROR: ${JSON.stringify(exc)}`);
           reject(exc);
         })
         .pipe(parser);
       } catch (exc) {
-        debug(`ERROR: ${Object.keys(exc)}`);
+        debug(`ERROR: ${JSON.stringify(exc)}`);
         reject(exc);
       }
       parser.on("m3u", (m3u) => {
@@ -398,7 +403,7 @@ class SessionLive {
         resolve();
       });
       parser.on("error", (exc) => {
-        debug(`ERROR: ${Object.keys(exc)}`);
+        debug(`ERROR: ${JSON.stringify(exc)}`);
         reject(exc);
       });
     });
@@ -521,10 +526,10 @@ class SessionLive {
       if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
         isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
         if (isLeader) {
-          debug(`[${this.instanceId}]: I'm the new leader`);
+          debug(`[${this.instanceId}][${this.sessionId}]: I'm the new leader`);
           return;
         } else {
-          debug(`[${this.instanceId}]: The leader is still alive`);
+          debug(`[${this.instanceId}][${this.sessionId}]: The leader is still alive`);
           return;
         }
       }
@@ -532,7 +537,7 @@ class SessionLive {
       // Follower updates its manifest ingedients (segment holders & counts)
       this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
       this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
-      debug(`[${this.sessionId}]: +-+ Look these are my segments from store: [${JSON.stringify(this.liveSegsForFollowers)}]`);
+      debug(`[${this.sessionId}]: These are the segments from store: [${JSON.stringify(this.liveSegsForFollowers)}]`);
       this._updateLiveSegQueue();
       return;
     }
@@ -577,9 +582,9 @@ class SessionLive {
       // Handle if mediaSeqCounts are NOT synced up!
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
         debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
-        //  Decement fetch counter.
-        --FETCH_ATTEMPTS;
-        //  Wait a little before trying again.
+        // Decement fetch counter
+        FETCH_ATTEMPTS--;
+        // Wait a little before trying again
         debug(`[${this.sessionId}]: [ALERT] | Live Source Data NOT in sync! Will try again after 1500ms`);
         await timer(1500);
         this.timerCompensation = false;
@@ -638,12 +643,12 @@ class SessionLive {
         debug(`[${this.sessionId}]: ...pushAmount=${allMediaSeqCounts[0]} - ${this.lastRequestedMediaSeqRaw}`);
         break;
       }
-      // Live Source Data is in sync, and LEADER & new FOLLOWER are in sync.
+      // Live Source Data is in sync, and LEADER & new FOLLOWER are in sync
       break;
     }
 
     isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    // NEW FOLLOWER - Edge Case: One Instance is ahead of another. Read latest live segs from store.
+    // NEW FOLLOWER - Edge Case: One Instance is ahead of another. Read latest live segs from store
     if (!isLeader) {
       const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       const counts = await this.sessionLiveState.get("firstCounts");
@@ -758,9 +763,9 @@ class SessionLive {
     const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth];
     const parser = m3u8.createStream();
     try {
-      request({ uri: mediaManifestUri, gzip: true })
+      request({ uri: mediaManifestUri, gzip: true, timeout: 20000 })
       .on("error", exc => {
-        debug(`ERROR: ${JSON.stringify(exc)}`);
+        debug(`ON ERROR: ${JSON.stringify(exc)}`);
         return new Promise((resolve, reject) => {
           reject({
             message: exc,
@@ -939,6 +944,10 @@ class SessionLive {
       }
     }
 
+    if (!this._isEmpty(this.liveSegQueue) && this.liveSegQueue[Object.keys(this.liveSegQueue)[0]].length !== 0) {
+      this.targetDuration = this._getMaxDuration(this.liveSegQueue[Object.keys(this.liveSegQueue)[0]]);
+    }
+
     // Determine if VOD segments influence targetDuration
     for (let i = 0; i < this.vodSegments[vodTargetBandwidth].length; i++) {
       let vodSeg = this.vodSegments[vodTargetBandwidth][i];
@@ -950,8 +959,8 @@ class SessionLive {
 
     const date = new Date(); // TODO: Remove this line
     const dateString = date.toISOString(); // TODO: Remove this line
+    let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER"; // TODO: Remove this line
 
-    let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER";
     debug(`[${this.sessionId}]: Started Generating the Manifest...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
@@ -985,7 +994,7 @@ class SessionLive {
         }
       }
     }
-    debug(`[${this.sessionId}]: ...Manifest Generation Complete!`);
+    debug(`[${this.sessionId}]: Manifest Generation Complete!`);
     return m3u8;
   }
 
@@ -1020,6 +1029,20 @@ class SessionLive {
       }
     }
     return Math.round(total / segments.length);
+  }
+
+  _getMaxDuration(segments) {
+    if (!segments) {
+      debug(`[${this.sessionId}]: ERROR segments is: ${segments}`);
+    }
+    let max = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (!seg.discontinuity) {
+        max = seg.duration > max ? seg.duration : max;
+      }
+    }
+    return max;
   }
 
   _isEmpty(obj) {

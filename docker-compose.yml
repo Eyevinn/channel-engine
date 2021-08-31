@@ -11,7 +11,7 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8081
-      - TEST_CHANNELS=2
+      - TEST_CHANNELS=10
       - REDIS_URL=redis://redis:6379/
     networks:
       - vc-net
@@ -24,7 +24,7 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8082
-      - TEST_CHANNELS=2
+      - TEST_CHANNELS=10
       - REDIS_URL=redis://redis:6379/
     networks:
       - vc-net

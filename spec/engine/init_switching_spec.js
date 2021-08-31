@@ -278,7 +278,7 @@ class TestAssetManager {
   }
 }
 
-fdescribe("The initialize switching", () => {
+describe("The initialize switching", () => {
   let sessionStore = undefined;
   let sessionLiveStore = undefined;
   beforeEach(() => {
@@ -317,6 +317,7 @@ fdescribe("The initialize switching", () => {
       await session.incrementAsync();
     }
     await sessionLive.initAsync();
+    sessionLive.startPlayheadAsync();
 
     currVodSegments = await session.getCurrentMediaSequenceSegments();
     currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
@@ -355,9 +356,9 @@ fdescribe("The initialize switching", () => {
     currVodSegments[1313000].push({ discontinuity: true });
     expect(tSegments[1313000]).toEqual(currVodSegments[1313000]);
     nock.cleanAll();
-  });
+  }, 10000);
 
-  fit("should give correct segments and sequence counts from sessionLive to session (case: LIVE->V2L)", async () => {
+  it("should give correct segments and sequence counts from sessionLive to session (case: LIVE->V2L)", async () => {
     nock(mockBaseUri)
       .persist()
       .get("/live/master.m3u8")
