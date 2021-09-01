@@ -258,18 +258,25 @@ class Session {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
       await this._sessionState.clearCurrentVodCache();
       let vodReloaded = await this._sessionState.get("vodReloaded");
-      if (!vodReloaded) {
-        // 8500ms since streamSwitcher has set interval=3000ms and setVolatile has TTL=5000ms
-        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (8500ms) for LEADER to relaod currentVod in store!`);
-        await timer(8500);
+      let attempts = 9;
+      while (!isLeader && !vodReloaded && attempts > 0) {
+        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (1000ms) for LEADER to relaod currentVod in store!`);
+        await timer(1000);
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         vodReloaded = await this._sessionState.get("vodReloaded");
-        if (!isLeader || vodReloaded) {
-          debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod`);
-          return;
-        }
+        attempts--;
+      }
+
+      if (attempts === 0) {
+        debug(`[${this._sessionId}]: FOLLOWER: WARNING! Attempts=0 - Risk of using wrong currentVod`);
+      }
+
+      if (!isLeader || vodReloaded) {
+        debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod`);
+        return;
       }
     }
+    
     if (isLeader) {
       debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
       const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);

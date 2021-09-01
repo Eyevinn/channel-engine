@@ -155,9 +155,9 @@ class RefChannelManager {
 
   _getProfile() {
     return [
-      { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
-      { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
-      { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+      { bw: 2462000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 1274000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
+      { bw: 742000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
     ]
   }
 }

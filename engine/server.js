@@ -144,18 +144,6 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
-    // const pingSwitcher = setInterval(async () => {
-    //   let timeIntervalsMs = [];
-    //   for (const chId in sessionSwitchers) {
-    //     debug(`In pingSwitcher: chId_${chId}  sessionSwitchers keys_${Object.keys(sessionSwitchers)}`);
-    //     if (Object.hasOwnProperty.call(sessionSwitchers, chId)) {
-    //       const switcher = sessionSwitchers[chId];
-    //       switcherStatus[chId] = null;
-    //       switcherStatus[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
-    //     }
-    //   }
-    // }, this.streamSwitchTimeIntervalMs);
-    //const pingStreamSwitch = setInterval(async () => { await this.updateStreamSwitchAsync() }, 3 * 1000);
     const StreamSwitchLoop = async (timeIntervalMs) => {
       while(true) {
         const ts_1 = Date.now();
@@ -163,9 +151,9 @@ class ChannelEngine {
         const ts_2 = Date.now();
         let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
         await timer(interval)
-        debug(`__/|___SteamSwitchLoop waited for all channels. Next Tick in: ${interval}ms`)
+        debug(`SteamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
       }
-    } 
+    }
 
     StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
 
@@ -175,19 +163,18 @@ class ChannelEngine {
 
   async updateStreamSwitchAsync() {
     const channels = Object.keys(sessionSwitchers);
-    debug(`_____(sessionSwitchers's channels=${channels})`)
+    debug(`sessionSwitchers's channels=${channels})`);
     const getSwitchStatusAndPerformSwitch = async (channel) => {
       if (sessionSwitchers[channel]) {
         const switcher = sessionSwitchers[channel];
         switcherStatus[channel] = null;
         switcherStatus[channel] = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
       } else {
-        debug(` Tried to stream-switch on a non-existing channel=${channel}. Switching Ignored!)`);
+        debug(`Tried to switch stream on a non-existing channel=[${channel}]. Switching Ignored!)`);
       }
     }
     await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
   }
-
 
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
@@ -219,9 +206,7 @@ class ChannelEngine {
 
       sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
-        useDemuxedAudio: options.useDemuxedAudio,
-        cloudWatchMetrics: this.logCloudWatchMetrics,
-        streamSwitchManager: this.streamSwitchManager,
+        streamSwitchManager: this.streamSwitchManager ? this.streamSwitchManager : null
       });
 
       await sessions[channel.id].initAsync();
@@ -249,7 +234,7 @@ class ChannelEngine {
       await sessionsLive[channelId].stopPlayheadAsync();
       delete sessions[channelId];
       delete sessionsLive[channelId];
-      delete sessionSwitcherss[channelId];
+      delete sessionSwitchers[channelId];
       delete switcherStatus[channelId];
     };
     await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
@@ -425,7 +410,7 @@ class ChannelEngine {
   }
 
   async _handleMediaManifest(req, res, next) {
-    //debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]];

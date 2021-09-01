@@ -8,7 +8,6 @@ const { m3u8Header } = require("./util.js");
 const { AbortController } = require("abort-controller");
 
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
-const DELAY_FACTOR = 0.5;
 const RESET_DELAY = 5000;
 const PlayheadState = Object.freeze({
   RUNNING: 1,
@@ -32,7 +31,6 @@ class SessionLive {
     this.lastRequestedMediaSeqRaw = 0;
     this.targetNumSeg = 0;
     this.liveSourceM3Us = {};
-    this.delayFactor = DELAY_FACTOR;
     this.playheadState = PlayheadState.IDLE;
     this.liveSegsForFollowers = {};
     this.timerCompensation = null;
@@ -130,7 +128,7 @@ class SessionLive {
         let liveBws = Object.keys(this.liveSegQueue);
         debug(`[${this.sessionId}]: +-+ liveBws=${liveBws}`);
         //debug(`[${this.sessionId}]: +-+ this.liveSegQueue[liveBws[0]]=${this.liveSegQueue[liveBws[0]]}`);
-        if (liveBws.length !== 0 && this.liveSegQueue[liveBws[0]].length !== 0 && this.liveSegQueue[liveBws[0]][0].duration){
+        if (liveBws.length !== 0 && this.liveSegQueue[liveBws[0]].length !== 0 && this.liveSegQueue[liveBws[0]][0].duration) {
           liveSegmentDurationMs = this.liveSegQueue[liveBws[0]][0].duration * 1000;
         }
 
@@ -424,7 +422,7 @@ class SessionLive {
     const vodBws = Object.keys(this.vodSegments);
     const liveBws = Object.keys(this.liveSegsForFollowers);
     const size = this.liveSegsForFollowers[liveBws[0]].length;
-    debug(`[${this.sessionId}]: [size=${size}]->this.liveSegsForFollowers=${ Object.keys(this.liveSegsForFollowers)} `);
+    debug(`[${this.sessionId}]: [size=${size}]->this.liveSegsForFollowers=${Object.keys(this.liveSegsForFollowers)} `);
     // Remove transitional segs & add live source segs collected from store
     for (let k = 0; k < size; k++) {
       // Increase Discontinuity count if top segment is a discontinuity segment
@@ -583,7 +581,7 @@ class SessionLive {
       }
 
       // Extract the media sequence count from promise results
-      if(manifestList[0].status === "rejected") {
+      if (manifestList[0].status === "rejected") {
         debug(`[${this.sessionId}]: Promises I: FAILURE!`);
         return;
       }
@@ -628,9 +626,32 @@ class SessionLive {
         if (tries === 0) {
           isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
           if (isLeader) {
-            debug(`[${this.instanceId}]: I'm the new leader`);
+            debug(`[${this.instanceId}]: I'm the new leader, and now I am going to add 'firstCounts' in store`);
+            break;
           } else {
             debug(`[${this.instanceId}]: The leader is still alive`);
+            leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
+            if (!leadersFirstSeqCounts.liveSourceMseqCount) {
+              debug(`[${this.instanceId}]: Could not find 'firstCounts' in store. Returning to Playhead.`);
+              return;
+            }
+          }
+        }
+
+        // Respawners never do this, only starter followers.
+        if (leadersFirstSeqCounts.mediaSeqCount - 1 !== this.mediaSeqCount) {
+          this.mediaSeqCount = leadersFirstSeqCounts.mediaSeqCount - 1;
+          const transitSegs = await this.sessionLiveState.get("transitSegs");
+          if (!this._isEmpty(transitSegs)) {
+            this.vodSegments = transitSegs;
+            let discTagCount = 0;
+            const allBws = Object.keys(this.vodSegments);
+            for (let segIdx = 0; segIdx < this.vodSegments[allBws[0]].length; segIdx++) {
+              if (this.vodSegments[allBws[0]][segIdx].discontinuity) {
+                discTagCount++;
+              }
+            }
+            this.targetNumSeg = this.vodSegments[allBws[0]].length - (discTagCount - 1);
           }
         }
 
@@ -642,7 +663,7 @@ class SessionLive {
           // RESPAWNED NODES DO THIS!
           this.pushAmount = (allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount) + 1;
           const transitSegs = await this.sessionLiveState.get("transitSegs");
-          debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
+          //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
             let discTagCount = 0;
@@ -687,7 +708,7 @@ class SessionLive {
           // Follower updates it's manifest ingedients (segment holders & counts)
           this.lastRequestedMediaSeqRaw = leadersCurrentMseqRaw;
           this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
-          debug(`[${this.sessionId}]: NEW FOLLOWER: Leader is ahead or behind me! Clearing Queue and Getting his latest segments from store.`);
+          debug(`[${this.sessionId}]: NEW FOLLOWER: Leader is ahead or behind me! Clearing Queue and Getting latest segments from store.`);
           this._updateLiveSegQueue();
           this.firstTime = false;
           debug(`[${this.sessionId}]: Got all needed segments from all live-source bandwidths. We are now able to build a Live Manifest`);
@@ -1037,20 +1058,6 @@ class SessionLive {
     return null;
   }
 
-  _getAverageDuration(segments) {
-    if (!segments) {
-      debug(`[${this.sessionId}]: ERROR segments is: ${segments}`);
-    }
-    let total = 0;
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      if (!seg.discontinuity) {
-        total += seg.duration;
-      }
-    }
-    return Math.round(total / segments.length);
-  }
-
   _getMaxDuration(segments) {
     if (!segments) {
       debug(`[${this.sessionId}]: ERROR segments is: ${segments}`);
@@ -1077,12 +1084,6 @@ class SessionLive {
       }
     }
     return true;
-  }
-
-  _getDelay() {
-    const delayMs = 1000 * (this.delayFactor * this._getAverageDuration(this.liveSegsForFollowers[this._getFirstBwWithSegmentsInList(this.liveSegsForFollowers)]));
-    debug(`[${this.sessionId}]: Current delay is: [${delayMs}ms] `);
-    return delayMs;
   }
 }
 
