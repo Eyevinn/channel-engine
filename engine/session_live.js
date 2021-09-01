@@ -2,9 +2,10 @@ const debug = require("debug")("engine-sessionLive");
 const allSettled = require("promise.allsettled");
 const crypto = require("crypto");
 const m3u8 = require("@eyevinn/m3u8");
-const request = require("request");
 const url = require("url");
+const fetch = require("node-fetch");
 const { m3u8Header } = require("./util.js");
+const { AbortController } = require("abort-controller");
 
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
 const DELAY_FACTOR = 0.5;
@@ -369,23 +370,25 @@ class SessionLive {
    *
    * @returns Loads the URIs to the different media playlists from the given master playlist
    */
-  _loadMasterManifest(masterManifestURI) {
+  async _loadMasterManifest(masterManifestURI) {
+    const parser = m3u8.createStream();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      debug(`Aborting Request to ${masterManifestURI}`);
+      controller.abort();
+    }, 30000);
+
+    const response = await fetch(masterManifestURI, { signal: controller.signal });
+    try {
+      response.body.pipe(parser);
+    } catch (err) {
+      debug(`[${this.sessionId}]: Error when piping response to parser! ${JSON.stringify(err)}`);
+      return Promise.reject(err);
+    } finally {
+      clearTimeout(timeout);
+    }
+
     return new Promise((resolve, reject) => {
-      const parser = m3u8.createStream();
-      try {
-        request({ uri: masterManifestURI, gzip: true, timeout: 30000 })
-        .on("error", (exc) => {
-          debug(`ON ERROR: ${JSON.stringify(exc)}`);
-          if (exc.code === "ETIMEDOUT") {
-            debug(`[${this.sessionId}]: Failure connecting to ${masterManifestURI}`);
-          }
-          reject(exc);
-        })
-        .pipe(parser);
-      } catch (exc) {
-        debug(`ERROR: ${JSON.stringify(exc)}`);
-        reject(exc);
-      }
       parser.on("m3u", (m3u) => {
         debug(`[${this.sessionId}]: ...Fetched a New Live Master Manifest from:\n${masterManifestURI}`);
         let baseUrl = "";
@@ -405,10 +408,10 @@ class SessionLive {
         }
         debug(`[${this.sessionId}]: All Live Media Manifest URIs have been collected. (${Object.keys(this.mediaManifestURIs).length}) profiles found!`);
         resolve();
-      });
-      parser.on("error", (exc) => {
-        debug(`ERROR: ${JSON.stringify(exc)}`);
-        reject(exc);
+        parser.on("error", (exc) => {
+          debug(`Parser Error: ${JSON.stringify(exc)}`);
+          reject(exc);
+        });
       });
     });
   }
@@ -561,29 +564,30 @@ class SessionLive {
 
       // Reset Values Each Attempt
       let livePromises = [];
+      let manifestList = [];
       this.pushAmount = 0;
-
-      // Collect Live Source Requesting Promises
-      for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
-        let bw = Object.keys(this.mediaManifestURIs)[i];
-        livePromises.push(this._loadMediaManifest(bw));
-        debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=[${bw}]`);
-      }
-
-      // Fetech From Live Source
-      debug(`[${this.sessionId}]: Executing Promises I: Fetech From Live Source`);
-      let manifestList;
       try {
+        // Collect Live Source Requesting Promises
+        for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
+          let bw = Object.keys(this.mediaManifestURIs)[i];
+          livePromises.push(this._loadMediaManifest(bw));
+          debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=[${bw}]`);
+        }
+        // Fetech From Live Source
+        debug(`[${this.sessionId}]: Executing Promises I: Fetech From Live Source`);
         manifestList = await allSettled(livePromises);
         livePromises = [];
       } catch (err) {
-        debug(`[${this.sessionId}]: Promises I: FAILURE!\n${err}\nTrying again after (1000)ms`);
-        livePromises = [];
-        await timer(1000);
-        continue;
+        debug(`[${this.sessionId}]: Promises I: FAILURE!\n${err}`);
+        return;
       }
 
       // Extract the media sequence count from promise results
+      if(manifestList[0].status === "rejected") {
+        debug(`[${this.sessionId}]: Promises I: FAILURE!`);
+        return;
+      }
+
       const allMediaSeqCounts = manifestList.map((item) => {
         if (item.status === "rejected") {
           return item.reason.mediaSeq;
@@ -591,8 +595,15 @@ class SessionLive {
         return item.value.mediaSeq;
       });
 
+      // Handle if all promises got rejected
+      if (allMediaSeqCounts.every((val, i, arr) => val === -1)) {
+        debug(`[${this.sessionId}]: [ALERT] | Promises I: Failed, all got rejected. Returning to Playhead`);
+        return;
+      }
+
       // Handle if mediaSeqCounts are NOT synced up!
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+
         debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
         // Decement fetch counter
         FETCH_ATTEMPTS--;
@@ -775,38 +786,23 @@ class SessionLive {
 
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
     debug(`[${this.sessionId}]: Requesting bw=(${bw}), Nearest Bandwidth is: ${liveTargetBandwidth}`);
-
     // Get the target media manifest
     const mediaManifestUri = this.mediaManifestURIs[liveTargetBandwidth];
     const parser = m3u8.createStream();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      debug(`Aborting Request to ${mediaManifestUri}`);
+      controller.abort();
+    }, 30000);
+
+    const response = await fetch(mediaManifestUri, { signal: controller.signal });
     try {
-      debug(`[${this.sessionId}]: Gonna REQUEST on uri=${mediaManifestUri}`)// TODO: DELETE THIS
-      request({ uri: mediaManifestUri, gzip: true, timeout: 30000 })
-      .on("error", exc => {
-        debug(`ON ERROR: ${JSON.stringify(exc)}`);
-        return new Promise((resolve, reject) => {
-          if (exc.code === "ETIMEDOUT") {
-            debug(`[${this.sessionId}]: Failure connecting to: [${mediaManifestUri}]`);
-          }
-          reject({
-            message: JSON.stringify(exc),
-            bandwidth: liveTargetBandwidth,
-            m3u8: null,
-            mediaSeq: -1,
-          });
-        });
-      })
-      .pipe(parser);
-    } catch (exc) {
-      debug(`ERROR: ${JSON.stringify(exc)}`);
-      return new Promise((resolve, reject) => {
-        reject({
-          message: exc,
-          bandwidth: liveTargetBandwidth,
-          m3u8: null,
-          mediaSeq: -1,
-        });
-      });
+      response.body.pipe(parser);
+    } catch (err) {
+      debug(`[${this.sessionId}]: Error when piping response to parser! ${JSON.stringify(err)}`);
+      return Promise.reject(err);
+    } finally {
+      clearTimeout(timeout);
     }
     return new Promise((resolve, reject) => {
       parser.on("m3u", (m3u) => {
@@ -817,6 +813,10 @@ class SessionLive {
           debug(`[${this.sessionId}]: Error when parsing latest manifest`);
           reject(exc);
         }
+      });
+      parser.on("error", (exc) => {
+        debug(`Parser Error: ${JSON.stringify(exc)}`);
+        reject(exc);
       });
     });
   }

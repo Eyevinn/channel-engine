@@ -19,8 +19,8 @@ const timer = ms => new Promise(res => setTimeout(res, ms));
 
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
-const sessionSwitcher = {}; // Should be a persistent store...
-const switchSession = {}; // Should be a persistent store...
+const sessionSwitchers = {}; // Should be a persistent store...
+const switcherStatus = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
@@ -144,20 +144,50 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
-    setInterval(async () => {
-      let timeIntervalsMs = [];
-      for (const chId in sessionSwitcher) {
-        if (Object.hasOwnProperty.call(sessionSwitcher, chId)) {
-          const switcher = sessionSwitcher[chId];
-          switchSession[chId] = null;
-          switchSession[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
-        }
+    // const pingSwitcher = setInterval(async () => {
+    //   let timeIntervalsMs = [];
+    //   for (const chId in sessionSwitchers) {
+    //     debug(`In pingSwitcher: chId_${chId}  sessionSwitchers keys_${Object.keys(sessionSwitchers)}`);
+    //     if (Object.hasOwnProperty.call(sessionSwitchers, chId)) {
+    //       const switcher = sessionSwitchers[chId];
+    //       switcherStatus[chId] = null;
+    //       switcherStatus[chId] = await switcher.streamSwitcher(sessions[chId], sessionsLive[chId]);
+    //     }
+    //   }
+    // }, this.streamSwitchTimeIntervalMs);
+    //const pingStreamSwitch = setInterval(async () => { await this.updateStreamSwitchAsync() }, 3 * 1000);
+    const StreamSwitchLoop = async (timeIntervalMs) => {
+      while(true) {
+        const ts_1 = Date.now();
+        await this.updateStreamSwitchAsync()
+        const ts_2 = Date.now();
+        let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
+        await timer(interval)
+        debug(`__/|___SteamSwitchLoop waited for all channels. Next Tick in: ${interval}ms`)
       }
-    }, this.streamSwitchTimeIntervalMs);
+    } 
+
+    StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
 
     const pingSession = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
     const pingSessionLive = setInterval(async () => { await this.sessionLiveStore.sessionLiveStateStore.ping(this.instanceId); }, 3000);
   }
+
+  async updateStreamSwitchAsync() {
+    const channels = Object.keys(sessionSwitchers);
+    debug(`_____(sessionSwitchers's channels=${channels})`)
+    const getSwitchStatusAndPerformSwitch = async (channel) => {
+      if (sessionSwitchers[channel]) {
+        const switcher = sessionSwitchers[channel];
+        switcherStatus[channel] = null;
+        switcherStatus[channel] = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
+      } else {
+        debug(` Tried to stream-switch on a non-existing channel=${channel}. Switching Ignored!)`);
+      }
+    }
+    await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
+  }
+
 
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
@@ -187,7 +217,7 @@ class ChannelEngine {
         cloudWatchMetrics: this.logCloudWatchMetrics,
       }, this.sessionLiveStore);
 
-      sessionSwitcher[channel.id] = new StreamSwitcher({
+      sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,
@@ -219,7 +249,8 @@ class ChannelEngine {
       await sessionsLive[channelId].stopPlayheadAsync();
       delete sessions[channelId];
       delete sessionsLive[channelId];
-      delete sessionSwitcher[channelId];
+      delete sessionSwitcherss[channelId];
+      delete switcherStatus[channelId];
     };
     await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
@@ -400,13 +431,13 @@ class ChannelEngine {
     const sessionLive = sessionsLive[req.params[1]];
     if (session && sessionLive) {
       try {
-        while (switchSession[req.params[1]] === null || switchSession[req.params[1]] === undefined) {
+        while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
           debug(`[${req.params[1]}]: Waiting for streamSwitcher to respond`);
           await timer(500);
         }
         let body = null;
-        debug(`switchSession[req.params[1]]=[${switchSession[req.params[1]]}]`);
-        if (switchSession[req.params[1]]) {
+        debug(`switcherStatus[req.params[1]]=[${switcherStatus[req.params[1]]}]`);
+        if (switcherStatus[req.params[1]]) {
           debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {

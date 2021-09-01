@@ -7,7 +7,7 @@ services:
   engine1:
     depends_on:
       - redis
-    build: . 
+    build: .
     image: channel-engine:test
     environment:
       - PORT=8081
