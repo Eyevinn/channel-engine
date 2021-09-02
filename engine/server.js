@@ -144,6 +144,20 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
+    const LeaderSyncSessionTypes = async () => {
+      await timer(10*1000);
+      let isLeader = await this.sessionStore.sessionStateStore.isLeader(this.instanceId);
+      if (isLeader) {
+        await this.sessionLiveStore.sessionLiveStateStore.setLeader(this.instanceId);
+      }
+    }
+    LeaderSyncSessionTypes();
+
+    const ping = setInterval(async () => {
+      await this.sessionStore.sessionStateStore.ping(this.instanceId);
+      await this.sessionLiveStore.sessionLiveStateStore.ping(this.instanceId);
+    }, 3000);
+
     const StreamSwitchLoop = async (timeIntervalMs) => {
       while(true) {
         const ts_1 = Date.now();
@@ -154,16 +168,12 @@ class ChannelEngine {
         debug(`SteamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
       }
     }
-
     StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
-
-    const pingSession = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
-    const pingSessionLive = setInterval(async () => { await this.sessionLiveStore.sessionLiveStateStore.ping(this.instanceId); }, 3000);
   }
 
   async updateStreamSwitchAsync() {
     const channels = Object.keys(sessionSwitchers);
-    debug(`sessionSwitchers's channels=${channels})`);
+    //debug(`(sessionSwitchers's channels=${channels})`);
     const getSwitchStatusAndPerformSwitch = async (channel) => {
       if (sessionSwitchers[channel]) {
         const switcher = sessionSwitchers[channel];

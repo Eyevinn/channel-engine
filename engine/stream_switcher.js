@@ -100,7 +100,7 @@ class StreamSwitcher {
       this.switchTimestamp = tsNow;
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
-        debug(`[${this.sessionId}]: Switching back to VOD2Live due to unreachable URI`);
+        debug(`[${this.sessionId}]: Abort Live Stream! Switching back to VOD2Live due to unreachable URI`);
         await this._initSwitching(
           SwitcherState.LIVE_TO_V2L,
           session,
@@ -182,7 +182,7 @@ class StreamSwitcher {
 
     switch (state) {
       case SwitcherState.V2L_TO_LIVE:
-        debug(`[${this.sessionId}]: [ Switching from V2L->LIVE ]`);
+        debug(`[${this.sessionId}]: [ INIT Switching from V2L->LIVE ]`);
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         currVodSegments = await session.getCurrentMediaSequenceSegments();
@@ -199,7 +199,7 @@ class StreamSwitcher {
         debug(`[${this.sessionId}]: [ Switched from V2L->LIVE ]`);
         break;
       case SwitcherState.V2L_TO_VOD:
-        debug(`[${this.sessionId}]: [ Switching from V2L->VOD ]`);
+        debug(`[${this.sessionId}]: [ INIT Switching from V2L->VOD ]`);
         this.eventId = scheduleObj.eventId;
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
@@ -212,7 +212,7 @@ class StreamSwitcher {
         debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
         break;
       case SwitcherState.LIVE_TO_V2L:
-        debug(`[${this.sessionId}]: [ Switching from LIVE->V2L ]`);
+        debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
         this.eventId = null;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -239,7 +239,7 @@ class StreamSwitcher {
         debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
         break;
       case SwitcherState.LIVE_TO_VOD:
-        debug(`[${this.sessionId}]: Switching from LIVE->VOD`);
+        debug(`[${this.sessionId}]: INIT Switching from LIVE->VOD`);
         // TODO: Not yet fully tested/supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
@@ -258,7 +258,7 @@ class StreamSwitcher {
         debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
         break;
       case SwitcherState.LIVE_TO_LIVE:
-        debug(`[${this.sessionId}]: Switching from LIVE->LIVE`);
+        debug(`[${this.sessionId}]: INIT Switching from LIVE->LIVE`);
         // TODO: Not yet fully tested/supported (still in alpha)
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();

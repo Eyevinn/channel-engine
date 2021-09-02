@@ -5,54 +5,7 @@
 const ChannelEngine = require("./index.js");
 const { v4: uuidv4 } = require('uuid');
 
-// class RefAssetManager {
-//   constructor(opts) {
-//     this.assets = {
-//       1: [
-//         {
-//           id: 1,
-//           title: "VINN",
-//           uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
-//         },
-//         {
-//           id: 2,
-//           title: "BECKY",
-//           uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8",
-//         },
-//       ],
-//     };
-//     this.pos = {
-//       '1': 1,
-//     };
-//   }
-
-//   /**
-//    *
-//    * @param {Object} vodRequest
-//    *   {
-//    *      sessionId,
-//    *      category,
-//    *      playlistId
-//    *   }
-//    */
-//   getNextVod(vodRequest) {
-//     return new Promise((resolve, reject) => {
-//       const channelId = vodRequest.playlistId;
-//       if (this.assets[channelId]) {
-//         let vod = this.assets[channelId][this.pos[channelId]++];
-//         if (this.pos[channelId] > this.assets[channelId].length - 1) {
-//           this.pos[channelId] = 0;
-//         }
-//         resolve(vod);
-//       } else {
-//         reject("Invalid channelId provided");
-//       }
-//     });
-//   }
-// }
-
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
-
 class RefAssetManager {
   constructor(opts) {
     if (process.env.TEST_CHANNELS) {
@@ -70,7 +23,6 @@ class RefAssetManager {
           { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
           { id: 6, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
         ];
-        //this.pos[channelId] = Math.floor(Math.random() * this.assets[channelId].length);
         this.pos[channelId] = 2;
       }
     } else {
@@ -78,7 +30,7 @@ class RefAssetManager {
         '1': [
           { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
           { id: 2, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },//uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
           { id: 4, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
           { id: 5, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
           { id: 6, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
@@ -121,21 +73,6 @@ class RefAssetManager {
   }
 }
 
-const tsNow = Date.now();
-// class RefChannelManager {
-//   getChannels() {
-//     //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
-//     return [{ id: "1", profile: this._getProfile() }];
-//   }
-//   _getProfile() {
-//     return [
-//       { bw: 6134000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
-//       { bw: 2323000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
-//       { bw: 1313000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] },
-//     ];
-//   }
-// }
-
 class RefChannelManager {
   constructor(opts) {
     this.channels = [];
@@ -177,7 +114,7 @@ class StreamSwitchManager {
 
   getSchedule() {
     const tsNow = Date.now();
-    const streamDuration = 0.5 * 60 * 1000;
+    const streamDuration = 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + 2*streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts

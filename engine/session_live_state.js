@@ -25,7 +25,6 @@ class SharedSessionLiveState {
   }
 }
 
-
 class SessionLiveStateStore extends SharedStateStore {
   constructor(opts) {
     super("sessionLive", opts, {
@@ -55,12 +54,17 @@ class SessionLiveStateStore extends SharedStateStore {
     await this.setVolatile("", instanceId, t);
   }
 
-  async getLeader() {
-    if (this.cache.leader.value) {
-      return this.cache.leader.value;
-    } else {
-      return null;
+  // Should only be called when Channel Engine starts.
+  // This is due to the fact that we want to sync leaders between Session and SessionLive.
+  async setLeader(instanceId) {
+    if (!instanceId) {
+      throw new Error("Cannot set leader without instance id");
     }
+    debug(`[${instanceId}]: Taking the lead! ${instanceId}`);
+    await this.set("", "leader", instanceId);
+    this.cache.leader.ts = Date.now();
+    this.cache.leader.value = instanceId;
+    return instanceId;
   }
 
   async isLeader(instanceId) {
