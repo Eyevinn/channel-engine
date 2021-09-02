@@ -260,7 +260,7 @@ class Session {
       let vodReloaded = await this._sessionState.get("vodReloaded");
       let attempts = 9;
       while (!isLeader && !vodReloaded && attempts > 0) {
-        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (1000ms) for LEADER to relaod currentVod in store!`);
+        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (1000ms) for LEADER to reload currentVod in store! (tries left=${attempts})`);
         await timer(1000);
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         vodReloaded = await this._sessionState.get("vodReloaded");

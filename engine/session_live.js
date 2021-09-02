@@ -460,7 +460,7 @@ class SessionLive {
     //  ends here, where I only read from store.
     // -------------------------------------
     let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader && this.lastRequestedMediaSeqRaw !== 0) {
+    if (!isLeader && !this.lastRequestedMediaSeqRaw) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
@@ -516,7 +516,7 @@ class SessionLive {
     }
 
     // ---------------------------------
-    // FETCHING FROM LIVE-SOURCE
+    // FETCHING FROM LIVE-SOURCE - New Followers (once) & Leaders do this.
     // ---------------------------------
     let FETCH_ATTEMPTS = 10;
     this.liveSegsForFollowers = {};

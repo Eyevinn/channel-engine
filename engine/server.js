@@ -173,7 +173,6 @@ class ChannelEngine {
 
   async updateStreamSwitchAsync() {
     const channels = Object.keys(sessionSwitchers);
-    //debug(`(sessionSwitchers's channels=${channels})`);
     const getSwitchStatusAndPerformSwitch = async (channel) => {
       if (sessionSwitchers[channel]) {
         const switcher = sessionSwitchers[channel];
