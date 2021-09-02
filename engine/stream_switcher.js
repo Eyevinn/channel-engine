@@ -97,7 +97,6 @@ class StreamSwitcher {
 
     const validURI = await this._validURI(scheduleObj.uri);
     if (!validURI) {
-      this.switchTimestamp = tsNow;
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
         debug(`[${this.sessionId}]: Abort Live Stream! Switching back to VOD2Live due to unreachable URI`);
@@ -107,17 +106,23 @@ class StreamSwitcher {
           sessionLive,
           null
         );
+        this.switchTimestamp = Date.now();
         return false;
       }
       return false;
     }
+
+
     if (this.switchTimestamp && (tsNow - this.switchTimestamp) <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
       // Stay on V2L to give live session some time to prepare before switching back to live.
-      debug(`[${this.sessionId}]: Waiting [${(tsNow - this.switchTimestamp)}ms] before switching back to Live due to unreachable URI`);
+      debug(`[${this.sessionId}]: Waiting [${10000 - (tsNow - this.switchTimestamp)}ms] before switching back to Live due to unreachable URI`);
       return false;
-    }
+    } 
+
     this.switchTimestamp = null;
+
+    
 
     if (this.streamTypeLive) {
       if (tsNow >= scheduleObj.start_time && this.eventId !== scheduleObj.eventId) {

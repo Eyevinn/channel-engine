@@ -71,7 +71,7 @@ class SessionLive {
       mediaSeqCount: null,
       discSeqCount: null,
     });
-    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Cleared the local store after ${resetDelay}ms`);
+    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Resetting SessionLive values in Store after a delay=${resetDelay}ms`);
   }
 
   async resetSession() {
