@@ -136,7 +136,7 @@ class StreamSwitcher {
         );
       }
     }
-    if (tsNow >= scheduleObj.start_time && tsNow < scheduleObj.end_time) {
+    if (tsNow >= scheduleObj.start_time && tsNow < scheduleObj.end_time && (scheduleObj.end_time - tsNow) > 10000) {
       if (scheduleObj.type === StreamType.LIVE) {
         if (!this.streamTypeLive) {
           return await this._initSwitching(

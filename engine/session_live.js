@@ -648,6 +648,7 @@ class SessionLive {
         } else {
           // RESPAWNED NODES
           this.pushAmount = (allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount) + 1;
+
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
           if (!this._isEmpty(transitSegs)) {
@@ -996,7 +997,7 @@ class SessionLive {
     const dateString = date.toISOString(); // TODO: Remove this line
     let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER"; // TODO: Remove this line
 
-    debug(`[${this.sessionId}]: Started Generating the Manifest...`);
+    debug(`[${this.sessionId}]: Started Generating the Manifest File:[${this.mediaSeqCount}]...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
     m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line

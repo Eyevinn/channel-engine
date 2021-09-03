@@ -120,10 +120,10 @@ class StreamSwitchManager {
   }
 
   getSchedule() {
-    const tsNow = 1630571746332; //Date.now();
+    const tsNow = 1630695296650; //Date.now();
     const streamDuration = 1 * 60 * 1000;
     const startOffset = tsNow + streamDuration;
-    const endTime = startOffset + streamDuration;
+    const endTime = startOffset + 3*streamDuration;
     // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
     // Required: "assetId", "start_time", "end_time", "uri", "duration"
     // "duration" is only required for StreamType.VOD
@@ -138,16 +138,16 @@ class StreamSwitchManager {
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
-        // {
-        //   eventId: this.generateID(),
-        //   assetId: this.generateID(),
-        //   title: "Scheduled VOD test",
-        //   type: StreamType.VOD,
-        //   start_time: (endTime + 100*1000),
-        //   end_time: (endTime + 100*1000) + streamDuration,
-        //   uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
-        //   duration: streamDuration,
-        // }
+        {
+          eventId: this.generateID(),
+          assetId: this.generateID(),
+          title: "Scheduled VOD test",
+          type: StreamType.VOD,
+          start_time: (endTime + 100*1000),
+          end_time: (endTime + 100*1000) + streamDuration,
+          uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
+          duration: streamDuration,
+        }
       );
     }
     console.log(`SCHEDULE:  startTime=${(this.schedule[0].start_time)} - dateNow=${Date.now()} = ${this.schedule[0].start_time - Date.now()}`);
