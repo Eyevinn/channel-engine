@@ -241,11 +241,15 @@ class Session {
   }
 
   async getTruncatedVodSegments(vodUri, duration) {
-    const hlsVod = await this._truncateSlate(null, duration, vodUri);
-    let vodSegments = hlsVod.getMediaSegments();
-    Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true }));
-
-    return vodSegments;
+    try {
+      const hlsVod = await this._truncateSlate(null, duration, vodUri);
+      let vodSegments = hlsVod.getMediaSegments();
+      Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true }));
+      return vodSegments;
+    } catch (exc) {
+      debug(`[${this._sessionId}]: Failed to generate truncated VOD!`);
+      return null;
+    }
   }
 
   async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
@@ -328,7 +332,7 @@ class Session {
     if (currentVod) {
       try {
         const mediaSegments = currentVod.getLiveMediaSequenceSegments(playheadState.vodMediaSeqVideo);
-        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence`);
+        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence: ${playheadState.vodMediaSeqVideo}`);
         return mediaSegments;
       } catch (err) {
         logerror(this._sessionId, err);

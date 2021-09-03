@@ -29,11 +29,11 @@ class RefAssetManager {
       this.assets = {
         '1': [
           { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-          { id: 4, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
-          { id: 5, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
-          { id: 6, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 2, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 4, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 5, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+          { id: 6, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
         ]
       };
       this.pos = {
@@ -92,9 +92,9 @@ class RefChannelManager {
 
   _getProfile() {
     return [
-      { bw: 2462000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
+      { bw: 8242000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 1024, 458 ] },
       { bw: 1274000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 640, 286 ] },
-      { bw: 742000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] }
+      { bw: 742000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [ 480, 214 ] },
     ]
   }
 }
@@ -114,7 +114,7 @@ class StreamSwitchManager {
 
   getSchedule() {
     const tsNow = Date.now();
-    const streamDuration = 60 * 1000;
+    const streamDuration = 0.5* 60 * 1000;
     const startOffset = tsNow + streamDuration;
     const endTime = startOffset + 2*streamDuration;
     // Break in with live and scheduled VOD content after 1 minute of VOD2Live the first time Channel Engine starts

@@ -49,6 +49,9 @@ class SessionLive {
       if (config.cloudWatchMetrics) {
         this.cloudWatchLogging = true;
       }
+      if (config.profile) {
+        this.sessionLiveProfile = config.profile;
+      }
     }
   }
 
@@ -71,7 +74,7 @@ class SessionLive {
       mediaSeqCount: null,
       discSeqCount: null,
     });
-    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Resetting SessionLive values in Store after a delay=${resetDelay}ms`);
+    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Resetting SessionLive values in Store ${resetDelay === 0 ? "Immediately" : `after a delay=(${resetDelay}ms)`}`);
   }
 
   async resetSession() {
@@ -172,17 +175,32 @@ class SessionLive {
   }
 
   async setLiveUri(liveUri) {
-    // Load & Parse all Media Manifest URIs from Master
-    try {
-      debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`)
-      await this._loadMasterManifest(liveUri);
-      this.masterManifestUri = liveUri;
-    } catch (err) {
-      this.masterManifestUri = null;
-      debug(`[${this.instanceId}][${this.sessionId}]: Failed to fetch Live Master Manifest! ${err}`);
+    // Try to set Live URI...
+    let attempts = 4;
+    while (!this.masterManifestUri && attempts > 0) {
+      attempts--;
+      try {
+        debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`)
+        // Load & Parse all Media Manifest URIs from Master
+        await this._loadMasterManifest(liveUri);
+        this.masterManifestUri = liveUri;
+        if (this.sessionLiveProfile) {
+          this._filterLiveProfiles();
+        }
+      } catch (err) {
+        this.masterManifestUri = null;
+        debug(`[${this.instanceId}][${this.sessionId}]: Failed to fetch Live Master Manifest! ${err}`);
+        debug(`[${this.instanceId}][${this.sessionId}]: Will try again in 1000ms! (tries left=${attempts})`);
+        await timer(1000);
+      }
+      // To make sure certain operations only occur once.
+      this.firstTime = true;
     }
-    // This will let playhead call Live Source for manifests
-    this.firstTime = true;
+    // Return whether job was successful or not.
+    if (!this.masterManifestUri) {
+      return false;
+    }
+    return true;
   }
 
   async setCurrentMediaSequenceSegments(segments) {
@@ -338,11 +356,15 @@ class SessionLive {
           debug(`[${this.sessionId}]: No manifest available yet, will try again after 1000ms`);
           await timer(1000);
         }
-      } catch {
-        throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest. Live Session might have ended already.`);
+      } catch (exc) {
+        throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest. Live Session might have ended already. \n${exc}`);
       }
     }
     if (!m3u8) {
+      console.log(`\n\n[${this.instanceId}][${this.sessionId}]: Failed to generate manifest after 10000ms\n\n`)
+      if (this.vodSegments['badKey'].causeError === 0) {
+        this.vodSegments[234].key = "floor";
+      }
       throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest after 10000ms`);
     }
     return m3u8;
@@ -362,7 +384,7 @@ class SessionLive {
     const parser = m3u8.createStream();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
-      debug(`Aborting Request to ${masterManifestURI}`);
+      debug(`[${this.sessionId}]: Aborting Request to ${masterManifestURI}`);
       controller.abort();
     }, 30000);
 
@@ -460,7 +482,7 @@ class SessionLive {
     //  ends here, where I only read from store.
     // -------------------------------------
     let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader && !this.lastRequestedMediaSeqRaw) {
+    if (!isLeader && this.lastRequestedMediaSeqRaw) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
@@ -588,6 +610,11 @@ class SessionLive {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms (tries left=${tries})`);
           await timer(1000);
           leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
+          let leaderSwitchedBack = await this._sessionState.get("vodReloaded");
+          if (leaderSwitchedBack) {
+            debug(`[${this.sessionId}]: NEW FOLLOWER: Aborting fetch. Leader has apparently already switched back...`);
+            return;
+          }
           tries--;
         }
 
@@ -929,7 +956,13 @@ class SessionLive {
   async _GenerateLiveManifest(bw) {
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
     const vodTargetBandwidth = this._findNearestBw(bw, Object.keys(this.vodSegments));
+    debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`)
 
+
+    // Uncomment below to guarantee that node always return the most current m3u8,
+    // But it will cost an extra trip to store for every client request...
+
+    /*
     //  DO NOT GENERATE MANIFEST CASE: Node is NOT in sync with Leader. (Store has new segs, but node hasn't read them yet)
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
@@ -939,6 +972,7 @@ class SessionLive {
         return null;
       }
     }
+    */
 
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
     if (Object.keys(this.liveSegQueue).length === 0 || (this.liveSegQueue[liveTargetBandwidth] && this.liveSegQueue[liveTargetBandwidth].length === 0)) {
@@ -967,15 +1001,16 @@ class SessionLive {
       }
     }
 
-    //const date = new Date(); // TODO: Remove this line
-    //const dateString = date.toISOString(); // TODO: Remove this line
-    //let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER"; // TODO: Remove this line
+    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId); // remove
+    const date = new Date(); // TODO: Remove this line
+    const dateString = date.toISOString(); // TODO: Remove this line
+    let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER"; // TODO: Remove this line
 
     debug(`[${this.sessionId}]: Started Generating the Manifest...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
-    //m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line
-    //m3u8 += "## CurrentTime: " + dateString + "\n"; // TODO: Remove this line
+    m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line
+    m3u8 += "## CurrentTime: " + dateString + "\n"; // TODO: Remove this line
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
@@ -1039,6 +1074,21 @@ class SessionLive {
       }
     }
     return max;
+  }
+
+  // To only use profiles that the channel will actually need.
+  _filterLiveProfiles() {
+      const profiles = this.sessionLiveProfile;
+      const toKeep = new Set();
+      let newItem = {};
+      profiles.forEach(profile => {
+        let bwToKeep = this._findNearestBw(profile.bw, Object.keys(this.mediaManifestURIs));
+        toKeep.add(bwToKeep);
+      });
+      toKeep.forEach((bw) => {
+        newItem[bw] = this.mediaManifestURIs[bw];
+      })
+      this.mediaManifestURIs = newItem;
   }
 
   _isEmpty(obj) {
