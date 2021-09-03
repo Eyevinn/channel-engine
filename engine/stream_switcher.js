@@ -112,7 +112,7 @@ class StreamSwitcher {
 
     if (this.switchTimestamp && (tsNow - this.switchTimestamp) <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
-      // Stay on V2L to give live session some time to prepare before switching back to live.
+      // Stay on V2L to give live sessionLive some time to prepare before switching back to live.
       debug(`[${this.sessionId}]: Waiting [${10000 - (tsNow - this.switchTimestamp)}ms] before switching back to Live due to unreachable URI`);
       return false;
     } 
@@ -184,7 +184,7 @@ class StreamSwitcher {
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         currVodSegments = await session.getCurrentMediaSequenceSegments();
 
-        // TODO: In risk that the SL-playhead might have updated some data after
+        // In risk that the SL-playhead might have updated some data after
         // we reset last time... we should Reset SessionLive before sending new data.
         await sessionLive.resetLiveStoreAsync(0);
         await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
@@ -252,7 +252,7 @@ class StreamSwitcher {
         return false;
       case SwitcherState.LIVE_TO_VOD:
         debug(`[${this.sessionId}]: INIT Switching from LIVE->VOD`);
-        // TODO: Not yet fully tested/supported (still in alpha)
+        // TODO: Not yet fully tested/supported
         this.eventId = scheduleObj.eventId;
         liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
         liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -278,7 +278,7 @@ class StreamSwitcher {
         return false;
       case SwitcherState.LIVE_TO_LIVE:
         debug(`[${this.sessionId}]: INIT Switching from LIVE->LIVE`);
-        // TODO: Not yet fully tested/supported (still in alpha)
+        // TODO: Not yet fully tested/supported
         this.eventId = scheduleObj.eventId;
         eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
         currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();

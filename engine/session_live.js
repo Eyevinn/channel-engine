@@ -59,10 +59,18 @@ class SessionLive {
     this.sessionLiveState = await this.sessionLiveStateStore.create(this.sessionId, this.instanceId);
   }
 
+  /**
+   *
+   * @param {number} resetDelay The amount of time to wait before resetting the session.
+   *
+   */
   async resetLiveStoreAsync(resetDelay) {
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
       return;
+    }
+    if(resetDelay === null || resetDelay < 0) {
+      resetDelay = RESET_DELAY;
     }
 
     await timer(resetDelay);
@@ -79,9 +87,9 @@ class SessionLive {
 
   async resetSession() {
     /*
-     * ISSUE: fucntion can be called at anytime no matter where the playhead is
+     * ISSUE: resetSession can be called at anytime no matter where the playhead is
      * running code. If a reset occurs just before playhead wants to read from this.something,
-     * then it will generate a TypeError, depending on fucntion.
+     * then it will generate a TypeError, depending on function.
      */
     while (this.waitForPlayhead) {
       debug(`[${this.sessionId}]: SessionLive RESET requested. Waiting for Playhead to finish a parse job.`);
@@ -174,16 +182,25 @@ class SessionLive {
     this.playheadState = PlayheadState.STOPPED;
   }
 
-  async setLiveUri(liveUri) {
-    // Try to set Live URI...
+  /**
+   * This function sets the master manifest URI in sessionLive.
+   * @param {string} masterManifestUri The master manifest URI.
+   * @returns a boolean indicating whether the master manifest URI is reachable or not.
+   */
+  async setLiveUri(masterManifestUri) {
+    if (masterManifestUri === null) {
+      debug(`[${this.sessionId}]: No Live URI provided.`);
+      return false;
+    }
+    // Try to set Live URI
     let attempts = 4;
     while (!this.masterManifestUri && attempts > 0) {
       attempts--;
       try {
         debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`)
         // Load & Parse all Media Manifest URIs from Master
-        await this._loadMasterManifest(liveUri);
-        this.masterManifestUri = liveUri;
+        await this._loadMasterManifest(masterManifestUri);
+        this.masterManifestUri = masterManifestUri;
         if (this.sessionLiveProfile) {
           this._filterLiveProfiles();
         }
@@ -204,6 +221,10 @@ class SessionLive {
   }
 
   async setCurrentMediaSequenceSegments(segments) {
+    if (segments === null) {
+      debug(`[${this.sessionId}]: No segments provided.`);
+      return false;
+    }
     // Make it possible to add & share new segments
     this.allowedToSet = true;
     let discCount = 0;
@@ -243,6 +264,10 @@ class SessionLive {
   }
 
   async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
+    if (mediaSeq === null || discSeq === null) {
+      debug(`[${this.sessionId}]: No media or disc sequence provided`);
+      return false;
+    }
     debug(`[${this.sessionId}]: Setting mediaSeqCount and discSeqCount to: [${mediaSeq}]:[${discSeq}]`);
     this.mediaSeqCount = mediaSeq;
     this.discSeqCount = discSeq;
@@ -344,6 +369,10 @@ class SessionLive {
 
   // Generate manifest to give to client
   async getCurrentMediaManifestAsync(bw) {
+    if (bw === null) {
+      debug(`[${this.sessionId}]: No bandwidth provided`);
+      return null;
+    }
     debug(`[${this.sessionId}]: ...Loading the selected Live Media Manifest`);
     let attempts = 10;
     let m3u8 = null;
@@ -373,9 +402,14 @@ class SessionLive {
 
   /**
    *
-   * @returns Loads the URIs to the different media playlists from the given master playlist
+   * @param {string} masterManifestURI The master manifest URI.
+   * @returns Loads the URIs to the different media playlists from the given master playlist.
+   *
    */
   async _loadMasterManifest(masterManifestURI) {
+    if (masterManifestURI === null) {
+      throw new Error(`[${this.instanceId}][${this.sessionId}]: No masterManifestURI provided`);
+    }
     const parser = m3u8.createStream();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -524,7 +558,7 @@ class SessionLive {
         }
       }
 
-      // Follower updates its manifest ingedients (segment holders & counts)
+      // Follower updates its manifest building blocks (segment holders & counts)
       this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
       this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
       debug(`[${this.sessionId}]: These are the segments from store: [${JSON.stringify(this.liveSegsForFollowers)}]`);
@@ -561,7 +595,7 @@ class SessionLive {
           livePromises.push(this._loadMediaManifest(bw));
           debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=[${bw}]`);
         }
-        // Fetech From Live Source
+        // Fetch From Live Source
         debug(`[${this.sessionId}]: Executing Promises I: Fetech From Live Source`);
         manifestList = await allSettled(livePromises);
         livePromises = [];
@@ -588,7 +622,7 @@ class SessionLive {
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
 
         debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
-        // Decement fetch counter
+        // Decrement fetch counter
         FETCH_ATTEMPTS--;
         // Wait a little before trying again
         debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
@@ -828,6 +862,9 @@ class SessionLive {
   }
 
   _miniparse(m3u, bw, mediaManifestUri, liveTargetBandwidth) {
+    if (m3u === null) {
+      throw new Error("No m3u object provided");
+    }
     return new Promise(async (resolve, reject) => {
       try {
         const resolveObj = {
@@ -944,14 +981,15 @@ class SessionLive {
   * (returning null will cause the engine to try again after 1000ms)
   */
   async _GenerateLiveManifest(bw) {
+    if (bw === null) {
+      throw new Error("No bandwidth provided");
+    }
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
     const vodTargetBandwidth = this._findNearestBw(bw, Object.keys(this.vodSegments));
     debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`)
 
-
     // Uncomment below to guarantee that node always return the most current m3u8,
     // But it will cost an extra trip to store for every client request...
-
     /*
     //  DO NOT GENERATE MANIFEST CASE: Node is NOT in sync with Leader. (Store has new segs, but node hasn't read them yet)
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
@@ -991,23 +1029,24 @@ class SessionLive {
       }
     }
 
-    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId); // remove
-    const date = new Date(); // TODO: Remove this line
-    const dateString = date.toISOString(); // TODO: Remove this line
-    let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER"; // TODO: Remove this line
+    // TODO: Remove this.
+    //const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    //const date = new Date();
+    //const dateString = date.toISOString();
+    //let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER";
 
     debug(`[${this.sessionId}]: Started Generating the Manifest...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
-    m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line
-    m3u8 += "## CurrentTime: " + dateString + "\n"; // TODO: Remove this line
+    //m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line
+    //m3u8 += "## CurrentTime: " + dateString + "\n"; // TODO: Remove this line
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
     m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
     if (Object.keys(this.vodSegments).length !== 0) {
-      // # Add transitional segments if there are any left.
+      // Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegments[vodTargetBandwidth].length}) VOD segments to manifest`);
       for (let i = 0; i < this.vodSegments[vodTargetBandwidth].length; i++) {
         let vodSeg = this.vodSegments[vodTargetBandwidth][i];
