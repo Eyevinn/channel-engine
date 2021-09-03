@@ -250,12 +250,11 @@ class SessionLive {
     // IN CASE: New/Respawned Node Joins the Live Party
     // Don't use what Session gave you. Use the Leaders number if it's available
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+    let liveCounts = await this.sessionLiveState.get("firstCounts");
     if (isLeader) {
-      let firstCounts = await this.sessionLiveState.get("firstCounts");
-      firstCounts.discSeqCount = this.discSeqCount;
-      await this.sessionLiveState.set("firstCounts", firstCounts);
+      liveCounts.discSeqCount = this.discSeqCount;
+      await this.sessionLiveState.set("firstCounts", liveCounts);
     } else {
-      const liveCounts = await this.sessionLiveState.get("firstCounts");
       const leadersMediaSeqCount = liveCounts.mediaSeqCount;
       const leadersDiscSeqCount = liveCounts.discSeqCount;
       if (leadersMediaSeqCount !== null) {
@@ -361,10 +360,6 @@ class SessionLive {
       }
     }
     if (!m3u8) {
-      console.log(`\n\n[${this.instanceId}][${this.sessionId}]: Failed to generate manifest after 10000ms\n\n`)
-      if (this.vodSegments['badKey'].causeError === 0) {
-        this.vodSegments[234].key = "floor";
-      }
       throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate manifest after 10000ms`);
     }
     return m3u8;
@@ -610,11 +605,6 @@ class SessionLive {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms (tries left=${tries})`);
           await timer(1000);
           leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
-          let leaderSwitchedBack = await this._sessionState.get("vodReloaded");
-          if (leaderSwitchedBack) {
-            debug(`[${this.sessionId}]: NEW FOLLOWER: Aborting fetch. Leader has apparently already switched back...`);
-            return;
-          }
           tries--;
         }
 
@@ -627,7 +617,7 @@ class SessionLive {
             debug(`[${this.instanceId}]: The leader is still alive`);
             leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
             if (!leadersFirstSeqCounts.liveSourceMseqCount) {
-              debug(`[${this.instanceId}]: Could not find 'firstCounts' in store. Returning to Playhead.`);
+              debug(`[${this.instanceId}]: Could not find 'firstCounts' in store. Abort Executing Promises II & Returning to Playhead.`);
               return;
             }
           }

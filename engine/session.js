@@ -353,7 +353,7 @@ class Session {
       await this._sessionState.set("mediaSeq", _mediaSeq);
       await this._playheadState.set("mediaSeq", _mediaSeq);
       await this._sessionState.set("discSeq", _discSeq);
-      debug(`[${this._sessionId}]: Setting current media and discontinuity count.`);
+      debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${_mediaSeq}]:[${_discSeq}]`);
     }
   }
 
