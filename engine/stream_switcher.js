@@ -254,8 +254,9 @@ class StreamSwitcher {
           return false;;
         }
 
-        await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
         await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+        await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
+        
 
         this.working = false;
         this.streamTypeLive = false;

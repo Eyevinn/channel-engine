@@ -285,7 +285,7 @@ class Session {
       let ATTEMPTS = 5;
       // Do Not want to reload when session is loading next Vod
       while (state !== SessionState.VOD_PLAYING && ATTEMPTS > 0) {
-        debug(`[${this._sessionId}]: LEADER: Wait for session to initialize next VOD.`);
+        debug(`[${this._sessionId}]: LEADER: Wait for session to initialize next VOD. (tries left=${ATTEMPTS})`);
         await timer(1000);
         state = await this._sessionState.get("state");
         ATTEMPTS--;
