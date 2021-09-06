@@ -39,6 +39,7 @@ class SessionLive {
     this.allowedToSet = false;
     this.pushAmount = 0;
     this.waitForPlayhead = true;
+    this.blockGenerateManifest = false;
 
     if (config) {
       if (config.sessionId) {
@@ -70,7 +71,7 @@ class SessionLive {
     if (!isLeader) {
       return;
     }
-    if(resetDelay === null || resetDelay < 0) {
+    if (resetDelay === null || resetDelay < 0) {
       resetDelay = RESET_DELAY;
     }
 
@@ -113,6 +114,8 @@ class SessionLive {
     this.pushAmount = 0;
     this.allowedToSet = false;
     this.waitForPlayhead = true;
+    this.blockGenerateManifest = false;
+
     debug(`[${this.instanceId}][${this.sessionId}]: Resetting all proprerty values in sessionLive`);
   }
 
@@ -516,6 +519,10 @@ class SessionLive {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+
+      if (!leadersMediaSeqRaw < this.lastRequestedMediaSeqRaw && this.blockGenerateManifest) {
+        this.blockGenerateManifest = false;
+      }
       let attempts = 5;
 
       //  CHECK AGAIN CASE 1: Store Empty
@@ -736,6 +743,10 @@ class SessionLive {
           this.firstTime = false;
           debug(`[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`);
           return;
+        }
+        else if (leadersCurrentMseqRaw < this.lastRequestedMediaSeqRaw) {
+          // WE ARE A RESPAWN-NODE, and we are ahead of leader.
+          this.blockGenerateManifest = true;
         }
       }
     }
@@ -990,6 +1001,12 @@ class SessionLive {
     const vodTargetBandwidth = this._findNearestBw(bw, Object.keys(this.vodSegments));
     debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`)
 
+
+    if (this.blockGenerateManifest) {
+      debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Manifest! Waiting to sync-up with Leader...`);
+      return null;
+    }
+
     // Uncomment below to guarantee that node always return the most current m3u8,
     // But it will cost an extra trip to store for every client request...
     /*
@@ -1031,17 +1048,9 @@ class SessionLive {
       }
     }
 
-    // TODO: Remove this.
-    //const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    //const date = new Date();
-    //const dateString = date.toISOString();
-    //let m3u8FromNode = isLeader ? "LEADER" : "FOLLOWER";
-
     debug(`[${this.sessionId}]: Started Generating the Manifest File:[${this.mediaSeqCount}]...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
-    //m3u8 += "## " + m3u8FromNode + "\n"; // TODO: Remove this line
-    //m3u8 += "## CurrentTime: " + dateString + "\n"; // TODO: Remove this line
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
@@ -1109,17 +1118,17 @@ class SessionLive {
 
   // To only use profiles that the channel will actually need.
   _filterLiveProfiles() {
-      const profiles = this.sessionLiveProfile;
-      const toKeep = new Set();
-      let newItem = {};
-      profiles.forEach(profile => {
-        let bwToKeep = this._findNearestBw(profile.bw, Object.keys(this.mediaManifestURIs));
-        toKeep.add(bwToKeep);
-      });
-      toKeep.forEach((bw) => {
-        newItem[bw] = this.mediaManifestURIs[bw];
-      })
-      this.mediaManifestURIs = newItem;
+    const profiles = this.sessionLiveProfile;
+    const toKeep = new Set();
+    let newItem = {};
+    profiles.forEach(profile => {
+      let bwToKeep = this._findNearestBw(profile.bw, Object.keys(this.mediaManifestURIs));
+      toKeep.add(bwToKeep);
+    });
+    toKeep.forEach((bw) => {
+      newItem[bw] = this.mediaManifestURIs[bw];
+    })
+    this.mediaManifestURIs = newItem;
   }
 
   _isEmpty(obj) {

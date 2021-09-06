@@ -179,9 +179,7 @@ class ChannelEngine {
         switcherStatus[channel] = null;
         let status = null;
         try {
-          //console.log(`status before = ${status}`);
           status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
-          //console.log(`status after = ${status}, good job switcher.streamSwitcher(..,..)`);
           if (status === undefined) {
             debug(`[WARNING]: switcherStatus->${status}`);
           }
@@ -305,8 +303,8 @@ class ChannelEngine {
     const statusSessionLive = sessionLive.getStatus();
     const statusSession = await session.getStatusAsync();
 
-    debug(`MONITOR (${new Date().toISOString()}) [${statusSession.sessionId}]: playhead: ${statusSession.playhead.state}`);
-    debug(`MONITOR (${new Date().toISOString()}) [${statusSessionLive.sessionId}]: live-playhead: ${statusSessionLive.playhead.state}`);
+    debug(`MONITOR: (${new Date().toISOString()}) [${statusSession.sessionId}]: playhead: ${statusSession.playhead.state}`);
+    debug(`MONITOR: (${new Date().toISOString()}) [${statusSessionLive.sessionId}]: live-playhead: ${statusSessionLive.playhead.state}`);
 
     if (statusSessionLive.playhead.state === 'crashed') {
       debug(`[${statusSessionLive.sessionId}]: SessionLive-Playhead crashed, restarting`);
@@ -438,7 +436,7 @@ class ChannelEngine {
     if (session && sessionLive) {
       try {
         while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
-          debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]] }) Waiting for streamSwitcher to respond`);
+          debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
           await timer(500);
         }
         let body = null;

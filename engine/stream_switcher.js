@@ -65,18 +65,19 @@ class StreamSwitcher {
       debug(`[${this.sessionId}]: streamSwitcher is currently busy`);
       return null;
     }
-
+    let status = null;
     // Filter out schedule objects from the past
     const tsNow = Date.now(); 
-    const  strmSchedule = this.streamSwitchManager.getSchedule();
-    const  schedule = strmSchedule.filter((obj) => obj.end_time > tsNow);   
+    const strmSchedule = this.streamSwitchManager.getSchedule();
+    const schedule = strmSchedule.filter((obj) => obj.end_time > tsNow);   
     if (schedule.length === 0 && this.streamTypeLive) {
-      return await this._initSwitching(
+      status = await this._initSwitching(
         SwitcherState.LIVE_TO_V2L,
         session,
         sessionLive,
         null
       );
+      return status;
     }
     if (schedule.length === 0) {
       this.eventId = null;
@@ -86,12 +87,13 @@ class StreamSwitcher {
     this.timeDiff = scheduleObj;
     if (tsNow < scheduleObj.start_time) {
       if (this.streamTypeLive) {
-        return await this._initSwitching(
+        status = await this._initSwitching(
           SwitcherState.LIVE_TO_V2L,
           session,
           sessionLive,
           null
         );
+        return status;
       }
       this.eventId = null;
       return false;
@@ -109,17 +111,18 @@ class StreamSwitcher {
       if (this.streamTypeLive) {
         debug(`[${this.sessionId}]: Abort Live Stream! Switching back to VOD2Live due to unreachable URI`);
         this.abortTimeStamp = Date.now();
-        return await this._initSwitching(
+        status = await this._initSwitching(
           SwitcherState.LIVE_TO_V2L,
           session,
           sessionLive,
           null
         );
+        return status;
       }
       return false;
     }
     debug(`[${this.sessionId}]: ....Master URI -> VALID`);
-      
+
 
     if (this.abortTimeStamp && (tsNow - this.abortTimeStamp) <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
@@ -132,30 +135,34 @@ class StreamSwitcher {
     if (this.streamTypeLive) {
       if (tsNow >= scheduleObj.start_time && this.eventId !== scheduleObj.eventId) {
         if (scheduleObj.type === StreamType.LIVE) {
-          return await this._initSwitching(
+          status =  await this._initSwitching(
             SwitcherState.LIVE_TO_LIVE,
             session,
             sessionLive,
             scheduleObj
           );
+          return status;
+
         }
-        return await this._initSwitching(
+        status = await this._initSwitching(
           SwitcherState.LIVE_TO_VOD,
           session,
           sessionLive,
           scheduleObj
         );
+        return status;
       }
     }
     if (tsNow >= scheduleObj.start_time && tsNow < scheduleObj.end_time && (scheduleObj.end_time - tsNow) > 10000) {
       if (scheduleObj.type === StreamType.LIVE) {
         if (!this.streamTypeLive) {
-          return await this._initSwitching(
+          status = await this._initSwitching(
             SwitcherState.V2L_TO_LIVE,
             session,
             sessionLive,
             scheduleObj
           );
+          return status;
         }
         return true;
       }
@@ -165,12 +172,13 @@ class StreamSwitcher {
           return false;
         }
         if (this.eventId !== scheduleObj.eventId) {
-          return await this._initSwitching(
+          status = await this._initSwitching(
             SwitcherState.V2L_TO_VOD,
             session,
             sessionLive,
             scheduleObj
           );
+          return status;
         }
         return false;
       }
@@ -202,7 +210,6 @@ class StreamSwitcher {
         await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
         liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
-
         if (!liveUri) {
           debug(`[${this.sessionId}]: [ ERROR Switching from V2L->LIVE ]`);
           this.working = false;
@@ -217,7 +224,6 @@ class StreamSwitcher {
       case SwitcherState.V2L_TO_VOD:
         debug(`[${this.sessionId}]: [ INIT Switching from V2L->VOD ]`);
         this.eventId = scheduleObj.eventId;
-        this.streamTypeLive = false; // Should not be possible but just in case
         currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
         eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
