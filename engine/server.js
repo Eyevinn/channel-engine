@@ -9,13 +9,18 @@ const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 
 const { SessionStateStore } = require('./session_state.js');
+const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
+
 const { filterQueryParser, toHHMMSS } = require('./util.js');
 const { version } = require('../package.json');
 
+const timer = ms => new Promise(res => setTimeout(res, ms));
+
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
-const sessionSwitcher = {};
+const sessionSwitchers = {}; // Should be a persistent store...
+const switcherStatus = {}; // Should be a persistent store...
 const eventStreams = {};
 
 class ChannelEngine {
@@ -46,13 +51,24 @@ class ChannelEngine {
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
 
+    this.streamSwitchTimeIntervalMs = 3000;
+
     this.sessionStore = {
-      sessionStateStore: new SessionStateStore({ 
+      sessionStateStore: new SessionStateStore({
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
       }),
       playheadStateStore: new PlayheadStateStore({ 
+        redisUrl: options.redisUrl, 
+        memcachedUrl: options.memcachedUrl, 
+        cacheTTL: options.sharedStoreCacheTTL,
+      }),
+      instanceId: this.instanceId,
+    };
+
+    this.sessionLiveStore = {
+      sessionLiveStateStore: new SessionLiveStateStore({
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
@@ -128,7 +144,54 @@ class ChannelEngine {
       const t = setInterval(async () => { await this.updateChannelsAsync(options.channelManager, options) }, 60 * 1000);
     }
 
-    const ping = setInterval(async () => { await this.sessionStore.sessionStateStore.ping(this.instanceId); }, 3000);
+    const LeaderSyncSessionTypes = async () => {
+      await timer(10*1000);
+      let isLeader = await this.sessionStore.sessionStateStore.isLeader(this.instanceId);
+      if (isLeader) {
+        await this.sessionLiveStore.sessionLiveStateStore.setLeader(this.instanceId);
+      }
+    }
+    LeaderSyncSessionTypes();
+
+    const ping = setInterval(async () => {
+      await this.sessionStore.sessionStateStore.ping(this.instanceId);
+      await this.sessionLiveStore.sessionLiveStateStore.ping(this.instanceId);
+    }, 3000);
+
+    const StreamSwitchLoop = async (timeIntervalMs) => {
+      while(true) {
+        const ts_1 = Date.now();
+        await this.updateStreamSwitchAsync()
+        const ts_2 = Date.now();
+        let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
+        await timer(interval)
+        debug(`SteamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
+      }
+    }
+    StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
+  }
+
+  async updateStreamSwitchAsync() {
+    const channels = Object.keys(sessionSwitchers);
+    const getSwitchStatusAndPerformSwitch = async (channel) => {
+      if (sessionSwitchers[channel]) {
+        const switcher = sessionSwitchers[channel];
+        switcherStatus[channel] = null;
+        let status = null;
+        try {
+          status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
+          if (status === undefined) {
+            debug(`[WARNING]: switcherStatus->${status}`);
+          }
+          switcherStatus[channel] = status;
+        } catch (err) {
+          throw new Error (err);
+        }
+       } else {
+        debug(`Tried to switch stream on a non-existing channel=[${channel}]. Switching Ignored!)`);
+      }
+    }
+    await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
   }
 
   async updateChannelsAsync(channelMgr, options) {
@@ -154,26 +217,32 @@ class ChannelEngine {
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
-        instanceId: this.sessionStore.instanceId,
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
         cloudWatchMetrics: this.logCloudWatchMetrics,
-      });
+        profile: channel.profile,
+      }, this.sessionLiveStore);
 
-      sessionSwitcher[channel.id] = new StreamSwitcher({
+      sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
-        useDemuxedAudio: options.useDemuxedAudio,
-        cloudWatchMetrics: this.logCloudWatchMetrics,
-        streamSwitchManager: this.streamSwitchManager,
+        streamSwitchManager: this.streamSwitchManager ? this.streamSwitchManager : null
       });
 
       await sessions[channel.id].initAsync();
+      await sessionsLive[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
-        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id]) }, 5000);
+        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id], sessionsLive[channel.id]) }, 5000);
       }
+
       await sessions[channel.id].startPlayheadAsync();
     };
-    await Promise.all(newChannels.map(channel => addAsync(channel)));
+
+    const addLiveAsync = async (channel) => {
+      debug(`Adding channel with ID ${channel.id}`);
+      await sessionsLive[channel.id].initAsync();
+      await sessionsLive[channel.id].startPlayheadAsync();
+    };
+    await Promise.all(newChannels.map(channel => addAsync(channel)).concat(newChannels.map(channel => addLiveAsync(channel))));
 
     debug(`Have any channels been removed?`);
     const removedChannels = Object.keys(sessions).filter(channelId => !channelMgr.getChannels().find(ch => ch.id == channelId));
@@ -181,9 +250,11 @@ class ChannelEngine {
       debug(`Removing channel with ID ${channelId}`);
       clearInterval(this.monitorTimer[channelId]);
       await sessions[channelId].stopPlayheadAsync();
+      await sessionsLive[channelId].stopPlayheadAsync();
       delete sessions[channelId];
       delete sessionsLive[channelId];
-      delete sessionSwitcher[channelId];
+      delete sessionSwitchers[channelId];
+      delete switcherStatus[channelId];
     };
     await Promise.all(removedChannels.map(channelId => removeAsync(channelId)));
   }
@@ -191,15 +262,22 @@ class ChannelEngine {
   start() {
     const startAsync = async (channelId) => {
       const session = sessions[channelId];
+      const sessionLive = sessionsLive[channelId];
       if (!this.monitorTimer[channelId]) {
-        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session) }, 5000);
+        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session, sessionLive) }, 5000);
       }
-      await session.startPlayheadAsync();
+      session.startPlayheadAsync();
+      await sessionLive.startPlayheadAsync();
     };
+    const startLiveAsync = async (channelId) => {
+      const sessionLive = sessionsLive[channelId];
+      await sessionLive.startPlayheadAsync();
+    };
+
     (async () => {
       debug("Starting engine");
       await this.updateChannelsAsync(this.options.channelManager, this.options);
-      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)));
+      await Promise.all(Object.keys(sessions).map(channelId => startAsync(channelId)).concat(Object.keys(sessionsLive).map(channelId => startLiveAsync(channelId))));
     })();
   }
 
@@ -221,14 +299,22 @@ class ChannelEngine {
     return Object.keys(sessions).filter(sessionId => sessions[sessionId].hasPlayhead()).length;
   }
 
-  async _monitorAsync(session) {
-    const status = await session.getStatusAsync();
-    debug(`MONITOR (${new Date().toISOString()}) [${status.sessionId}]: playhead: ${status.playhead.state}`);
-    if (status.playhead.state === 'crashed') {
-      debug(`[${status.sessionId}]: Playhead crashed, restarting`);
+  async _monitorAsync(session, sessionLive) {
+    const statusSessionLive = sessionLive.getStatus();
+    const statusSession = await session.getStatusAsync();
+
+    debug(`MONITOR: (${new Date().toISOString()}) [${statusSession.sessionId}]: playhead: ${statusSession.playhead.state}`);
+    debug(`MONITOR: (${new Date().toISOString()}) [${statusSessionLive.sessionId}]: live-playhead: ${statusSessionLive.playhead.state}`);
+
+    if (statusSessionLive.playhead.state === 'crashed') {
+      debug(`[${statusSessionLive.sessionId}]: SessionLive-Playhead crashed, restarting`);
+      await sessionLive.restartPlayheadAsync();
+    }
+    if (statusSession.playhead.state === 'crashed') {
+      debug(`[${statusSession.sessionId}]: Session-Playhead crashed, restarting`);
       await session.restartPlayheadAsync();
-    } else if (status.playhead.state === 'idle') {
-      debug(`[${status.sessionId}]: Starting playhead`);
+    } else if (statusSession.playhead.state === 'idle') {
+      debug(`[${statusSession.sessionId}]: Starting playhead`);
       await session.startPlayheadAsync();
     }
   }
@@ -243,6 +329,7 @@ class ChannelEngine {
     debug('req.url=' + req.url);
     debug(req.query);
     let session;
+    let sessionLive;
     let options = {};
     if (req.query['playlist']) {
       // Backward compatibility
@@ -346,21 +433,24 @@ class ChannelEngine {
     debug(req.params);
     const session = sessions[req.params[1]];
     const sessionLive = sessionsLive[req.params[1]];
-    const switcher = sessionSwitcher[req.params[1]];
     if (session && sessionLive) {
       try {
+        while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
+          debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+          await timer(500);
+        }
         let body = null;
-        const useLiveSession = await switcher.streamSwitcher(session, sessionLive);
-        if (useLiveSession) {
-          debug(`Responding with Altered-Live stream manifest`);
+        debug(`switcherStatus[req.params[1]]=[${switcherStatus[req.params[1]]}]`);
+        if (switcherStatus[req.params[1]]) {
+          debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {
-          debug(`Responding with VOD2Live stream manifest`);
+          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         }
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), { 
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/x-mpegURL;charset=UTF-8",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
@@ -371,7 +461,7 @@ class ChannelEngine {
         next(this._gracefulErrorHandler(err));
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
+      const err = new errs.NotFoundError('Invalid session(s)');
       next(err);
     }
   }
