@@ -9,6 +9,7 @@ const { AbortController } = require("abort-controller");
 
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
 const RESET_DELAY = 5000;
+const FAIL_TIMEOUT = 4000;
 const PlayheadState = Object.freeze({
   RUNNING: 1,
   STOPPED: 2,
@@ -193,7 +194,7 @@ class SessionLive {
       return false;
     }
     // Try to set Live URI
-    let attempts = 4;
+    let attempts = 3;
     while (!this.masterManifestUri && attempts > 0) {
       attempts--;
       try {
@@ -413,9 +414,9 @@ class SessionLive {
     const parser = m3u8.createStream();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
-      debug(`[${this.sessionId}]: Aborting Request to ${masterManifestURI}`);
+      debug(`[${this.sessionId}]: Request Timeout! Aborting Request to ${masterManifestURI}`);
       controller.abort();
-    }, 30000);
+    }, FAIL_TIMEOUT);
 
     const response = await fetch(masterManifestURI, { signal: controller.signal });
     try {
@@ -606,7 +607,7 @@ class SessionLive {
 
       // Handle if any promise got rejected
       if (manifestList.some(result => result.status === "rejected")) {
-        debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Returning to Playhead`);
+        debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again...`);
         continue;
       }
 
@@ -733,7 +734,7 @@ class SessionLive {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Leader is ahead or behind me! Clearing Queue and Getting latest segments from store.`);
           this._updateLiveSegQueue();
           this.firstTime = false;
-          debug(`[${this.sessionId}]: Got all needed segments from all live-source bandwidths. We are now able to build a Live Manifest`);
+          debug(`[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`);
           return;
         }
       }
@@ -832,9 +833,9 @@ class SessionLive {
     const parser = m3u8.createStream();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
-      debug(`[${this.sessionId}]: Aborting Request to ${mediaManifestUri}`);
+      debug(`[${this.sessionId}]: Request Timeout! Aborting Request to ${mediaManifestUri}`);
       controller.abort();
-    }, 30000);
+    }, FAIL_TIMEOUT);
 
     const response = await fetch(mediaManifestUri, { signal: controller.signal });
     try {
@@ -937,8 +938,8 @@ class SessionLive {
   }
 
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth) {
-    debug(`[${this.sessionId}]: Adding Live Segment(s) to Queue (for bw=${liveTargetBandwidth})`);
     for (let i = startIdx; i < playlistItems.length; i++) {
+      debug(`[${this.sessionId}]: Adding Live Segment(s) to Queue (for bw=${liveTargetBandwidth})`);
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;

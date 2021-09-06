@@ -177,8 +177,19 @@ class ChannelEngine {
       if (sessionSwitchers[channel]) {
         const switcher = sessionSwitchers[channel];
         switcherStatus[channel] = null;
-        switcherStatus[channel] = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
-      } else {
+        let status = null;
+        try {
+          //console.log(`status before = ${status}`);
+          status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
+          //console.log(`status after = ${status}, good job switcher.streamSwitcher(..,..)`);
+          if (status === undefined) {
+            debug(`[WARNING]: switcherStatus->${status}`);
+          }
+          switcherStatus[channel] = status;
+        } catch (err) {
+          throw new Error (err);
+        }
+       } else {
         debug(`Tried to switch stream on a non-existing channel=[${channel}]. Switching Ignored!)`);
       }
     }
@@ -427,7 +438,7 @@ class ChannelEngine {
     if (session && sessionLive) {
       try {
         while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
-          debug(`[${req.params[1]}]: Waiting for streamSwitcher to respond`);
+          debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]] }) Waiting for streamSwitcher to respond`);
           await timer(500);
         }
         let body = null;

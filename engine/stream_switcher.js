@@ -15,6 +15,9 @@ const StreamType = Object.freeze({
   VOD: 2,
 });
 
+const FAIL_TIMEOUT = 3000;
+const MAX_FAILS = 3;
+
 class StreamSwitcher {
   constructor(config) {
     this.sessionId = crypto.randomBytes(20).toString("hex");
@@ -25,7 +28,7 @@ class StreamSwitcher {
     this.eventId = null;
     this.working = false;
     this.timeDiff = null;
-    this.switchTimestamp = null;
+    this.abortTimeStamp = null;
 
     if (config) {
       if (config.sessionId) {
@@ -64,9 +67,9 @@ class StreamSwitcher {
     }
 
     // Filter out schedule objects from the past
-    const tsNow = Date.now();
-    const strmSchedule = this.streamSwitchManager.getSchedule();
-    const schedule = strmSchedule.filter((obj) => obj.end_time > tsNow);
+    const tsNow = Date.now(); 
+    const  strmSchedule = this.streamSwitchManager.getSchedule();
+    const  schedule = strmSchedule.filter((obj) => obj.end_time > tsNow);   
     if (schedule.length === 0 && this.streamTypeLive) {
       return await this._initSwitching(
         SwitcherState.LIVE_TO_V2L,
@@ -94,12 +97,18 @@ class StreamSwitcher {
       return false;
     }
 
-    const validURI = await this._validURI(scheduleObj.uri);
+    let tries = 0;
+    let validURI = false;
+    while (!validURI && tries < MAX_FAILS) {
+      debug(`[${this.sessionId}]: Switcher is validating Master URI... (tries left=${MAX_FAILS - tries})`);
+      validURI = await this._validURI(scheduleObj.uri);
+      tries++;
+    }
     if (!validURI) {
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
         debug(`[${this.sessionId}]: Abort Live Stream! Switching back to VOD2Live due to unreachable URI`);
-        this.switchTimestamp = Date.now();
+        this.abortTimeStamp = Date.now();
         return await this._initSwitching(
           SwitcherState.LIVE_TO_V2L,
           session,
@@ -109,14 +118,16 @@ class StreamSwitcher {
       }
       return false;
     }
+    debug(`[${this.sessionId}]: ....Master URI -> VALID`);
+      
 
-    if (this.switchTimestamp && (tsNow - this.switchTimestamp) <= 10000) {
+    if (this.abortTimeStamp && (tsNow - this.abortTimeStamp) <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
       // Stay on V2L to give live sessionLive some time to prepare before switching back to live.
-      debug(`[${this.sessionId}]: Waiting [${10000 - (tsNow - this.switchTimestamp)}ms] before switching back to Live due to unreachable URI`);
+      debug(`[${this.sessionId}]: Waiting [${10000 - (tsNow - this.abortTimeStamp)}ms] before switching back to Live due to unreachable URI`);
       return false;
     } 
-    this.switchTimestamp = null;
+    this.abortTimeStamp = null;
 
     if (this.streamTypeLive) {
       if (tsNow >= scheduleObj.start_time && this.eventId !== scheduleObj.eventId) {
@@ -325,10 +336,12 @@ class StreamSwitcher {
   async _validURI(uri) {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
+      debug(`[${this.sessionId}]: Request Timeout @ ${uri}`);
       controller.abort();
-    }, 3000);
+    }, FAIL_TIMEOUT);
     try {
       const online = await fetch(uri, { signal: controller.signal });
+
       if (online.status >= 200 && online.status < 300) {
         return true;
       }
