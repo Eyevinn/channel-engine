@@ -143,7 +143,7 @@ The class's `getSchedule()` function should return a list of event objects in th
 {
   "eventId": {
       "type": "string",
-      "description": "Generated ID of the event. If not specified a uuid-based eventId will be generated"
+      "description": "Generated ID of the event"
   },
   "assetId": {
     "type": "string",
@@ -200,6 +200,9 @@ Below are examples of a Live stream event and a VOD event respectively:
   duration: 2 * 60 * 1000,
 }
 ```
+(*Important Note: When it comes to VOD events. Desired `duration` has priority over `end_time`. Meaning that you will only resume VOD2Live content after the asset in the VOD event has finished. This may change in the future.*) 
+
+
 Then create an instance of the class and reference it as the `streamSwitchManager` in your engineOptions, just like you'd do with the channel manager. 
 
 ```
