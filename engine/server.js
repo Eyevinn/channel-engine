@@ -182,7 +182,7 @@ class ChannelEngine {
         try {
           status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
           if (status === undefined) {
-            debug(`[WARNING]: switcherStatus->${status}___setting to->${prevStatus}`);
+            debug(`[WARNING]: switcherStatus->${status}. Setting value to previous status->${prevStatus}`);
             status = prevStatus;
           }
           switcherStatus[channel] = status;
