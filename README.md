@@ -219,7 +219,7 @@ const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
 engine.listen(process.env.port || 8000);
 ```
-A StreamSwitcher component in the channel engine will continiously, in a set time interval, use the StreamSwitchManager to get the list and will inspect whether it should break into/out of the event, depending on the current time. 
+A StreamSwitcher component in the channel engine will continiously, in a set time interval, use the StreamSwitchManager to get the list and filter out all events whos `end_time` has passed, and will inspect whether it should break into/out of the next event in the remaining list, depending on the current time. 
 
 Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
 
