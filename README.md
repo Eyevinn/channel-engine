@@ -89,6 +89,7 @@ Available options when constructing the Channel Engine object are:
 - `sharedStoreCacheTTL`: How long should data be cached in memory before writing to shared store. Default is 1000 ms.
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
+- `streamSwitchManager`: A reference to a stream switch manager object.
 - `cacheTTL`: Sets the cache-control header TTL. Default is 4 sec.
 - `playheadDiffThreshold`: Sets the threshold when starting to adjust tick interval to compensate for playhead drift.
 - `maxTickInterval`: The maximum interval for playhead tick interval. Default is 10000 ms.
@@ -119,6 +120,108 @@ engine.listen(process.env.port || 8000);
 ```
 
 Note that this feature is currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
+
+
+## Live Mixing (BETA)
+
+This feature gives the possibility to mix in a true live stream in a Channel Engine powered linear channel (VOD2Live).
+
+![RFC Drawing of Live-Mixing Functionality](rfc/channel_engine_vod_with_live.png)
+
+A beta-version of live-mixing with high availability support is available in the Channel Engine. This allows you to use a new component which can let you break in to a scheduled VOD event or Live stream event at any speficied time on top of the usual vod-to-live content. 
+To enable live-mixing, create a class which implements the following interface.
+
+```
+class MyStreamSwitchManager {
+  getSchedule() -> [ { eventId, assetId, title, type, start_time, end_time, uri, duration } ]
+}
+```
+
+The class's `getSchedule()` function should return a list of event objects in the following format:
+
+```
+{
+  "eventId": {
+      "type": "string",
+      "description": "Generated ID of the event. If not specified a uuid-based eventId will be generated"
+  },
+  "assetId": {
+    "type": "string",
+    "description": "The ID of the asset in the schedule event"
+  },
+  "title": {
+    "type": "string",
+    "description": "Title of the asset"
+  },
+  "type": {
+    "type": "number",
+    "description": "Type of event (1=LIVE and 2=VOD)"
+  },
+  "start_time": {
+    "type": "number",
+    "description": "UTC Start time of the event as a Unix Timestamp (in milliseconds)"
+  },
+  "end_time": {
+    "type": "number",
+    "description": "UTC End time of the event as a Unix Timestamp (in milliseconds)"
+  },
+  "uri": {
+    "type": "string",
+    "description": "The URI to the VOD asset or Live Stream"
+  },
+  "duration": {
+    "type": "number",
+    "description": "The duration of the asset (in milliseconds) NOTE: Not required for Live Stream events"
+  }
+}
+```
+
+Below are examples of a Live stream event and a VOD event respectively:
+```
+{
+  eventId: "eeecd5ce-d2d2-48db-b1b3-233957f7d69e",
+  assetId: "live-asset-4",
+  title: "My scheduled Live stream event",
+  type: 1,
+  start_time: 1631003900000,
+  end_time: 1631003921000,
+  uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+}
+```
+```
+{
+  eventId: "26453eea-0ac2-4b89-a87a-73d369920874",
+  assetId: "vod-asset-13",
+  title: "My scheduled VOD event",
+  type: 2,
+  start_time: 1631004100000,
+  end_time: 1631004121000,
+  uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
+  duration: 2 * 60 * 1000,
+}
+```
+Then create an instance of the class and reference it as the `streamSwitchManager` in your engineOptions, just like you'd do with the channel manager. 
+
+```
+const MyStreamSwitchManager = new MyStreamSwitchManager();
+
+const engineOptions = {
+  heartbeat: '/',
+  averageSegmentDuration: 2000,
+  channelManager: MyChannelManager,
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  slateRepetitions: 10,
+  redisUrl: "redis://127.0.0.1",
+  streamSwitchManager: MyStreamSwitchManager,
+};
+
+const engine = new ChannelEngine(refAssetManager, engineOptions);
+engine.start();
+engine.listen(process.env.port || 8000);
+```
+A StreamSwitcher component in the channel engine will continiously, in a set time interval, use the StreamSwitchManager to get the list and will inspect whether it should break into/out of the event, depending on the current time. 
+
+Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
 
 ## Demo
 
