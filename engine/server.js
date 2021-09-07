@@ -176,12 +176,14 @@ class ChannelEngine {
     const getSwitchStatusAndPerformSwitch = async (channel) => {
       if (sessionSwitchers[channel]) {
         const switcher = sessionSwitchers[channel];
+        let prevStatus = switcherStatus[channel] !== null ? switcherStatus[channel] : null;
         switcherStatus[channel] = null;
         let status = null;
         try {
           status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
           if (status === undefined) {
-            debug(`[WARNING]: switcherStatus->${status}`);
+            debug(`[WARNING]: switcherStatus->${status}___setting to->${prevStatus}`);
+            status = prevStatus;
           }
           switcherStatus[channel] = status;
         } catch (err) {
