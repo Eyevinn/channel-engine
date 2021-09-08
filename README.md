@@ -222,7 +222,24 @@ const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
 engine.listen(process.env.port || 8000);
 ```
-A StreamSwitcher component in the channel engine will continiously, in a set time interval, use the StreamSwitchManager to get the list and filter out all events whos `end_time` has passed, and will inspect whether it should break into/out of the next event in the remaining list, depending on the current time. 
+
+### Stream Switch Manager & The StreamSwitcher
+When building a Stream Switch Manager it is good to know the basics of how the **StreamSwitcher** component in Channel Engine works.
+Each channel will have it's own **StreamSwitcher** component in the Channel Engine which will continiously, at a set time interval, call the `getSchedule()` function in the StreamSwitchManager to get the list of scheduled events.
+
+*Note: For now, all channels read from the same event schedule*
+
+
+The **StreamSwitcher** decides whether the channel should show VOD2Live content (chosen by the Asset manager) or true Live content (content specified in the event object).
+By default, if no StreamSwitchManager is used, or if the returned schedule list is empty, or if the next event in the schedule list has its `start_time` in the future, the **StreamSwitcher** will have the channel broadcast the VOD2Live feed.
+
+
+When the **StreamSwitcher** receives a populated schedule list, it will ignore all items whos `end_time` is past the current time, and will only look at the first event whos `end_time` is in the future. When the condition: `event.start_time ≤ (current time) ≤ event.end_time` is true, then the **StreamSwitcher** will perform a switch from VOD2Live to LIVE, where the channel will start broadcasting the true Live stream. When this happens a proper transition between content will take place in the HLS manifests. Also once LIVE, it will not switch again. 
+
+
+VOD2Live content will still be "playing" in the background as fallback content in case the true Live stream has issues or fails. 
+If the connection to the Live stream ends or if the current time has passed the event `end_time` then the **StreamSwitcher** will switch from LIVE to VOD2Live, having the channel broadcast VOD2Live once again until the next event starts.
+
 
 Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
 
