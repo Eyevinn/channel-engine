@@ -113,42 +113,45 @@ const StreamType = Object.freeze({
 class StreamSwitchManager {
   constructor() {
     this.schedule = [];
+    this.BREAKING_ENDPOINT = process.env.SWITCH_MGR_URL || "http://localhost:8001/api/v1/schedule/";
   }
 
   generateID() {
     return uuidv4();
   }
 
-  getSchedule() {
-    const tsNow = Date.now();
-    const streamDuration = 60 * 1000;
-    const startOffset = tsNow + streamDuration;
-    const endTime = startOffset + 3*streamDuration;
-    // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
-    // Required: "assetId", "start_time", "end_time", "uri", "duration"
-    // "duration" is only required for StreamType.VOD
-    this.schedule = this.schedule.filter((obj) => obj.end_time >= tsNow);
-    if (this.schedule.length === 0) {
-      this.schedule.push({
-        eventId: this.generateID(),
-        assetId: this.generateID(),
-        title: "Live stream test",
-        type: StreamType.LIVE,
-        start_time: startOffset,
-        end_time: endTime,
-        uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
-      },
-      {
-        eventId: this.generateID(),
-        assetId: this.generateID(),
-        title: "Scheduled VOD test",
-        type: StreamType.VOD,
-        start_time: (endTime + 100*1000),
-        end_time: (endTime + 100*1000) + streamDuration,
-        uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
-        duration: streamDuration,
-      });
-    }
+  async getSchedule(channelId) {
+
+
+    // const tsNow = Date.now();
+    // const streamDuration = 60 * 1000;
+    // const startOffset = tsNow + streamDuration;
+    // const endTime = startOffset + 3*streamDuration;
+    // // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
+    // // Required: "assetId", "start_time", "end_time", "uri", "duration"
+    // // "duration" is only required for StreamType.VOD
+    // this.schedule = this.schedule.filter((obj) => obj.end_time >= tsNow);
+    // if (this.schedule.length === 0) {
+    //   this.schedule.push({
+    //     eventId: this.generateID(),
+    //     assetId: this.generateID(),
+    //     title: "Live stream test",
+    //     type: StreamType.LIVE,
+    //     start_time: startOffset,
+    //     end_time: endTime,
+    //     uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+    //   },
+    //   {
+    //     eventId: this.generateID(),
+    //     assetId: this.generateID(),
+    //     title: "Scheduled VOD test",
+    //     type: StreamType.VOD,
+    //     start_time: (endTime + 100*1000),
+    //     end_time: (endTime + 100*1000) + streamDuration,
+    //     uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
+    //     duration: streamDuration,
+    //   });
+    // }
     return this.schedule;
   }
 }

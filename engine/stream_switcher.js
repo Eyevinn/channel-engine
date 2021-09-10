@@ -68,7 +68,7 @@ class StreamSwitcher {
     let status = null;
     // Filter out schedule objects from the past
     const tsNow = Date.now(); 
-    const strmSchedule = this.streamSwitchManager.getSchedule();
+    const strmSchedule = await this.streamSwitchManager.getSchedule(this.sessionId);
     const schedule = strmSchedule.filter((obj) => obj.end_time > tsNow);   
     if (schedule.length === 0 && this.streamTypeLive) {
       status = await this._initSwitching(
