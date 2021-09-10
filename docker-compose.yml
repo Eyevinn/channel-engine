@@ -11,8 +11,9 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8081
-      - TEST_CHANNELS=5
+      - TEST_CHANNELS=3
       - REDIS_URL=redis://redis:6379/
+      - SWITCH_MGR_URL=http://localhost:8001/api/v1/schedule
     networks:
       - vc-net
     ports:
@@ -24,8 +25,9 @@ services:
     image: channel-engine:test
     environment:
       - PORT=8082
-      - TEST_CHANNELS=5
+      - TEST_CHANNELS=3
       - REDIS_URL=redis://redis:6379/
+      - SWITCH_MGR_URL=http://localhost:8001/api/v1/schedule
     networks:
       - vc-net
     ports:

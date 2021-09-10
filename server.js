@@ -4,6 +4,8 @@
 
 const ChannelEngine = require("./index.js");
 const { v4: uuidv4 } = require('uuid');
+const fetch = require("node-fetch");
+const { AbortController } = require("abort-controller");
 
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
 class RefAssetManager {
@@ -105,15 +107,10 @@ class RefChannelManager {
     ]
   }
 }
-const StreamType = Object.freeze({
-  LIVE: 1,
-  VOD: 2,
-});
-
-class StreamSwitchManager {
+class RefStreamSwitchManager {
   constructor() {
     this.schedule = [];
-    this.BREAKING_ENDPOINT = process.env.SWITCH_MGR_URL || "http://localhost:8001/api/v1/schedule/";
+    this.SCHEDULE_ENDPOINT = process.env.SWITCH_MGR_URL || "http://localhost:8001/api/v1/schedule";
   }
 
   generateID() {
@@ -121,44 +118,33 @@ class StreamSwitchManager {
   }
 
   async getSchedule(channelId) {
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      debug(`[${this.sessionId}]: Request Timeout! Aborting Request to ${this.SCHEDULE_ENDPOINT}`);
+      controller.abort();
+    }, 3000);
 
-
-    // const tsNow = Date.now();
-    // const streamDuration = 60 * 1000;
-    // const startOffset = tsNow + streamDuration;
-    // const endTime = startOffset + 3*streamDuration;
-    // // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
-    // // Required: "assetId", "start_time", "end_time", "uri", "duration"
-    // // "duration" is only required for StreamType.VOD
-    // this.schedule = this.schedule.filter((obj) => obj.end_time >= tsNow);
-    // if (this.schedule.length === 0) {
-    //   this.schedule.push({
-    //     eventId: this.generateID(),
-    //     assetId: this.generateID(),
-    //     title: "Live stream test",
-    //     type: StreamType.LIVE,
-    //     start_time: startOffset,
-    //     end_time: endTime,
-    //     uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
-    //   },
-    //   {
-    //     eventId: this.generateID(),
-    //     assetId: this.generateID(),
-    //     title: "Scheduled VOD test",
-    //     type: StreamType.VOD,
-    //     start_time: (endTime + 100*1000),
-    //     end_time: (endTime + 100*1000) + streamDuration,
-    //     uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
-    //     duration: streamDuration,
-    //   });
-    // }
+    try {
+      const res = await fetch(`${this.SCHEDULE_ENDPOINT}/${channelId}`, { signal: controller.signal });
+      if(res.ok){
+        const data = await res.json();
+        this.schedule = data;
+      } else {
+        this.schedule = [];
+      }
+    } catch (e) {
+      console.log(e);
+    } finally {
+      clearTimeout(timeout);
+    }
     return this.schedule;
   }
 }
 
 const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
-const refStreamSwitchManager = new StreamSwitchManager();
+const refStreamSwitchManager = new RefStreamSwitchManager();
 
 const engineOptions = {
   heartbeat: "/",
