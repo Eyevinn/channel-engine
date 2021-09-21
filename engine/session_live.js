@@ -249,6 +249,9 @@ class SessionLive {
       if (!segments[bw][segments[bw].length - 1].discontinuity) {
         this.vodSegments[bw].push({ discontinuity: true });
       }
+      if(segments[bw][0].cue) {
+        this.vodSegments[bw].push(segments[bw][0].cue);
+      }
     }
 
     for (let segIdx = 0; segIdx < segments[allBws[0]].length; segIdx++) {
@@ -1066,6 +1069,28 @@ class SessionLive {
           m3u8 += vodSeg.uri + "\n";
         } else {
           m3u8 += "#EXT-X-DISCONTINUITY\n";
+        }
+        if (vodSeg.cue) {
+          if (vodSeg.cue.in){
+            m3u8 += "#EXT-X-CUE-IN" + "\n";
+          }
+          if(vodSeg.cue.out) {
+            if (vodSeg.cue.scteData) {
+              m3u8 += "#EXT-OATCLS-SCTE35:" + vodSeg.cue.scteData + "\n";
+            }
+            if (vodSeg.cue.assetData) {
+              m3u8 += "#EXT-X-ASSET:" + vodSeg.cue.assetData + "\n";
+            }
+            m3u8 += "#EXT-X-CUE-OUT:DURATION=" + vodSeg.cue.duration + "\n";
+          }
+          if (vodSeg.cue.cont) {
+            if (vodSeg.cue.scteData) {
+              m3u8 += "#EXT-X-CUE-OUT-CONT:ElapsedTime=" + vodSeg.cue.cont + ",Duration=" + vodSeg.cue.duration + ",SCTE35=" + vodSeg.cue.scteData + "\n";
+            }
+            else {
+              m3u8 += "#EXT-X-CUE-OUT-CONT:" + vodSeg.cue.cont + "/" + vodSeg.cue.duration + "\n";
+            }
+          }
         }
       }
       // Add live-source segments
