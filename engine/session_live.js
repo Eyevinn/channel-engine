@@ -987,15 +987,19 @@ class SessionLive {
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
-      let attributes = playlistItem.attributes.attributes;
+      let attributes = playlistItem["attributes"].attributes;
 
+      if (playlistItem.properties.discontinuity) {
+        this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
+      }
       if ("cuein" in attributes) {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { in: true } });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { in: true } });
       }
       if ("cueout" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { out: true}, duration: attributes["cueout"] });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { out: true }, duration: attributes["cueout"] });
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] }, });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] } });
       }
       if ("cuecont" in attributes) {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { cont: true } });
@@ -1008,10 +1012,6 @@ class SessionLive {
       if ("scteData" in attributes) {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
-      }
-      if (playlistItem.properties.discontinuity) {
-        this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
       }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
@@ -1125,7 +1125,6 @@ class SessionLive {
       // Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegments[vodTargetBandwidth].length}) VOD segments to manifest`);
       m3u8 = this._setMediaManifestTags(this.vodSegments, m3u8, vodTargetBandwidth);
-      this.liveSegQueue[liveTargetBandwidth].map((item) => console.log(JSON.stringify(item)));
       // Add live-source segments
       m3u8 = this._setMediaManifestTags(this.liveSegQueue, m3u8, liveTargetBandwidth);
     }
@@ -1136,10 +1135,7 @@ class SessionLive {
   _setMediaManifestTags(segments, m3u8, bw) {
     for (let i = 0; i < segments[bw].length; i++) {
       const seg = segments[bw][i];
-      if (!seg.discontinuity) {
-        m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
-        m3u8 += seg.uri + "\n";
-      } else {
+      if (seg.discontinuity) {
         m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
       if (seg.cue) {
@@ -1163,6 +1159,10 @@ class SessionLive {
             m3u8 += "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
           }
         }
+      }
+      if (!seg.discontinuity && !seg.cue) {
+        m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
+        m3u8 += seg.uri + "\n";
       }
     }
     return m3u8;

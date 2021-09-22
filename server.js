@@ -62,10 +62,15 @@ class RefAssetManager {
           breaks: [
             {
               pos: 0,
-              duration: 105 * 1000,
-              url: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8"
+              duration: 15 * 1000,
+              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
+            },
+            {
+              pos: 100,
+              duration: 15 * 1000,
+              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
             }
-          ],
+          ]
         };
         const buff = Buffer.from(JSON.stringify(payload));
         const encodedPayload = buff.toString("base64");
@@ -140,9 +145,10 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: startOffset,
-        end_time: endTime,
-        uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+        start_time: startOffset/2,
+        end_time: 60*endTime,
+        uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn",
+        //uri: "https://csm-e-telenorse-eb.tls1.yospace.com/csm/extlive/telenorseprd01,vc-clear.m3u8?yo.ac=true&yo.d.cp=true&forceAds=true&tv4.chId=61",
       },
       {
         eventId: this.generateID(),
@@ -176,3 +182,91 @@ const engineOptions = {
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
 engine.listen(process.env.PORT || 8000);
+
+/*{
+  "items": {
+    "PlaylistItem": [
+      {"attributes": {
+        "attributes":{}
+      },
+      "properties": {
+        "byteRange":null,
+        "daiPlacementOpportunity": null,
+        "date":null,
+        "discontinuity":null,
+        "duration":9,
+        "title":"",
+        "uri":"https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/2000/2000-00004.ts"
+      }
+    },
+    {
+      "attributes":
+    {
+      "attributes":{}
+    },
+    "properties":{
+      "byteRange":null,
+      "daiPlacementOpportunity":null,
+      "date":null,"discontinuity":null,
+      "duration":6,
+      "title":"",
+      "uri":"https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/2000/2000-00005.ts"
+    }},
+    {"attributes":{
+      "attributes":{}
+    },"properties":{
+      "byteRange":null,
+      "daiPlacementOpportunity":null,
+      "date":null,
+      "discontinuity":null,
+      "duration":9,
+      "title":""
+      ,"uri":"https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/2000/2000-00006.ts"
+    }
+  },
+  {"attributes":{
+    "attributes":{}
+  },
+  "properties":{
+    "byteRange":null,
+    "daiPlacementOpportunity":null,
+    "date":null,
+    "discontinuity":null,
+    "duration":1.867,
+    "title":"",
+    "uri":"https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/2000/2000-00007.ts"
+  }
+},
+{
+  "attributes":{
+    "attributes":{
+      "cueout":15
+    }
+  },
+  "properties":{
+    "byteRange":null,
+    "daiPlacementOpportunity":null,
+    "date":null,
+    "discontinuity":true,
+    "duration":10.88,
+    "title":"","uri":"https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768-e214-4ebc-9f14-7ed89710115e.mp4/2000/2000-00000.ts"
+  }
+},
+{
+  "attributes":{
+    "attributes":{
+      "cuein":true
+    }
+  },
+  "properties":{
+    "byteRange":null,
+    "daiPlacementOpportunity":null,
+    "date":null,
+    "discontinuity":null,
+    "duration":4.24,
+    "title":"",
+    "uri":"https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768-e214-4ebc-9f14-7ed89710115e.mp4/2000/2000-00001.ts"
+  }
+}
+  }
+}*/
