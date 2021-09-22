@@ -61,11 +61,6 @@ class RefAssetManager {
           uri: vod.uri,
           breaks: [
             {
-              pos: 0,
-              duration: 15 * 1000,
-              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
-            },
-            {
               pos: 100,
               duration: 15 * 1000,
               url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
@@ -145,7 +140,7 @@ class StreamSwitchManager {
         assetId: this.generateID(),
         title: "Live stream test",
         type: StreamType.LIVE,
-        start_time: startOffset/2,
+        start_time: startOffset,
         end_time: endTime,
         uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
       },
