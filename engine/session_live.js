@@ -517,6 +517,8 @@ class SessionLive {
       }
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
+        // Do not increase counter if top segment is a disc tag
+        this.mediaSeqCount--;
       }
       this.mediaSeqCount++;
     }
@@ -845,6 +847,8 @@ class SessionLive {
       }
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
+        // Do not increase counter if top segment is a disc tag
+        this.mediaSeqCount--;
       }
       this.mediaSeqCount++;
     }
