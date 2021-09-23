@@ -487,6 +487,9 @@ class SessionLive {
           this.vodSegments[vodBws[i]].shift();
         }
       }
+      if (incrementDiscSeqCount) {
+        this.mediaSeqCount++;
+      }
       // Push to bottom, new live source segment on all variants
       for (let i = 0; i < liveBws.length; i++) {
         const bw = liveBws[i];
@@ -517,8 +520,6 @@ class SessionLive {
       }
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
-        // Do not increase counter if top segment is a disc tag
-        this.mediaSeqCount--;
       }
       this.mediaSeqCount++;
     }
@@ -847,8 +848,6 @@ class SessionLive {
       }
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
-        // Do not increase counter if top segment is a disc tag
-        this.mediaSeqCount--;
       }
       this.mediaSeqCount++;
     }
