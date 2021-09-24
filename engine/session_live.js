@@ -501,7 +501,7 @@ class SessionLive {
 
         let segCount = 0;
         this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
-        if (segCount >= this.targetNumSeg) {
+        if (segCount > this.targetNumSeg) {
           seg = this.liveSegQueue[bw].shift();
           if (seg && seg.discontinuity || seg && seg.cue) {
             if (seg.discontinuity) {
@@ -1030,7 +1030,7 @@ class SessionLive {
         let segCount = 0;
         this.liveSegQueue[liveTargetBandwidth].map((seg) => {if (seg.uri) { segCount++ }});
         debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
-        if (segCount >= this.targetNumSeg) {
+        if (segCount > this.targetNumSeg) {
           seg = this.liveSegQueue[liveTargetBandwidth].shift();
           if (seg && seg.discontinuity || seg && seg.cue) {
             if (seg.discontinuity) {
