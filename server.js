@@ -59,7 +59,13 @@ class RefAssetManager {
         }
         const payload = {
           uri: vod.uri,
-          breaks: []
+          breaks: [
+            {
+              pos: 100,
+              duration: 15 * 1000,
+              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
+            }
+          ]
         };
         const buff = Buffer.from(JSON.stringify(payload));
         const encodedPayload = buff.toString("base64");
@@ -123,7 +129,7 @@ class StreamSwitchManager {
     const tsNow = Date.now();
     const streamDuration = 60 * 1000;
     const startOffset = tsNow + streamDuration;
-    const endTime = startOffset + 3*streamDuration;
+    const endTime = startOffset + streamDuration;
     // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
     // Required: "assetId", "start_time", "end_time", "uri", "duration"
     // "duration" is only required for StreamType.VOD

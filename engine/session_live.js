@@ -116,7 +116,7 @@ class SessionLive {
     this.waitForPlayhead = true;
     this.blockGenerateManifest = false;
 
-    debug(`[${this.instanceId}][${this.sessionId}]: Resetting all proprerty values in sessionLive`);
+    debug(`[${this.instanceId}][${this.sessionId}]: Resetting all property values in sessionLive`);
   }
 
   async startPlayheadAsync() {
@@ -231,7 +231,7 @@ class SessionLive {
     }
     // Make it possible to add & share new segments
     this.allowedToSet = true;
-    let discCount = 0;
+    let segCount = 0;
     const allBws = Object.keys(segments);
     for (let i = 0; i < allBws.length; i++) {
       const bw = allBws[i];
@@ -252,11 +252,11 @@ class SessionLive {
     }
 
     for (let segIdx = 0; segIdx < segments[allBws[0]].length; segIdx++) {
-      if (segments[allBws[0]][segIdx].discontinuity) {
-        discCount++;
+      if (segments[allBws[0]][segIdx].uri) {
+        segCount++;
       }
     }
-    this.targetNumSeg = this.vodSegments[allBws[0]].length - discCount;
+    this.targetNumSeg = segCount;
     debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: [${this.vodSegments[allBws[0]][0].uri}]`);
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
@@ -470,16 +470,25 @@ class SessionLive {
     debug(`[${this.sessionId}]: [size=${size}]->this.liveSegsForFollowers=${Object.keys(this.liveSegsForFollowers)} `);
     // Remove transitional segs & add live source segs collected from store
     for (let k = 0; k < size; k++) {
-      // Increase Discontinuity count if top segment is a discontinuity segment
-      if (this.vodSegments[vodBws[0]].length !== 0 && this.vodSegments[vodBws[0]][0].discontinuity) {
-        this.discSeqCount++;
-      }
+      let incrementDiscSeqCount = false;
       // Shift the top vod segment on all variants
       for (let i = 0; i < vodBws.length; i++) {
         let seg = this.vodSegments[vodBws[i]].shift();
-        if (seg && seg.discontinuity) {
+        if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg.discontinuity) {
+            incrementDiscSeqCount = true;
+          }
+          seg = this.vodSegments[vodBws[i]].shift();
+        }
+        if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg.discontinuity) {
+            incrementDiscSeqCount = true;
+          }
           this.vodSegments[vodBws[i]].shift();
         }
+      }
+      if (incrementDiscSeqCount) {
+        this.mediaSeqCount++;
       }
       // Push to bottom, new live source segment on all variants
       for (let i = 0; i < liveBws.length; i++) {
@@ -489,10 +498,28 @@ class SessionLive {
           this.liveSegQueue[bw] = [];
         }
         this.liveSegQueue[bw].push(liveSegFromLeader);
-        if (this.liveSegQueue[bw].length >= this.targetNumSeg) {
-          this.liveSegQueue[bw].shift();
+
+        let segCount = 0;
+        this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
+        if (segCount > this.targetNumSeg) {
+          seg = this.liveSegQueue[bw].shift();
+          if (seg && seg.discontinuity || seg && seg.cue) {
+            if (seg.discontinuity) {
+              incrementDiscSeqCount = true;
+            }
+            seg = this.liveSegQueue[bw].shift();
+          }
+          if (seg && seg.discontinuity || seg && seg.cue) {
+            if (seg.discontinuity) {
+              incrementDiscSeqCount = true;
+            }
+            this.liveSegQueue[bw].shift();
+          }
         }
         debug(`[${this.sessionId}]: Pushed a segment to 'liveSegQueue'`);
+      }
+      if (incrementDiscSeqCount) {
+        this.discSeqCount++;
       }
       this.mediaSeqCount++;
     }
@@ -604,7 +631,7 @@ class SessionLive {
           debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=[${bw}]`);
         }
         // Fetch From Live Source
-        debug(`[${this.sessionId}]: Executing Promises I: Fetech From Live Source`);
+        debug(`[${this.sessionId}]: Executing Promises I: Fetch From Live Source`);
         manifestList = await allSettled(livePromises);
         livePromises = [];
       } catch (err) {
@@ -802,19 +829,27 @@ class SessionLive {
   async _incrementAndShift() {
     const vodBandwidths = Object.keys(this.vodSegments);
     for (let j = 0; j < this.pushAmount; j++) {
-      // Increase Media Sequence Count
-      this.mediaSeqCount++;
-      // Increase Discontinuity count if top segment is a discontinuity segment
-      if (this.vodSegments[vodBandwidths[0]].length != 0 && this.vodSegments[vodBandwidths[0]][0].discontinuity) {
-        this.discSeqCount++;
-      }
+      let incrementDiscSeqCount = false;
       // Shift the top vod segment
       for (let i = 0; i < vodBandwidths.length; i++) {
         let seg = this.vodSegments[vodBandwidths[i]].shift();
-        if (seg && seg.discontinuity) {
+        if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg.discontinuity) {
+            incrementDiscSeqCount = true;
+          }
+          seg = this.vodSegments[vodBandwidths[i]].shift();
+        }
+        if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg.discontinuity) {
+            incrementDiscSeqCount = true;
+          }
           this.vodSegments[vodBandwidths[i]].shift();
         }
       }
+      if (incrementDiscSeqCount) {
+        this.discSeqCount++;
+      }
+      this.mediaSeqCount++;
     }
 
     // TODO: LASTLY: SHRINK IF NEEDED. (should only happen once if ever.)
@@ -949,12 +984,39 @@ class SessionLive {
   }
 
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth) {
+    let incrementDiscSeqCount = false;
     for (let i = startIdx; i < playlistItems.length; i++) {
       debug(`[${this.sessionId}]: Adding Live Segment(s) to Queue (for bw=${liveTargetBandwidth})`);
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
-      if (!playlistItem.properties.discontinuity) {
+      let attributes = playlistItem["attributes"].attributes;
+
+      if (playlistItem.properties.discontinuity) {
+        this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
+      }
+      if ("cuein" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { in: true } });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { in: true } });
+      }
+      if ("cueout" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] }, });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] } });
+      }
+      if ("cuecont" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { cont: true } });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { cont: true } });
+      }
+      if ("scteData" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
+      }
+      if ("scteData" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
+      }
+      if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
           segmentUri = playlistItem.properties.uri;
         } else {
@@ -962,25 +1024,31 @@ class SessionLive {
         }
         seg["duration"] = playlistItem.properties.duration;
         seg["uri"] = segmentUri;
-        //debug(`[${this.sessionId}]: X | PUSHED this segment to the QUEUE:${JSON.stringify(seg)}`);
+
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
-        let sizeOfQueue = this.liveSegQueue[liveTargetBandwidth].length;
-        //debug(`[${this.sessionId}]: size of queue=${sizeOfQueue}_targetNumseg=${this.targetNumSeg}`);
-        if (sizeOfQueue >= this.targetNumSeg) {
-          this.liveSegQueue[liveTargetBandwidth].shift();
-        }
-      } else {
-        //debug(`[${this.sessionId}]: X | PUSHED a DISCONTINUITY tag to the QUEUE`);
-        this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({
-          discontinuity: true,
-        });
-        let sizeOfQueue = this.liveSegQueue[liveTargetBandwidth].length;
-        if (sizeOfQueue >= this.targetNumSeg) {
-          this.liveSegQueue[liveTargetBandwidth].shift();
+        let segCount = 0;
+        this.liveSegQueue[liveTargetBandwidth].map((seg) => {if (seg.uri) { segCount++ }});
+        debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
+        if (segCount > this.targetNumSeg) {
+          seg = this.liveSegQueue[liveTargetBandwidth].shift();
+          if (seg && seg.discontinuity || seg && seg.cue) {
+            if (seg.discontinuity) {
+              incrementDiscSeqCount = true;
+            }
+            seg = this.liveSegQueue[liveTargetBandwidth].shift();
+          }
+          if (seg && seg.discontinuity || seg && seg.cue) {
+            if (seg.discontinuity) {
+              incrementDiscSeqCount = true;
+            }
+            this.liveSegQueue[liveTargetBandwidth].shift();
+          }
         }
       }
+    }
+    if (incrementDiscSeqCount) {
+      this.discSeqCount++;
     }
   }
 
@@ -1059,25 +1127,47 @@ class SessionLive {
     if (Object.keys(this.vodSegments).length !== 0) {
       // Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegments[vodTargetBandwidth].length}) VOD segments to manifest`);
-      for (let i = 0; i < this.vodSegments[vodTargetBandwidth].length; i++) {
-        let vodSeg = this.vodSegments[vodTargetBandwidth][i];
-        if (!vodSeg.discontinuity) {
-          m3u8 += "#EXTINF:" + vodSeg.duration.toFixed(3) + ",\n";
-          m3u8 += vodSeg.uri + "\n";
-        } else {
-          m3u8 += "#EXT-X-DISCONTINUITY\n";
-        }
-      }
+      m3u8 = this._setMediaManifestTags(this.vodSegments, m3u8, vodTargetBandwidth);
       // Add live-source segments
-      for (let i = 0; i < this.liveSegQueue[liveTargetBandwidth].length; i++) {
-        const liveSeg = this.liveSegQueue[liveTargetBandwidth][i];
-        if (liveSeg.uri && liveSeg.duration) {
-          m3u8 += "#EXTINF:" + liveSeg.duration.toFixed(3) + ",\n";
-          m3u8 += liveSeg.uri + "\n";
-        }
-      }
+      m3u8 = this._setMediaManifestTags(this.liveSegQueue, m3u8, liveTargetBandwidth);
     }
     debug(`[${this.sessionId}]: Manifest Generation Complete!`);
+    return m3u8;
+  }
+
+  _setMediaManifestTags(segments, m3u8, bw) {
+    for (let i = 0; i < segments[bw].length; i++) {
+      const seg = segments[bw][i];
+      if (seg.discontinuity) {
+        m3u8 += "#EXT-X-DISCONTINUITY\n";
+      }
+      if (seg.cue) {
+        if (seg.cue.in){
+          m3u8 += "#EXT-X-CUE-IN" + "\n";
+        }
+        if(seg.cue.out) {
+          if (seg.cue.scteData) {
+            m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
+          }
+          if (seg.cue.assetData) {
+            m3u8 += "#EXT-X-ASSET:" + seg.cue.assetData + "\n";
+          }
+          m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
+        }
+        if (seg.cue.cont) {
+          if (seg.cue.scteData) {
+            m3u8 += "#EXT-X-CUE-OUT-CONT:ElapsedTime=" + seg.cue.cont + ",Duration=" + seg.cue.duration + ",SCTE35=" + seg.cue.scteData + "\n";
+          }
+          else {
+            m3u8 += "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
+          }
+        }
+      }
+      if (!seg.discontinuity && !seg.cue) {
+        m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
+        m3u8 += seg.uri + "\n";
+      }
+    }
     return m3u8;
   }
 
