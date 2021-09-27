@@ -252,9 +252,13 @@ class ChannelEngine {
       debug(`Removing channel with ID ${channelId}`);
       clearInterval(this.monitorTimer[channelId]);
       await sessions[channelId].stopPlayheadAsync();
-      await sessionsLive[channelId].stopPlayheadAsync();
+      if (sessionsLive[channelId]) {
+        await sessionsLive[channelId].stopPlayheadAsync();
+      } else {
+        debug(`Cannot remove live session of channel that does not exist ${channelId}`);
+        delete sessionsLive[channelId];
+      }
       delete sessions[channelId];
-      delete sessionsLive[channelId];
       delete sessionSwitchers[channelId];
       delete switcherStatus[channelId];
     };
