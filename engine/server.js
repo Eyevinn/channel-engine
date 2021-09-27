@@ -254,9 +254,9 @@ class ChannelEngine {
       await sessions[channelId].stopPlayheadAsync();
       if (sessionsLive[channelId]) {
         await sessionsLive[channelId].stopPlayheadAsync();
+        delete sessionsLive[channelId];
       } else {
         debug(`Cannot remove live session of channel that does not exist ${channelId}`);
-        delete sessionsLive[channelId];
       }
       delete sessions[channelId];
       delete sessionSwitchers[channelId];
