@@ -10,7 +10,6 @@ const { AbortController } = require("abort-controller");
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
 const daterangeAttribute = (key, attr) => {
   if (key === "planned-duration" || key === "duration") {
-    console.log("Attribute is: " + attr + "Parsed gives us: " + parseFloat(attr));
     return key.toUpperCase() + "=" + `${attr.toFixed(3)}`;
   } else {
     return key.toUpperCase() + "=" + `"${attr}"`;
