@@ -105,7 +105,7 @@ class ChannelEngine {
     if (options && options.forceTargetDuration) {
       this.streamerOpts.forceTargetDuration = options.forceTargetDuration;
     }
-    this.server.get('/live/:file', async (req, res, next) => {
+    const handleMasterRoute = async (req, res, next) => {
       debug(req.params);
       let m;
       if (req.params.file.match(/master.m3u8/)) {
@@ -120,7 +120,14 @@ class ChannelEngine {
         req.params[2] = m[3];
         await this._handleAudioManifest(req, res, next);
       }
+    };
+    this.server.get('/live/:file', async (req, res, next) => {
+      await handleMasterRoute(req, res, next);
     });
+    this.server.get('/channels/:channelId/:file', async (req, res, next) => {
+      req.query['channel'] = req.params.channelId;
+      await handleMasterRoute(req, res, next);
+    });   
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
