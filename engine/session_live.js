@@ -373,6 +373,9 @@ class SessionLive {
 
   // Generate manifest to give to client
   async getCurrentMediaManifestAsync(bw) {
+    if (!this.sessionLiveState) {
+      throw new Error('SessionLive not ready');
+    }
     if (bw === null) {
       debug(`[${this.sessionId}]: No bandwidth provided`);
       return null;
@@ -1012,7 +1015,7 @@ class SessionLive {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
       }
-      if ("scteData" in attributes) {
+      if ("assetData" in attributes) {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
       }
