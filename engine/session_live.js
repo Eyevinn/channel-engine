@@ -8,6 +8,13 @@ const { m3u8Header } = require("./util.js");
 const { AbortController } = require("abort-controller");
 
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
+const daterangeAttribute = (key, attr) => {
+  if (key === "planned-duration" || key === "duration") {
+    return key.toUpperCase() + "=" + `${attr.toFixed(3)}`;
+  } else {
+    return key.toUpperCase() + "=" + `"${attr}"`;
+  }
+};
 const RESET_DELAY = 5000;
 const FAIL_TIMEOUT = 4000;
 const PlayheadState = Object.freeze({
@@ -1019,6 +1026,22 @@ class SessionLive {
         this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
       }
+      if ("daterange" in attributes) {
+        this.liveSegQueue[liveTargetBandwidth].push({
+          daterange: { 
+            id: attributes["daterange"]["ID"],
+            "start-date": attributes["daterange"]["START-DATE"],
+            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
+          }
+        });
+        this.liveSegsForFollowers[liveTargetBandwidth].push({
+          daterange: { 
+            id: attributes["daterange"]["ID"],
+            "start-date": attributes["daterange"]["START-DATE"],
+            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
+          }
+        });
+      }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
           segmentUri = playlistItem.properties.uri;
@@ -1115,7 +1138,7 @@ class SessionLive {
       let vodSeg = this.vodSegments[vodTargetBandwidth][i];
       // Get max duration amongst segments
       if (vodSeg.duration > this.targetDuration) {
-        this.targetDuration = Math.round(vodSeg.duration);
+        this.targetDuration = vodSeg.duration;
       }
     }
 
@@ -1124,7 +1147,7 @@ class SessionLive {
     m3u8 += "#EXT-X-VERSION:6\n";
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
-    m3u8 += "#EXT-X-TARGETDURATION:" + this.targetDuration + "\n";
+    m3u8 += "#EXT-X-TARGETDURATION:" + Math.round(this.targetDuration) + "\n";
     m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
     m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
     if (Object.keys(this.vodSegments).length !== 0) {
@@ -1166,7 +1189,14 @@ class SessionLive {
           }
         }
       }
-      if (!seg.discontinuity && !seg.cue) {
+      if (seg.daterange) {
+        const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
+        if (seg.daterange['start-date']) {
+          m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
+        }
+        m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
+      }
+      if (seg.uri) {
         m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
         m3u8 += seg.uri + "\n";
       }
