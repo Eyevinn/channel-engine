@@ -1000,75 +1000,70 @@ class SessionLive {
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
-      let attributes = playlistItem["attributes"].attributes;
+      let assetData = playlistItem.get('assetdata');
+      let cueOut = playlistItem.get('cueout');
+      let cueIn = playlistItem.get('cuein');
+      let cueOutCont = playlistItem.get('cont-offset');
+      let duration = 0;
+      let scteData = playlistItem.get('sctedata');
+      if (typeof cueOut !== 'undefined') {
+        duration = cueOut;
+      } else if (typeof cueOutCont !== 'undefined') {
+        duration = playlistItem.get('cont-dur');
+      }
+      let cue = (cueOut || cueIn || cueOutCont || assetData) ? {
+        out: (typeof cueOut !== 'undefined'),
+        cont: (typeof cueOutCont !== 'undefined') ? cueOutCont : null,
+        scteData: (typeof scteData !== 'undefined') ? scteData : null,
+        in: cueIn ? true : false,
+        duration: duration,
+        assetData: (typeof assetData !== 'undefined') ? assetData: null
+      } : null;
 
+      if (playlistItem.properties.uri.match("^http")) {
+        segmentUri = playlistItem.properties.uri;
+      } else {
+        segmentUri = url.resolve(baseUrl, playlistItem.properties.uri);
+      }
+      seg = {
+        duration: playlistItem.properties.duration,
+        uri: segmentUri,
+        cue: cue,
+        //discontinuity: playlistItem.properties.discontinuity,
+      }
       if (playlistItem.properties.discontinuity) {
         this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
       }
-      if ("cuein" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { in: true } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { in: true } });
-      }
-      if ("cueout" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] }, });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] } });
-      }
-      if ("cuecont" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { cont: true } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { cont: true } });
-      }
-      if ("scteData" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
-      }
-      if ("assetData" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
-      }
-      if ("daterange" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
-      }
-      if (playlistItem.properties.uri) {
-        if (playlistItem.properties.uri.match("^http")) {
-          segmentUri = playlistItem.properties.uri;
-        } else {
-          segmentUri = url.resolve(baseUrl, playlistItem.properties.uri);
-        }
-        seg["duration"] = playlistItem.properties.duration;
-        seg["uri"] = segmentUri;
+      this.liveSegQueue[liveTargetBandwidth].push(seg);
+      this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
 
-        this.liveSegQueue[liveTargetBandwidth].push(seg);
-        this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
-        let segCount = 0;
-        this.liveSegQueue[liveTargetBandwidth].map((seg) => {if (seg.uri) { segCount++ }});
-        debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
-        if (segCount > this.targetNumSeg) {
-          seg = this.liveSegQueue[liveTargetBandwidth].shift();
-          if (seg && seg.discontinuity || seg && seg.cue) {
+      let segCount = 0;
+      this.liveSegQueue[liveTargetBandwidth].map((seg) => {
+        if (seg.uri) { 
+          segCount++ 
+        }
+      });
+      debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
+      if (segCount > this.targetNumSeg) {
+        seg = this.liveSegQueue[liveTargetBandwidth].shift();
+        this.liveSegsForFollowers[liveTargetBandwidth].shift();
+        if (seg) {
+          if (seg.discontinuity || seg.cue || seg.daterange) {
+            console.log("shift seg: " + JSON.stringify(seg));
             if (seg.discontinuity) {
               incrementDiscSeqCount = true;
             }
             seg = this.liveSegQueue[liveTargetBandwidth].shift();
+            this.liveSegsForFollowers[liveTargetBandwidth].shift();
           }
-          if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg.discontinuity || seg.cue || seg.daterange) {
+            console.log("shift seg: " + JSON.stringify(seg));
             if (seg.discontinuity) {
               incrementDiscSeqCount = true;
             }
             this.liveSegQueue[liveTargetBandwidth].shift();
+            this.liveSegsForFollowers[liveTargetBandwidth].shift();
           }
         }
       }
@@ -1076,6 +1071,7 @@ class SessionLive {
     if (incrementDiscSeqCount) {
       this.discSeqCount++;
     }
+    console.log(JSON.stringify(this.liveSegQueue[liveTargetBandwidth]));
   }
 
   /*
@@ -1164,14 +1160,15 @@ class SessionLive {
   _setMediaManifestTags(segments, m3u8, bw) {
     for (let i = 0; i < segments[bw].length; i++) {
       const seg = segments[bw][i];
-      if (seg.discontinuity) {
-        m3u8 += "#EXT-X-DISCONTINUITY\n";
-      }
-      if (seg.cue) {
-        if (seg.cue.in){
-          m3u8 += "#EXT-X-CUE-IN" + "\n";
+      if (!seg.discontinuity) {
+        if (seg.daterange) {
+          const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
+          if (seg.daterange['start-date']) {
+            m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
+          }
+          m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
         }
-        if(seg.cue.out) {
+        if(seg.cue && seg.cue.out) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
           }
@@ -1180,7 +1177,7 @@ class SessionLive {
           }
           m3u8 += "#EXT-X-CUE-OUT:DURATION=" + seg.cue.duration + "\n";
         }
-        if (seg.cue.cont) {
+        if (seg.cue && seg.cue.cont) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-X-CUE-OUT-CONT:ElapsedTime=" + seg.cue.cont + ",Duration=" + seg.cue.duration + ",SCTE35=" + seg.cue.scteData + "\n";
           }
@@ -1188,17 +1185,15 @@ class SessionLive {
             m3u8 += "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
           }
         }
-      }
-      if (seg.daterange) {
-        const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
-        if (seg.daterange['start-date']) {
-          m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
+        if (seg.uri) {
+          m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
+          m3u8 += seg.uri + "\n";
         }
-        m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
-      }
-      if (seg.uri) {
-        m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
-        m3u8 += seg.uri + "\n";
+        if (seg.cue && seg.cue.in){
+          m3u8 += "#EXT-X-CUE-IN" + "\n";
+        }
+      } else {
+        m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
     }
     return m3u8;
