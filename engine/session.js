@@ -11,6 +11,7 @@ const { PlayheadState } = require('./playhead_state.js');
 
 const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
+const { Console } = require('console');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -683,6 +684,21 @@ class Session {
     });
     this._sessionState.set("tsLastRequestMaster", Date.now());
     return m3u8;
+  }
+
+  async getAudioGroupsAndLangs() {
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (!currentVod) {
+      throw new Error('Session not ready');
+    }
+    const audioGroupIds = currentVod.getAudioGroups();
+    let allAudioGroupsAndTheirLanguages = {};
+    audioGroupIds.forEach((groupId) => {
+      allAudioGroupsAndTheirLanguages[groupId] =
+        currentVod.getAudioLangsForAudioGroup(groupId);
+    });
+    
+    return allAudioGroupsAndTheirLanguages;
   }
 
   consumeEvent() {

@@ -332,6 +332,74 @@ class ChannelEngine {
     }
   }
 
+  async getMasterManifest(channelId) {
+    if (sessions[channelId]) {
+      const session = sessions[channelId];
+      const masterM3U8 = await session.getMasterManifestAsync();
+      return masterM3U8;
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      return Promise.reject(err)
+    }
+  }
+
+  async getMediaManifests(channelId) {
+    if (sessions[channelId]) {
+      const allMediaM3U8 = {};
+      let promises = [];
+      const session = sessions[channelId];
+
+      const bandwidths = this.options.channelManager
+        .getChannels()
+        .filter((ch) => ch.id === channelId)
+        .pop()
+        .profile
+        .map((profile) => profile.bw);
+
+      const addM3U8 = async (bw) => {
+        allMediaM3U8[bw] = await session.getCurrentMediaManifestAsync(bw);
+      }
+
+      bandwidths.forEach((bw) => {
+        promises.push(addM3U8(bw));
+      })
+      await Promise.all(promises);
+
+      return allMediaM3U8;
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      return Promise.reject(err)
+    }
+  }
+
+  async getAudioManifests(channelId) {
+    if (sessions[channelId]) {
+      const allAudioM3U8 = {};
+      let promises = [];
+      const session = sessions[channelId];
+      const addM3U8 = async (groupId, lang) => {
+        let audioM3U8 = await session.getCurrentAudioManifestAsync(groupId, lang);
+        if (!allAudioM3U8[groupId]) {
+          allAudioM3U8[groupId] = {};
+        }
+        allAudioM3U8[groupId][lang] = audioM3U8;
+      }
+      // Get m3u8s for all langauges for all groups
+      const audioGroupsAndLangs = await session.getAudioGroupsAndLangs();
+      for (const [audioGroup, languages] of Object.entries(audioGroupsAndLangs)) {
+        languages.forEach((lang) => {
+          promises.push(addM3U8(audioGroup, lang));
+        });
+      }
+      await Promise.all(promises);
+
+      return allAudioM3U8;
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      return Promise.reject(err)
+    }
+  }
+
   _handleHeartbeat(req, res, next) {
     debug('req.url=' + req.url);
     res.send(200);
