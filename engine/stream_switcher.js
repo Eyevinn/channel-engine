@@ -352,8 +352,10 @@ class StreamSwitcher {
       if (online.status >= 200 && online.status < 300) {
         return true;
       }
+      debug(`[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! Returned Status Code: ${online.status}`);
       return false;
     } catch (err) {
+      debug(`[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! ${err}`);
       return false;
     } finally {
       clearTimeout(timeout);

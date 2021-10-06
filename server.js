@@ -155,7 +155,7 @@ class StreamSwitchManager {
             type: StreamType.LIVE,
             start_time: startOffset,
             end_time: endTime,
-            uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+            uri: "https://test2.frankspeech.com/live/Test2/playlist.m3u8",
           },
           {
             eventId: this.generateID(),
