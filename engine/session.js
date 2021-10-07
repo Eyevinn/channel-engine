@@ -685,6 +685,21 @@ class Session {
     return m3u8;
   }
 
+  async getAudioGroupsAndLangs() {
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (!currentVod) {
+      throw new Error('Session not ready');
+    }
+    const audioGroupIds = currentVod.getAudioGroups();
+    let allAudioGroupsAndTheirLanguages = {};
+    audioGroupIds.forEach((groupId) => {
+      allAudioGroupsAndTheirLanguages[groupId] =
+        currentVod.getAudioLangsForAudioGroup(groupId);
+    });
+    
+    return allAudioGroupsAndTheirLanguages;
+  }
+
   consumeEvent() {
     return this._events.shift();
   }
