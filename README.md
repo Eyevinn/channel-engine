@@ -1,5 +1,7 @@
 The Eyevinn Channel Engine is an NPM library that provides the functionality to generate "fake" live HLS stream by stitching HLS VOD's together. The library is provided as open source and this repository includes a basic reference implementation as a guide on how the library can be used.
 
+![Screenshot of demo site](docs/demosite.png)
+
 ## Usage
 
 To use this library in your NodeJS project download and install the library in your project by running the following in your project folder.
