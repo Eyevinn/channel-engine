@@ -25,11 +25,11 @@ $ npm run start-demux
 ```
 
 
-Then point your HLS video player to `http://localhost:8000/live/master.m3u8?channel=1` to start playing the linear live stream.
+Then point your HLS video player to `http://localhost:8000/channels/1/master.m3u8` to start playing the linear live stream.
 
 ## Master manifest filtering
 
-The engine supports a very simplistic and basic filtering of media playlists included in the master manifest. Currently supports to filter on video bandwidth and video height. To specify a filter provide the query parameter `filter` when loading the master manifest, e.g. `(type=="video"&&height>200)&&(type=="video"&&height<400)`. This needs to be URL encoded resulting in the following URL: `http://localhost:8000/live/master.m3u8?channel=1&filter=%28type%3D%3D%22video%22%26%26height%3E200%29%26%26%28type%3D%3D%22video%22%26%26height%3C400%29`
+The engine supports a very simplistic and basic filtering of media playlists included in the master manifest. Currently supports to filter on video bandwidth and video height. To specify a filter provide the query parameter `filter` when loading the master manifest, e.g. `(type=="video"&&height>200)&&(type=="video"&&height<400)`. This needs to be URL encoded resulting in the following URL: `http://localhost:8000/channels/1/master.m3u8?filter=%28type%3D%3D%22video%22%26%26height%3E200%29%26%26%28type%3D%3D%22video%22%26%26height%3C400%29`
 
 ## API
 
@@ -89,7 +89,6 @@ Available options when constructing the Channel Engine object are:
 - `defaultSlateUri`: URI to an HLS VOD that can be inserted when a VOD for some reason cannot be loaded.
 - `slateRepetitions`: Number of times the slate should be repeated.
 - `redisUrl`: A Redis DB URL for storing states that can be shared between nodes.
-- `memcachedUrl`: A Memcached URL for storing states that can be shared between nodes.
 - `sharedStoreCacheTTL`: How long should data be cached in memory before writing to shared store. Default is 1000 ms.
 - `heartbeat`: Path for heartbeat requests
 - `channelManager`: A reference to a channel manager object.
@@ -130,18 +129,16 @@ Note that this feature is currently in beta which means that it is close to prod
 
 This feature gives the possibility to mix in a true live stream in a Channel Engine powered linear channel (VOD2Live).
 
-![RFC Drawing of Live-Mixing Functionality](rfc/channel_engine_vod_with_live.png)
-
 A beta-version of live-mixing with high availability support is available in the Channel Engine. This allows you to use a new component which can let you break in to a scheduled VOD event or Live stream event at any speficied time on top of the usual vod-to-live content. 
 To enable live-mixing, create a class which implements the following interface.
 
 ```
 class MyStreamSwitchManager {
-  getSchedule() -> [ { eventId, assetId, title, type, start_time, end_time, uri, duration } ]
+  getSchedule(channelId) -> [ { eventId, assetId, title, type, start_time, end_time, uri, duration } ]
 }
 ```
 
-The class's `getSchedule()` function should return a list of event objects in the following format:
+The class's `getSchedule(channelId)` function should return a list of event objects in the following format:
 
 ```
 {
@@ -248,8 +245,6 @@ If the connection to the Live stream ends or if the current time has passed the 
 Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
 
 ## Demo
-
-Visit [Consuo](https://consuo.tv/) for a demonstration of this concept. A demo and proof-of-concept built on top of this library.
 
 If you want help to get started to build a service of your own based on this library you can hire an [Eyevinn Video-Dev Team](https://video-dev.team) to help you out.
 
