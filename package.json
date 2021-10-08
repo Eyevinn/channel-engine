@@ -1,6 +1,6 @@
 {
   "name": "eyevinn-channel-engine",
-  "version": "2.23.2",
+  "version": "3.0.0-rc.8",
   "description": "OTT TV Channel Engine",
   "main": "index.js",
   "scripts": {
@@ -19,15 +19,20 @@
   "repository": "https://github.com/Eyevinn/channel-engine",
   "license": "Apache-2.0",
   "dependencies": {
-    "@eyevinn/hls-repeat": "0.1.6",
-    "@eyevinn/hls-truncate": "0.1.1",
-    "@eyevinn/hls-vodtolive": "1.16.3",
+    "@eyevinn/hls-repeat": "^0.1.1",
+    "@eyevinn/hls-truncate": "^0.1.0",
+    "@eyevinn/hls-vodtolive": "^1.16.5",
     "@eyevinn/m3u8": "^0.4.0",
+    "abort-controller": "^3.0.0",
     "debug": "^3.2.7",
     "memcache-client": "^0.10.1",
+    "nock": "^13.1.1",
+    "node-fetch": "^2.6.1",
+    "promise.allsettled": "^1.0.4",
     "redis": "^3.0.2",
     "request": ">=2.88.0",
     "restify": ">=8.5.1",
+    "restify-errors": "^8.0.2",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
