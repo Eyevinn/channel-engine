@@ -242,7 +242,7 @@ If the connection to the Live stream ends or if the current time has passed the 
 
 Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
 
-## Demo
+## Support
 
 If you want help to get started to build a service of your own based on this library you can hire an [Eyevinn Video-Dev Team](https://video-dev.team) to help you out.
 
