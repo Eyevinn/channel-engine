@@ -122,8 +122,6 @@ engine.start();
 engine.listen(process.env.port || 8000);
 ```
 
-Note that this feature is currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
-
 
 ## Live Mixing (BETA)
 
