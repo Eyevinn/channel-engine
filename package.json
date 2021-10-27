@@ -8,7 +8,8 @@
     "test": "$(npm bin)/jasmine",
     "postversion": "git push && git push --tags",
     "start": "node server.js",
-    "start-demux": "node server-demux.js"
+    "start-demux": "node server-demux.js",
+    "start-livemix": "node server-livemix.js"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "contributors": [
