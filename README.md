@@ -18,10 +18,16 @@ To run the basic reference implementation included in this repository you run:
 $ npm start
 ```
 
-And to run the basic reference implementation for using demuxed VODs you run:
+To run the basic reference implementation for using demuxed VODs you run:
 
 ```
 $ npm run start-demux
+```
+
+And to run the basic reference implementation for using live-mixing you run:
+
+```
+$ npm run start-livemix
 ```
 
 
