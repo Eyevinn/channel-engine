@@ -28,10 +28,10 @@ class RefAssetManager {
     } else {
       this.assets = {
         '1': [
-          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 4, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 1, title: "Tears of Steel", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
+          { id: 2, title: "Morbius Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
+          { id: 3, title: "The Outpost Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
+          { id: 4, title: "Unhinged Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
           { id: 5, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
           { id: 6, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
         ]
@@ -61,9 +61,9 @@ class RefAssetManager {
           uri: vod.uri,
           breaks: [
             {
-              pos: 100,
-              duration: 15 * 1000,
-              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8"
+              pos: 0,
+              duration: 31 * 1000,
+              url: "https://lab.cdn.eyevinn.technology/stswe-ad-30sec.mp4/manifest.m3u8"
             }
           ]
         };
@@ -140,7 +140,7 @@ class StreamSwitchManager {
     return new Promise((resolve, reject) => {
       if (this.schedule[channelId]) {
         const tsNow = Date.now();
-        const streamDuration = 60 * 1000;
+        const streamDuration = 40 * 1000;
         const startOffset = tsNow + streamDuration;
         const endTime = startOffset + streamDuration;
         // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
@@ -154,19 +154,23 @@ class StreamSwitchManager {
             title: "Live stream test",
             type: StreamType.LIVE,
             start_time: startOffset,
-            end_time: endTime,
-            uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+            end_time: endTime + 10 * 60 * 1000,
+            //uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
+            uri: "http://localhost:8089/live/master.m3u8?channel=1"
+            //uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"
+
           },
-          {
-            eventId: this.generateID(),
-            assetId: this.generateID(),
-            title: "Scheduled VOD test",
-            type: StreamType.VOD,
-            start_time: (endTime + 100*1000),
-            end_time: (endTime + 100*1000) + streamDuration,
-            uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
-            duration: streamDuration,
-          });
+          // {
+          //   eventId: this.generateID(),
+          //   assetId: this.generateID(),
+          //   title: "Scheduled VOD test",
+          //   type: StreamType.VOD,
+          //   start_time: (endTime + 100*1000),
+          //   end_time: (endTime + 100*1000) + streamDuration,
+          //   uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
+          //   duration: streamDuration,
+          // }
+          );
         }
         resolve(this.schedule[channelId]);
       } else {
