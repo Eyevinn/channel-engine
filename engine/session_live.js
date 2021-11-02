@@ -968,7 +968,8 @@ class SessionLive {
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
-      let cueMetaData = null;
+      let cueData = null;
+      let daterangeData = null;
       let attributes = playlistItem["attributes"].attributes;
       console.log("_addLiveSe:::",liveTargetBandwidth, playlistItem)
       if (playlistItem.properties.discontinuity) {
@@ -976,51 +977,47 @@ class SessionLive {
         this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
       }
       if ("cuein" in attributes) {
-        if (!cueMetaData) {
-          cueMetaData = {};
+        if (!cueData) {
+          cueData = {};
         }
-        cueMetaData["in"] = true;
+        cueData["in"] = true;
       }
       if ("cueout" in attributes) {
-        if (!cueMetaData) {
-          cueMetaData = {};
+        if (!cueData) {
+          cueData = {};
         }
-        cueMetaData["out"] = true;
-        cueMetaData["duration"] = attributes["cueout"];
+        cueData["out"] = true;
+        cueData["duration"] = attributes["cueout"];
        }
       if ("cuecont" in attributes) {
-        if (!cueMetaData) {
-          cueMetaData = {};
+        if (!cueData) {
+          cueData = {};
         }
-        cueMetaData["cont"] = true;
+        cueData["cont"] = true;
       }
       if ("scteData" in attributes) {
-        if (!cueMetaData) {
-          cueMetaData = {};
+        if (!cueData) {
+          cueData = {};
         }
-        cueMetaData["scteData"] = attributes["scteData"];
+        cueData["scteData"] = attributes["scteData"];
       }
       if ("assetData" in attributes) {
-        if (!cueMetaData) {
-          cueMetaData = {};
+        if (!cueData) {
+          cueData = {};
         }
-        cueMetaData["assetData"] = attributes["assetData"];
+        cueData["assetData"] = attributes["assetData"];
       }
       if ("daterange" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
+        if(!daterangeData) {
+          daterangeData = {}
+        }
+        daterangeData = {
+          id: attributes["daterange"]["ID"],
+          "start-date": attributes["daterange"]["START-DATE"],
+          "planned-duration": parseFloat(
+            attributes["daterange"]["PLANNED-DURATION"]
+          ),
+        };
       }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
@@ -1030,7 +1027,10 @@ class SessionLive {
         }
         seg["duration"] = playlistItem.properties.duration;
         seg["uri"] = segmentUri;
-        seg["cue"] = cueMetaData;
+        seg["cue"] = cueData;
+        if (daterangeData) {
+          seg["daterange"] = daterangeData;
+        }
 
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
