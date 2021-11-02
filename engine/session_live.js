@@ -255,6 +255,8 @@ class SessionLive {
       }
       if (!segments[bw][segments[bw].length - 1].discontinuity) {
         this.vodSegments[bw].push({ discontinuity: true, cue: { in: true } });
+      } else {
+        segments[bw][segments[bw].length - 1]["cue"] = { in: true };
       }
     }
 
@@ -347,7 +349,7 @@ class SessionLive {
       currentMediaSequenceSegments[liveTargetBandwidth] = [];
       // In case we switch back before we've depleted all transitional segments
       currentMediaSequenceSegments[liveTargetBandwidth] = this.vodSegments[vodTargetBandwidth].concat(this.liveSegQueue[liveTargetBandwidth]);
-      currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true });
+      currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true, cue: { in: true } });
       debug(`[${this.sessionId}]: Getting current media segments for bw=${bw}`);
     }
 
@@ -486,21 +488,14 @@ class SessionLive {
       // Shift the top vod segment on all variants
       for (let i = 0; i < vodBws.length; i++) {
         let seg = this.vodSegments[vodBws[i]].shift();
-        if (seg && seg.discontinuity || seg && seg.cue) {
-          if (seg.discontinuity) {
-            incrementDiscSeqCount = true;
-          }
-          seg = this.vodSegments[vodBws[i]].shift();
-        }
-        if (seg && seg.discontinuity || seg && seg.cue) {
-          if (seg.discontinuity) {
-            incrementDiscSeqCount = true;
-          }
+        if (seg && seg.discontinuity) {
+          incrementDiscSeqCount = true;
           this.vodSegments[vodBws[i]].shift();
         }
       }
       if (incrementDiscSeqCount) {
-        this.mediaSeqCount++;
+        this.discSeqCount++;
+        incrementDiscSeqCount = false;
       }
       // Push to bottom, new live source segment on all variants
       for (let i = 0; i < liveBws.length; i++) {
@@ -515,17 +510,9 @@ class SessionLive {
         this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
         if (segCount > this.targetNumSeg) {
           seg = this.liveSegQueue[bw].shift();
-          if (seg && seg.discontinuity || seg && seg.cue) {
-            if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
-            }
+          if (seg && seg.discontinuity) {
+            incrementDiscSeqCount = true;
             seg = this.liveSegQueue[bw].shift();
-          }
-          if (seg && seg.discontinuity || seg && seg.cue) {
-            if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
-            }
-            this.liveSegQueue[bw].shift();
           }
         }
         debug(`[${this.sessionId}]: Pushed a segment to 'liveSegQueue'`);
@@ -806,7 +793,7 @@ class SessionLive {
         }
         return item.value.removedDiscSeqs;
       });
-      if (!removedDiscSeqList.every((val, i, arr) => val === arr[0])) {
+      if (removedDiscSeqList.every((val, i, arr) => val === arr[0])) {
         // if all variants removed equal amounts of disc-tags
         this.discSeqCount += removedDiscSeqList[0];
       }
@@ -1142,7 +1129,6 @@ class SessionLive {
       m3u8 = this._setMediaManifestTags(this.vodSegments, m3u8, vodTargetBandwidth);
       // Add live-source segments
       m3u8 = this._setMediaManifestTags(this.liveSegQueue, m3u8, liveTargetBandwidth);
-      console.log("livesegqueueue:", JSON.stringify(this.liveSegQueue,null,2))
     }
     debug(`[${this.sessionId}]: Manifest Generation Complete!`);
     return m3u8;
@@ -1155,9 +1141,6 @@ class SessionLive {
         m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
       if (seg.cue) {
-        if (seg.cue.in){
-          m3u8 += "#EXT-X-CUE-IN" + "\n";
-        }
         if(seg.cue.out) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
@@ -1182,6 +1165,10 @@ class SessionLive {
           m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
         }
         m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
+      }
+      // Mimick logic used in hls-vodtolive
+      if (seg.cue && seg.cue.in){
+        m3u8 += "#EXT-X-CUE-IN" + "\n";
       }
       if (seg.uri) {
         m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";

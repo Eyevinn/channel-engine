@@ -62,8 +62,8 @@ class RefAssetManager {
           breaks: [
             {
               pos: 0,
-              duration: 31 * 1000,
-              url: "https://lab.cdn.eyevinn.technology/stswe-ad-30sec.mp4/manifest.m3u8"
+              duration: 15 * 1000,
+              url: "https://maitv-vod.lab.eyevinn.technology/ads/apotea-15s.mp4/master.m3u8"
             }
           ]
         };
@@ -154,7 +154,7 @@ class StreamSwitchManager {
             title: "Live stream test",
             type: StreamType.LIVE,
             start_time: startOffset,
-            end_time: endTime + 10 * 60 * 1000,
+            end_time: endTime + 60*1000,
             //uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
             uri: "http://localhost:8089/live/master.m3u8?channel=1"
             //uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"
