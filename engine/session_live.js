@@ -254,7 +254,9 @@ class SessionLive {
         this.vodSegments[bw].push(segments[bw][segIdx]);
       }
       if (!segments[bw][segments[bw].length - 1].discontinuity) {
-        this.vodSegments[bw].push({ discontinuity: true });
+        this.vodSegments[bw].push({ discontinuity: true, cue: { in: true } });
+      } else {
+        segments[bw][segments[bw].length - 1]["cue"] = { in: true };
       }
     }
 
@@ -345,7 +347,7 @@ class SessionLive {
       currentMediaSequenceSegments[liveTargetBandwidth] = [];
       // In case we switch back before we've depleted all transitional segments
       currentMediaSequenceSegments[liveTargetBandwidth] = this.vodSegments[vodTargetBandwidth].concat(this.liveSegQueue[liveTargetBandwidth]);
-      currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true });
+      currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true, cue: { in: true } });
       debug(`[${this.sessionId}]: Getting current media segments for bw=${bw}`);
     }
 
@@ -484,21 +486,14 @@ class SessionLive {
       // Shift the top vod segment on all variants
       for (let i = 0; i < vodBws.length; i++) {
         let seg = this.vodSegments[vodBws[i]].shift();
-        if (seg && seg.discontinuity || seg && seg.cue) {
-          if (seg.discontinuity) {
-            incrementDiscSeqCount = true;
-          }
-          seg = this.vodSegments[vodBws[i]].shift();
-        }
-        if (seg && seg.discontinuity || seg && seg.cue) {
-          if (seg.discontinuity) {
-            incrementDiscSeqCount = true;
-          }
+        if (seg && seg.discontinuity) {
+          incrementDiscSeqCount = true;
           this.vodSegments[vodBws[i]].shift();
         }
       }
       if (incrementDiscSeqCount) {
-        this.mediaSeqCount++;
+        this.discSeqCount++;
+        incrementDiscSeqCount = false;
       }
       // Push to bottom, new live source segment on all variants
       for (let i = 0; i < liveBws.length; i++) {
@@ -513,17 +508,9 @@ class SessionLive {
         this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
         if (segCount > this.targetNumSeg) {
           seg = this.liveSegQueue[bw].shift();
-          if (seg && seg.discontinuity || seg && seg.cue) {
-            if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
-            }
+          if (seg && seg.discontinuity) {
+            incrementDiscSeqCount = true;
             seg = this.liveSegQueue[bw].shift();
-          }
-          if (seg && seg.discontinuity || seg && seg.cue) {
-            if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
-            }
-            this.liveSegQueue[bw].shift();
           }
         }
         debug(`[${this.sessionId}]: Pushed a segment to 'liveSegQueue'`);
@@ -792,13 +779,22 @@ class SessionLive {
       let pushPromises = [];
       for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
         let bw = Object.keys(this.mediaManifestURIs)[i];
-        pushPromises.push(this._parseMediaManifest(this.liveSourceM3Us[bw].M3U, bw, this.mediaManifestURIs[bw], bw));
-        //debug(`[${this.sessionId}]: Pushed pushPromise for bw=${bw}`);
+        pushPromises.push(this._parseMediaManifest(this.liveSourceM3Us[bw].M3U, this.mediaManifestURIs[bw], bw));
+        debug(`[${this.sessionId}]: Pushed pushPromise for bw=${bw}`);
       }
-
       // Segment Pushing
       debug(`[${this.sessionId}]: Executing Promises II: Segment Pushing`);
-      await Promise.all(pushPromises);
+      let results = await allSettled(pushPromises);//await Promise.all(pushPromises);
+      const removedDiscSeqList = results.map((item) => {
+        if (item.status === "rejected") {
+          return -1;
+        }
+        return item.value.removedDiscSeqs;
+      });
+      if (removedDiscSeqList.every((val, i, arr) => val === arr[0])) {
+        // if all variants removed equal amounts of disc-tags
+        this.discSeqCount += removedDiscSeqList[0];
+      }
       // UPDATE COUNTS, & Shift Segments in vodSegments
       await this._incrementAndShift();
     }
@@ -843,17 +839,11 @@ class SessionLive {
       // Shift the top vod segment
       for (let i = 0; i < vodBandwidths.length; i++) {
         let seg = this.vodSegments[vodBandwidths[i]].shift();
-        if (seg && seg.discontinuity || seg && seg.cue) {
+        if (seg) {
           if (seg.discontinuity) {
+            this.vodSegments[vodBandwidths[i]].shift();
             incrementDiscSeqCount = true;
           }
-          seg = this.vodSegments[vodBandwidths[i]].shift();
-        }
-        if (seg && seg.discontinuity || seg && seg.cue) {
-          if (seg.discontinuity) {
-            incrementDiscSeqCount = true;
-          }
-          this.vodSegments[vodBandwidths[i]].shift();
         }
       }
       if (incrementDiscSeqCount) {
@@ -905,8 +895,12 @@ class SessionLive {
     return new Promise((resolve, reject) => {
       parser.on("m3u", (m3u) => {
         try {
-          let manifestObj = this._miniparse(m3u, bw, mediaManifestUri, liveTargetBandwidth);
-          resolve(manifestObj);
+          const resolveObj = {
+            M3U: m3u,
+            mediaSeq: m3u.get("mediaSequence"),
+          };
+          this.liveSourceM3Us[liveTargetBandwidth] = resolveObj;
+          resolve(resolveObj);
         } catch (exc) {
           debug(`[${this.sessionId}]: Error when parsing latest manifest`);
           reject(exc);
@@ -919,33 +913,7 @@ class SessionLive {
     });
   }
 
-  _miniparse(m3u, bw, mediaManifestUri, liveTargetBandwidth) {
-    if (m3u === null) {
-      throw new Error("No m3u object provided");
-    }
-    return new Promise(async (resolve, reject) => {
-      try {
-        const resolveObj = {
-          M3U: m3u,
-          mediaSeq: m3u.get("mediaSequence"),
-        };
-
-        this.liveSourceM3Us[liveTargetBandwidth] = resolveObj;
-
-        resolve(resolveObj);
-      } catch (exc) {
-        console.error("ERROR: " + exc);
-        reject({
-          message: exc,
-          bandwidth: liveTargetBandwidth,
-          m3u8: null,
-          mediaSeq: -1,
-        });
-      }
-    });
-  }
-
-  _parseMediaManifest(m3u, bw, mediaManifestUri, liveTargetBandwidth) {
+  _parseMediaManifest(m3u, mediaManifestUri, liveTargetBandwidth) {
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.liveSegQueue[liveTargetBandwidth]) {
@@ -954,7 +922,6 @@ class SessionLive {
         if (!this.liveSegsForFollowers[liveTargetBandwidth]) {
           this.liveSegsForFollowers[liveTargetBandwidth] = [];
         }
-
         let baseUrl = "";
         const m = mediaManifestUri.match(/^(.*)\/.*?$/);
         if (m) {
@@ -972,20 +939,18 @@ class SessionLive {
 
         this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
         this.targetDuration = m3u.get("targetDuration");
-
-        // Switch out relative URIs if they are used, with absolute URLs
+        let amountRemovedDiscSeqs = 0;
+        let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
+        startIdx = startIdx < 0 ? 0 : startIdx;
         if (mediaManifestUri) {
-          // CREATE NEW MANIFEST
-          let startIdx;
-          startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
-          if (startIdx < 0) {
-            startIdx = 0;
-          }
           // push segments
-          this._addLiveSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetBandwidth);
+          amountRemovedDiscSeqs = this._addLiveSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetBandwidth);
         }
-
-        resolve(this.lastRequestedMediaSeqRaw);
+        let resolveObj = {
+          removedDiscSeqs: amountRemovedDiscSeqs,
+          bw: liveTargetBandwidth
+        }
+        resolve(resolveObj);
       } catch (exc) {
         console.error("ERROR: " + exc);
         reject(exc);
@@ -994,53 +959,61 @@ class SessionLive {
   }
 
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth) {
-    let incrementDiscSeqCount = false;
+    let amountRemovedDiscSeqs = 0;
     for (let i = startIdx; i < playlistItems.length; i++) {
       debug(`[${this.sessionId}]: Adding Live Segment(s) to Queue (for bw=${liveTargetBandwidth})`);
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
+      let cueData = null;
+      let daterangeData = null;
       let attributes = playlistItem["attributes"].attributes;
-
       if (playlistItem.properties.discontinuity) {
         this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
       }
       if ("cuein" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { in: true } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { in: true } });
+        if (!cueData) {
+          cueData = {};
+        }
+        cueData["in"] = true;
       }
       if ("cueout" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] }, });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { out: true, duration: attributes["cueout"] } });
-      }
+        if (!cueData) {
+          cueData = {};
+        }
+        cueData["out"] = true;
+        cueData["duration"] = attributes["cueout"];
+       }
       if ("cuecont" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { cont: true } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { cont: true } });
+        if (!cueData) {
+          cueData = {};
+        }
+        cueData["cont"] = true;
       }
       if ("scteData" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { scteData: attributes["scteData"] } });
+        if (!cueData) {
+          cueData = {};
+        }
+        cueData["scteData"] = attributes["scteData"];
       }
       if ("assetData" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({ cue: { assetData: attributes["assetData"] } });
+        if (!cueData) {
+          cueData = {};
+        }
+        cueData["assetData"] = attributes["assetData"];
       }
       if ("daterange" in attributes) {
-        this.liveSegQueue[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
-        this.liveSegsForFollowers[liveTargetBandwidth].push({
-          daterange: { 
-            id: attributes["daterange"]["ID"],
-            "start-date": attributes["daterange"]["START-DATE"],
-            "planned-duration": parseFloat(attributes["daterange"]["PLANNED-DURATION"]),
-          }
-        });
+        if(!daterangeData) {
+          daterangeData = {}
+        }
+        daterangeData = {
+          id: attributes["daterange"]["ID"],
+          "start-date": attributes["daterange"]["START-DATE"],
+          "planned-duration": parseFloat(
+            attributes["daterange"]["PLANNED-DURATION"]
+          ),
+        };
       }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
@@ -1050,6 +1023,10 @@ class SessionLive {
         }
         seg["duration"] = playlistItem.properties.duration;
         seg["uri"] = segmentUri;
+        seg["cue"] = cueData;
+        if (daterangeData) {
+          seg["daterange"] = daterangeData;
+        }
 
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
@@ -1058,24 +1035,16 @@ class SessionLive {
         debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
         if (segCount > this.targetNumSeg) {
           seg = this.liveSegQueue[liveTargetBandwidth].shift();
-          if (seg && seg.discontinuity || seg && seg.cue) {
+          if (seg) {
             if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
+              this.liveSegQueue[liveTargetBandwidth].shift();
+              amountRemovedDiscSeqs++;
             }
-            seg = this.liveSegQueue[liveTargetBandwidth].shift();
-          }
-          if (seg && seg.discontinuity || seg && seg.cue) {
-            if (seg.discontinuity) {
-              incrementDiscSeqCount = true;
-            }
-            this.liveSegQueue[liveTargetBandwidth].shift();
           }
         }
       }
     }
-    if (incrementDiscSeqCount) {
-      this.discSeqCount++;
-    }
+    return amountRemovedDiscSeqs;
   }
 
   /*
@@ -1168,9 +1137,6 @@ class SessionLive {
         m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
       if (seg.cue) {
-        if (seg.cue.in){
-          m3u8 += "#EXT-X-CUE-IN" + "\n";
-        }
         if(seg.cue.out) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
@@ -1195,6 +1161,10 @@ class SessionLive {
           m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
         }
         m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
+      }
+      // Mimick logic used in hls-vodtolive
+      if (seg.cue && seg.cue.in){
+        m3u8 += "#EXT-X-CUE-IN" + "\n";
       }
       if (seg.uri) {
         m3u8 += "#EXTINF:" + seg.duration.toFixed(3) + ",\n";
