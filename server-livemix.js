@@ -154,23 +154,19 @@ class StreamSwitchManager {
             title: "Live stream test",
             type: StreamType.LIVE,
             start_time: startOffset,
-            end_time: endTime + 60*1000,
-            //uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
-            uri: "http://localhost:8089/live/master.m3u8?channel=1"
-            //uri: "https://engine.cdn.consuo.tv/live/master.m3u8?channel=eyevinn"
-
+            end_time: endTime,
+            uri: "https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8",
           },
-          // {
-          //   eventId: this.generateID(),
-          //   assetId: this.generateID(),
-          //   title: "Scheduled VOD test",
-          //   type: StreamType.VOD,
-          //   start_time: (endTime + 100*1000),
-          //   end_time: (endTime + 100*1000) + streamDuration,
-          //   uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
-          //   duration: streamDuration,
-          // }
-          );
+          {
+            eventId: this.generateID(),
+            assetId: this.generateID(),
+            title: "Scheduled VOD test",
+            type: StreamType.VOD,
+            start_time: (endTime + 100*1000),
+            end_time: (endTime + 100*1000) + streamDuration,
+            uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
+            duration: streamDuration,
+          });
         }
         resolve(this.schedule[channelId]);
       } else {

@@ -274,8 +274,6 @@ class SessionLive {
       await this.sessionLiveState.set("transitSegs", this.vodSegments);
       debug(`[${this.sessionId}]: LEADER: I am adding 'transitSegs' to Store for future followers`);
     }
-
-    console.log("vodSegments:::", this.vodSegments)
   }
 
   async setCurrentMediaAndDiscSequenceCount(mediaSeq, discSeq) {
@@ -836,7 +834,6 @@ class SessionLive {
 
   async _incrementAndShift() {
     const vodBandwidths = Object.keys(this.vodSegments);
-    console.log("pushAmount__", this.pushAmount)
     for (let j = 0; j < this.pushAmount; j++) {
       let incrementDiscSeqCount = false;
       // Shift the top vod segment
@@ -971,7 +968,6 @@ class SessionLive {
       let cueData = null;
       let daterangeData = null;
       let attributes = playlistItem["attributes"].attributes;
-      console.log("_addLiveSe:::",liveTargetBandwidth, playlistItem)
       if (playlistItem.properties.discontinuity) {
         this.liveSegQueue[liveTargetBandwidth].push({ discontinuity: true });
         this.liveSegsForFollowers[liveTargetBandwidth].push({ discontinuity: true });
