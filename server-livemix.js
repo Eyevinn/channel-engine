@@ -28,10 +28,10 @@ class RefAssetManager {
     } else {
       this.assets = {
         '1': [
-          { id: 1, title: "Tears of Steel", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
-          { id: 2, title: "Morbius Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
-          { id: 3, title: "The Outpost Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
-          { id: 4, title: "Unhinged Trailer", uri: "https://lab.cdn.eyevinn.technology/BAAHUBALI_3_Trailer_2021.mp4/manifest.m3u8" },
+          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+          { id: 2, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 4, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
           { id: 5, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
           { id: 6, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
         ]
@@ -140,7 +140,7 @@ class StreamSwitchManager {
     return new Promise((resolve, reject) => {
       if (this.schedule[channelId]) {
         const tsNow = Date.now();
-        const streamDuration = 40 * 1000;
+        const streamDuration = 60 * 1000;
         const startOffset = tsNow + streamDuration;
         const endTime = startOffset + streamDuration;
         // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
