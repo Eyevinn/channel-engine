@@ -462,6 +462,7 @@ describe("The initialize switching", () => {
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 1]).toEqual({
       discontinuity: true,
+      cue: { in: true }
     });
     expect(
       sessionCurrentSegs["1313000"][size - 1].daterange["planned-duration"]
@@ -781,6 +782,7 @@ describe("The initialize switching", () => {
     });
     expect(newVodSegments["1313000"][size - 1 - 1 - 1]).toEqual({
       discontinuity: true,
+      cue: { in: true }
     });
     expect(
       newVodSegments["1313000"][size - 1 - 1].daterange["planned-duration"]
