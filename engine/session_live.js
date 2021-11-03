@@ -1,4 +1,4 @@
-const debug = require("debug")("engine-sessionLive");
+const debug = require("debug")("engine-session-live");
 const allSettled = require("promise.allsettled");
 const crypto = require("crypto");
 const m3u8 = require("@eyevinn/m3u8");
