@@ -1,4 +1,4 @@
-const debug = require("debug")("engine-streamSwitcher");
+const debug = require("debug")("engine-stream-switcher");
 const crypto = require("crypto");
 const fetch = require("node-fetch");
 const { AbortController } = require("abort-controller");

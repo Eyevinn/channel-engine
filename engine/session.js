@@ -244,7 +244,7 @@ class Session {
     try {
       const hlsVod = await this._truncateSlate(null, duration, vodUri);
       let vodSegments = hlsVod.getMediaSegments();
-      Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true }));
+      Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true, cue: { in: true } }));
       return vodSegments;
     } catch (exc) {
       debug(`[${this._sessionId}]: Failed to generate truncated VOD!`);

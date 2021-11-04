@@ -353,7 +353,7 @@ describe("The initialize switching", () => {
       discSeq: 0,
     });
     expect(Object.keys(tSegments)).toEqual(Object.keys(currVodSegments));
-    currVodSegments[1313000].push({ discontinuity: true });
+    currVodSegments[1313000].push({ discontinuity: true, cue: { in: true } });
     expect(tSegments[1313000]).toEqual(currVodSegments[1313000]);
     nock.cleanAll();
   }, 10000);
@@ -407,7 +407,7 @@ describe("The initialize switching", () => {
       uri: "http://mock.mock.com/180000/seg10.ts",
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 1]).toEqual({
-      discontinuity: true,
+      discontinuity: true, cue: { in: true }
     });
     expect(sessionCurrentSegs["1313000"][size - 1]).toEqual({
       duration: 7.5,
@@ -462,6 +462,7 @@ describe("The initialize switching", () => {
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 1]).toEqual({
       discontinuity: true,
+      cue: { in: true }
     });
     expect(
       sessionCurrentSegs["1313000"][size - 1].daterange["planned-duration"]
@@ -781,6 +782,7 @@ describe("The initialize switching", () => {
     });
     expect(newVodSegments["1313000"][size - 1 - 1 - 1]).toEqual({
       discontinuity: true,
+      cue: { in: true }
     });
     expect(
       newVodSegments["1313000"][size - 1 - 1].daterange["planned-duration"]

@@ -1,5 +1,5 @@
 const SharedStateStore = require('./shared_state_store.js');
-const debug = require("debug")("sessionLive-state-store");
+const debug = require("debug")("session-live-state-store");
 
 class SharedSessionLiveState {
   constructor(store, sessionId, instanceId, opts) {
