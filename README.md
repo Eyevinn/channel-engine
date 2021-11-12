@@ -141,8 +141,9 @@ class MyStreamSwitchManager {
   getSchedule(channelId) -> [ { eventId, assetId, title, type, start_time, end_time, uri, duration } ]
 }
 ```
+When using **Live Mixing** in **High-Availablilty** mode, it is important to know that the class's  `getSchedule(channelId)` function will be called by each channel-engine instance. Meaning that it is crucial that the implementation of this function will return the same response for each and every channel-engine instance, as they are expecting to be recieving identical lists in order to be synced up for live mixing. 
 
-The class's `getSchedule(channelId)` function should return a promise containing the list of events as an object in the following format:
+The class's `getSchedule(channelId)` function should return a promise containing the list of events as an object in the following format below:
 
 ```
 {
@@ -206,6 +207,7 @@ Below are examples of a Live stream event and a VOD event respectively:
 }
 ```
 (*Important Note: When it comes to VOD events. Desired `duration` has priority over `end_time`. Meaning that you will only resume VOD2Live content after the asset in the VOD event has finished. This may change in the future.*) 
+
 
 
 Then create an instance of the class and reference it as the `streamSwitchManager` in your engineOptions, just like you'd do with the channel manager. 
