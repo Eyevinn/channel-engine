@@ -362,6 +362,7 @@ class Session {
       throw new Error('Session not ready');
     }
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    const discSeqOffset = await this._sessionState.get("discSeq");
     if (playheadState.vodMediaSeqVideo === 0) {
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
@@ -372,7 +373,7 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-        const discSeqCount = currentVod.getLastUsedDiscSeq();
+        const discSeqCount = discSeqOffset + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
         debug(`[${this._sessionId}]: MediaSeq: (${(playheadState.mediaSeq + playheadState.vodMediaSeqVideo)}) and DiscSeq: (${discSeqCount}) requested `);
         return {
           'mediaSeq': (playheadState.mediaSeq + playheadState.vodMediaSeqVideo),

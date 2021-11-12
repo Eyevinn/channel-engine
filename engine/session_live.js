@@ -479,9 +479,13 @@ class SessionLive {
     const vodBws = Object.keys(this.vodSegments);
     const liveBws = Object.keys(this.liveSegsForFollowers);
     const size = this.liveSegsForFollowers[liveBws[0]].length;
-    debug(`[${this.sessionId}]: [size=${size}]->this.liveSegsForFollowers=${Object.keys(this.liveSegsForFollowers)} `);
+
+    let newSegCount = 0;
+    this.liveSegsForFollowers[liveBws[0]].map((seg) => {if (seg.uri) { newSegCount++ }});
+
+    debug(`[${this.sessionId}]: FOLLOWER: liveSegsForFollowers Bws=${Object.keys(this.liveSegsForFollowers)}_newSegCount=${newSegCount} `);
     // Remove transitional segs & add live source segs collected from store
-    for (let k = 0; k < size; k++) {
+    for (let k = 0; k < newSegCount; k++) {
       let incrementDiscSeqCount = false;
       // Shift the top vod segment on all variants
       for (let i = 0; i < vodBws.length; i++) {
@@ -493,12 +497,13 @@ class SessionLive {
       }
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
-        incrementDiscSeqCount = false;
       }
-      // Push to bottom, new live source segment on all variants
-      for (let i = 0; i < liveBws.length; i++) {
-        const bw = liveBws[i];
-        const liveSegFromLeader = this.liveSegsForFollowers[bw][k];
+    }
+    // Push to bottom, new live source segment on all variants
+    for (let segIdx = 0; segIdx < size; segIdx++) {
+      let incrementDiscSeqCount = false;
+      liveBws.forEach((bw)=>{
+        let liveSegFromLeader = this.liveSegsForFollowers[bw][segIdx];
         if (!this.liveSegQueue[bw]) {
           this.liveSegQueue[bw] = [];
         }
@@ -507,19 +512,21 @@ class SessionLive {
         let segCount = 0;
         this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
         if (segCount > this.targetNumSeg) {
-          seg = this.liveSegQueue[bw].shift();
+          let seg = this.liveSegQueue[bw].shift();
           if (seg && seg.discontinuity) {
             incrementDiscSeqCount = true;
             seg = this.liveSegQueue[bw].shift();
           }
         }
-        debug(`[${this.sessionId}]: Pushed a segment to 'liveSegQueue'`);
-      }
+        debug(`[${this.sessionId}]: Pushed segment (${liveSegFromLeader.uri ? liveSegFromLeader.uri : "Disc-tag"}) to 'liveSegQueue'`);
+      });
       if (incrementDiscSeqCount) {
         this.discSeqCount++;
       }
-      this.mediaSeqCount++;
     }
+    let prevVal = this.mediaSeqCount;
+    this.mediaSeqCount += newSegCount;
+    debug(`[${this.sessionId}]: Incrementing Mseq Count from [${prevVal}] -> [${this.mediaSeqCount}]`);
     debug(`[${this.sessionId}]: Finished updating all Follower's Counts and Segment Queues!`);
   }
 
