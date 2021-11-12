@@ -289,6 +289,13 @@ class SessionLive {
     // Don't use what Session gave you. Use the Leaders number if it's available
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     let liveCounts = await this.sessionLiveState.get("firstCounts");
+    if (liveCounts === null) {
+      liveCounts = {
+        liveSourceMseqCount: null,
+        mediaSeqCount: null,
+        discSeqCount: null,
+      };
+    }
     if (isLeader) {
       liveCounts.discSeqCount = this.discSeqCount;
       await this.sessionLiveState.set("firstCounts", liveCounts);

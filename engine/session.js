@@ -43,6 +43,7 @@ class Session {
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
+    this.waitingForNextVod = false;
 
     if (config) {
       if (config.sessionId) {
@@ -757,6 +758,13 @@ class Session {
       sessionState.state = SessionState.VOD_INIT;
     }
 
+    if (!isLeader && this.waitingForNextVod) {
+      // By now Leader should have added the next Vod in store
+      debug(`[${this._sessionId}]: I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+      await this._sessionState.clearCurrentVodCache();
+      this.waitingForNextVod = false;
+    }
+
     switch (sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -854,6 +862,7 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
+          this.waitingForNextVod = true;
           if (sessionState.vodMediaSeqVideo === 0) {
             debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
