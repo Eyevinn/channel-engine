@@ -142,7 +142,7 @@ class MyStreamSwitchManager {
 }
 ```
 
-The class's `getSchedule(channelId)` function should return a list of event objects in the following format:
+The class's `getSchedule(channelId)` function should return a promise containing the list of events as an object in the following format:
 
 ```
 {
