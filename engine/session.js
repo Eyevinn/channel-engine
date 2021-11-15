@@ -760,7 +760,7 @@ class Session {
 
     if (!isLeader && this.waitingForNextVod) {
       // By now Leader should have added the next Vod in store
-      debug(`[${this._sessionId}]: I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+      debug(`[${this._sessionId}]: Not leader! New VOD loaded during last tick. Invalidate current VOD cache`);
       await this._sessionState.clearCurrentVodCache();
       this.waitingForNextVod = false;
     }
@@ -851,10 +851,13 @@ class Session {
           }
         }
       case SessionState.VOD_PLAYING:
-        if (!isLeader && sessionState.vodMediaSeqVideo === 0) {
-          debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
-          await this._sessionState.clearCurrentVodCache();
-          currentVod = await this._sessionState.getCurrentVod();
+        if (!isLeader) {
+          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
+            debug(`[${this._sessionId}]: Not leader! Invalidate current VOD cache and fetch the new one from the leader`);
+            await this._sessionState.clearCurrentVodCache();
+            currentVod = await this._sessionState.getCurrentVod();
+            this.waitingForNextVod = false;
+          }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         return;
@@ -862,11 +865,11 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
-          this.waitingForNextVod = true;
-          if (sessionState.vodMediaSeqVideo === 0) {
+          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
             debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
           }
+          this.waitingForNextVod = true;
         }
         return;
       case SessionState.VOD_NEXT_INIT:
@@ -948,6 +951,7 @@ class Session {
             return;
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
+            this.waitingForNextVod = true;
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
             sessionState.currentVod = await this._sessionState.getCurrentVod();
           }

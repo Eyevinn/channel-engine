@@ -671,7 +671,6 @@ class ChannelEngine {
       const session = sessions[sessionId];
       const sessionLive = sessionsLive[sessionId];
       if (session && sessionLive) {
-        switcherStatus[sessionId] = false;
         await session.resetAsync(); 
         sessionResets.push(sessionId);
       } else {
