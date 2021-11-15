@@ -30,6 +30,7 @@ class StreamSwitcher {
     this.timeDiff = null;
     this.abortTimeStamp = null;
 
+
     if (config) {
       if (config.sessionId) {
         this.sessionId = config.sessionId;
@@ -48,6 +49,26 @@ class StreamSwitcher {
 
   getEventId() {
     return this.eventId;
+  }
+
+  async abortLiveFeed(session, sessionLive, message) {
+    if (this.streamTypeLive) {
+      let status = null;
+      debug(`[${this.sessionId}]: Abort Live Stream! Reason: ${message}`);
+      try {
+        this.abortTimeStamp = Date.now();
+        status = await this._initSwitching(
+          SwitcherState.LIVE_TO_V2L,
+          session,
+          sessionLive,
+          null
+        );
+        return status;
+      } catch (err) {
+        debug(`Failed to force a switch off live feed: ${err}`);
+        throw new Error(err);
+      }
+    }
   }
 
   /**
@@ -120,17 +141,24 @@ class StreamSwitcher {
     let tries = 0;
     let validURI = false;
     while (!validURI && tries < MAX_FAILS) {
-      debug(`[${this.sessionId}]: Switcher is validating Master URI... (tries left=${MAX_FAILS - tries})`);
+      debug(
+        `[${
+          this.sessionId
+        }]: Switcher is validating Master URI... (tries left=${
+          MAX_FAILS - tries
+        })`
+      );
       validURI = await this._validURI(scheduleObj.uri);
       tries++;
     }
     if (!validURI) {
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
       if (this.streamTypeLive) {
-        debug(`[${this.sessionId}]: Abort Live Stream! Switching back to VOD2Live due to unreachable URI`);
-        this.abortTimeStamp = Date.now();
-        status = await this._initSwitching(SwitcherState.LIVE_TO_V2L, session, sessionLive, null);
-        return status;
+        await this.abortLiveFeed(
+          session,
+          sessionLive,
+          "Switching back to VOD2Live due to unreachable URI"
+        );
       }
       return false;
     }
@@ -139,7 +167,11 @@ class StreamSwitcher {
     if (this.abortTimeStamp && tsNow - this.abortTimeStamp <= 10000) {
       // If we have a valid URI and no more than 10 seconds have passed since switching from Live->V2L.
       // Stay on V2L to give live sessionLive some time to prepare before switching back to live.
-      debug(`[${this.sessionId}]: Waiting [${10000 - (tsNow - this.abortTimeStamp)}ms] before switching back to Live due to unreachable URI`);
+      debug(
+        `[${this.sessionId}]: Waiting [${
+          10000 - (tsNow - this.abortTimeStamp)
+        }ms] before switching back to Live due to unreachable URI`
+      );
       return false;
     }
     this.abortTimeStamp = null;
@@ -186,7 +218,9 @@ class StreamSwitcher {
       }
       if (!this.streamTypeLive) {
         if (!scheduleObj.duration) {
-          debug(`[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`);
+          debug(
+            `[${this.sessionId}]: Cannot switch VOD no duration specified for schedule item: [${scheduleObj.assetId}]`
+          );
           return false;
         }
         if (this.eventId !== scheduleObj.eventId) {
@@ -289,7 +323,9 @@ class StreamSwitcher {
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
 
           if (scheduleObj && !scheduleObj.duration) {
-            debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
+            debug(
+              `[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`
+            );
           }
 
           if (this._isEmpty(liveSegments.currMseqSegs)) {
@@ -362,7 +398,8 @@ class StreamSwitcher {
           // TODO: Not yet fully tested/supported
           this.eventId = scheduleObj.eventId;
           eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
-          currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+          currLiveCounts =
+            await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
           await sessionLive.resetSession();
           await sessionLive.resetLiveStoreAsync(0);
@@ -424,10 +461,14 @@ class StreamSwitcher {
       if (online.status >= 200 && online.status < 300) {
         return true;
       }
-      debug(`[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! Returned Status Code: ${online.status}`);
+      debug(
+        `[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! Returned Status Code: ${online.status}`
+      );
       return false;
     } catch (err) {
-      debug(`[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! ${err}`);
+      debug(
+        `[${this.sessionId}]: Failed to validate URI: ${uri}\nERROR! ${err}`
+      );
       return false;
     } finally {
       clearTimeout(timeout);
