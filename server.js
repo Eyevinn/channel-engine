@@ -100,4 +100,4 @@ const engineOptions = {
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.PORT || 8000);
+engine.listen(process.env.port || 8000);

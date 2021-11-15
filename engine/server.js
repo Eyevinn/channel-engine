@@ -200,7 +200,13 @@ class ChannelEngine {
         debug(`Tried to switch stream on a non-existing channel=[${channel}]. Switching Ignored!)`);
       }
     }
-    await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
+    try {
+      await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
+    } catch (err) {
+      debug('Problem occured when updating streamSwitchers');
+      throw new Error (err);
+    }
+
   }
 
   async updateChannelsAsync(channelMgr, options) {
@@ -663,8 +669,9 @@ class ChannelEngine {
     let sessionResets = [];
     for (const sessionId of Object.keys(sessions)) {
       const session = sessions[sessionId];
-      if (session) {
-        await session.resetAsync();
+      const sessionLive = sessionsLive[sessionId];
+      if (session && sessionLive) {
+        await session.resetAsync(); 
         sessionResets.push(sessionId);
       } else {
         const err = new errs.NotFoundError('Invalid session');
