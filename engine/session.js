@@ -43,7 +43,7 @@ class Session {
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
-    this.waitingForNextVod = false;
+    this._currentAssetId = null;
 
     if (config) {
       if (config.sessionId) {
@@ -305,6 +305,7 @@ class Session {
       // TODO: Support reloading with audioSegments as well
       await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, { ttl: (currentVod.getDuration() * 1000) });
+      this._currentAssetId = await this._sessionState.set("assetId", crypto.randomUUID());
       await this._sessionState.set("vodReloaded", 1);
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
@@ -450,16 +451,21 @@ class Session {
     await this._tickAsync();
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     let sessionState = await this._sessionState.getValues(
-      ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+      ["state", "assetId", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
-    if (playheadState.vodMediaSeqVideo < 2) {
-      // This is due to the possibility that we miss the tick where vodMediaSeqVideo is 0
-      // The worst case scenario is that we clear cache two times in a row on a switch
-      if (!isLeader) {
-        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+    
+    // This is due to the possibility that we miss the tick where vodMediaSeqVideo is 0
+    // The worst case scenario is that we clear cache two times in a row on a switch
+    if (!isLeader) {
+      if (!this._currentAssetId && this._currentAssetId !== sessionState.assetId) {
+        debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
+        this._currentAssetId = sessionState.assetId;
+        // By now Leader should have added the next Vod in store
+        debug(`[${this._sessionId}]: Not leader! New VOD loaded during previous tick. Invalidate current VOD cache`);
+        await this._sessionState.clearCurrentVodCache();
       }
     }
+
     let currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod ||
         sessionState.vodMediaSeqVideo === null ||
@@ -730,6 +736,7 @@ class Session {
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
       await this._sessionState.setCurrentVod(slateVod);
+      await this._sessionState.set("assetId", crypto.randomUUID()); 
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
@@ -758,13 +765,17 @@ class Session {
       sessionState.state = SessionState.VOD_INIT;
     }
 
-    if (!isLeader && this.waitingForNextVod) {
-      // By now Leader should have added the next Vod in store
-      debug(`[${this._sessionId}]: Not leader! New VOD loaded during last tick. Invalidate current VOD cache`);
-      await this._sessionState.clearCurrentVodCache();
-      this.waitingForNextVod = false;
+    if (!isLeader) {
+      if (!this._currentAssetId && this._currentAssetId !== sessionState.assetId) {
+        debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
+        this._currentAssetId = sessionState.assetId;
+        // By now Leader should have added the next Vod in store
+        debug(
+          `[${this._sessionId}]: Not leader! New VOD loaded during last tick. Invalidate current VOD cache`
+        );
+        await this._sessionState.clearCurrentVodCache();
+      }
     }
-
     switch (sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -827,6 +838,8 @@ class Session {
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomUUID()); 
+            this._currentAssetId = sessionState.assetId;
             await this._sessionState.remove("nextVod");
             return;
           } else {
@@ -852,11 +865,12 @@ class Session {
         }
       case SessionState.VOD_PLAYING:
         if (!isLeader) {
-          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
+          if (sessionState.vodMediaSeqVideo === 0 || this._currentAssetId !== sessionState.assetId) {
+            debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
+            this._currentAssetId = sessionState.assetId;
             debug(`[${this._sessionId}]: Not leader! Invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
-            this.waitingForNextVod = false;
           }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
@@ -865,11 +879,12 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
-          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
+          if (sessionState.vodMediaSeqVideo === 0 || this._currentAssetId !== sessionState.assetId) {
+            debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
+            this._currentAssetId = sessionState.assetId;
             debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
           }
-          this.waitingForNextVod = true;
         }
         return;
       case SessionState.VOD_NEXT_INIT:
@@ -936,6 +951,8 @@ class Session {
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
             await this._sessionState.remove("nextVod");
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomUUID());
+            this._currentAssetId = sessionState.assetId;
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
@@ -951,7 +968,6 @@ class Session {
             return;
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
-            this.waitingForNextVod = true;
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
             sessionState.currentVod = await this._sessionState.getCurrentVod();
           }
