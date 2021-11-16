@@ -188,6 +188,7 @@ class ChannelEngine {
         let status = null;
         try {
           status = await switcher.streamSwitcher(sessions[channel], sessionsLive[channel]);
+          debug(`[${channel}]: streamSwitcher returned switchstatus=${status}`);
           if (status === undefined) {
             debug(`[WARNING]: switcherStatus->${status}. Setting value to previous status->${prevStatus}`);
             status = prevStatus;
@@ -527,7 +528,7 @@ class ChannelEngine {
           await timer(500);
         }
         let body = null;
-        debug(`switcherStatus[req.params[1]]=[${switcherStatus[req.params[1]]}]`);
+        debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
         if (switcherStatus[req.params[1]]) {
           debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);

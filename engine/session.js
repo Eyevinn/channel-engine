@@ -45,6 +45,7 @@ class Session {
     this.diffCompensation = null;
     this._currentAssetId = null;
 
+
     if (config) {
       if (config.sessionId) {
         this._sessionId = config.sessionId;
@@ -776,6 +777,7 @@ class Session {
         await this._sessionState.clearCurrentVodCache();
       }
     }
+
     switch (sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -885,6 +887,7 @@ class Session {
             debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
           }
+          this.waitingForNextVod = true;
         }
         return;
       case SessionState.VOD_NEXT_INIT:
@@ -968,6 +971,7 @@ class Session {
             return;
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
+            this.waitingForNextVod = true;
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
             sessionState.currentVod = await this._sessionState.getCurrentVod();
           }
