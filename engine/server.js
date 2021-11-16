@@ -172,7 +172,7 @@ class ChannelEngine {
         const ts_2 = Date.now();
         let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
         await timer(interval)
-        debug(`SteamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
+        debug(`StreamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
       }
     }
     StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
