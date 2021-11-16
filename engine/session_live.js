@@ -136,7 +136,7 @@ class SessionLive {
         if (!this.masterManifestUri) {
           await timer(3000);
           continue;
-        }
+        } 
         if (this.playheadState === PlayheadState.STOPPED) {
           debug(`[${this.sessionId}]: Playhead has Stopped, clearing local session and store.`);
           this.waitForPlayhead = false;
@@ -289,6 +289,13 @@ class SessionLive {
     // Don't use what Session gave you. Use the Leaders number if it's available
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     let liveCounts = await this.sessionLiveState.get("firstCounts");
+    if (liveCounts === null) {
+      liveCounts = {
+        liveSourceMseqCount: null,
+        mediaSeqCount: null,
+        discSeqCount: null,
+      };
+    }
     if (isLeader) {
       liveCounts.discSeqCount = this.discSeqCount;
       await this.sessionLiveState.set("firstCounts", liveCounts);
@@ -817,7 +824,7 @@ class SessionLive {
       }
 
       // [LASTLY]: LEADER does this for respawned-FOLLOWERS' sake.
-      if (this.firstTime) {
+      if (this.firstTime && this.allowedToSet) {
         // Buy some time for followers (NOT Respawned) to fetch their own L.S m3u8.
         await timer(1000); // maybe remove
         const firstCounts = {
@@ -1041,6 +1048,7 @@ class SessionLive {
         this.liveSegQueue[liveTargetBandwidth].map((seg) => {if (seg.uri) { segCount++ }});
         debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
         if (segCount > this.targetNumSeg) {
+          debug(`[${this.sessionId}]: liveTargetBandwidth=${liveTargetBandwidth}_seg=${JSON.stringify(seg,null,2)}`);
           seg = this.liveSegQueue[liveTargetBandwidth].shift();
           if (seg) {
             if (seg.discontinuity) {
@@ -1048,6 +1056,7 @@ class SessionLive {
               amountRemovedDiscSeqs++;
             }
           }
+          debug(`[${this.sessionId}]: After Shifting -> size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
         }
       }
     }
