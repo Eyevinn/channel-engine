@@ -305,7 +305,7 @@ class Session {
       // TODO: Support reloading with audioSegments as well
       await currentVod.reload(currentMseq, segments, null, reloadBehind);
       await this._sessionState.setCurrentVod(currentVod, { ttl: (currentVod.getDuration() * 1000) });
-      this._currentAssetId = await this._sessionState.set("assetId", crypto.randomUUID());
+      this._currentAssetId = await this._sessionState.set("assetId", crypto.randomBytes(20).toString('hex'));
       await this._sessionState.set("vodReloaded", 1);
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
@@ -395,9 +395,11 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const sessionState = await this._sessionState.getValues(["discSeq", "assetId"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-    if (playheadState.vodMediaSeqVideo === 0) {
+    if (this._currentAssetId !== sessionState.assetId) {
+      debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
+      this._currentAssetId = sessionState.assetId;
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -457,7 +459,7 @@ class Session {
     // This is due to the possibility that we miss the tick where vodMediaSeqVideo is 0
     // The worst case scenario is that we clear cache two times in a row on a switch
     if (!isLeader) {
-      if (!this._currentAssetId && this._currentAssetId !== sessionState.assetId) {
+      if (this._currentAssetId !== sessionState.assetId) {
         debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
         this._currentAssetId = sessionState.assetId;
         // By now Leader should have added the next Vod in store
@@ -736,7 +738,7 @@ class Session {
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
       await this._sessionState.setCurrentVod(slateVod);
-      await this._sessionState.set("assetId", crypto.randomUUID()); 
+      await this._sessionState.set("assetId", crypto.randomBytes(20).toString('hex')); 
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
@@ -766,7 +768,7 @@ class Session {
     }
 
     if (!isLeader) {
-      if (!this._currentAssetId && this._currentAssetId !== sessionState.assetId) {
+      if (this._currentAssetId !== sessionState.assetId) {
         debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
         this._currentAssetId = sessionState.assetId;
         // By now Leader should have added the next Vod in store
@@ -838,7 +840,7 @@ class Session {
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
-            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomUUID()); 
+            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomBytes(20).toString('hex')); 
             this._currentAssetId = sessionState.assetId;
             await this._sessionState.remove("nextVod");
             return;
@@ -865,7 +867,7 @@ class Session {
         }
       case SessionState.VOD_PLAYING:
         if (!isLeader) {
-          if (sessionState.vodMediaSeqVideo === 0 || this._currentAssetId !== sessionState.assetId) {
+          if (this._currentAssetId !== sessionState.assetId) {
             debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
             this._currentAssetId = sessionState.assetId;
             debug(`[${this._sessionId}]: Not leader! Invalidate current VOD cache and fetch the new one from the leader`);
@@ -879,7 +881,7 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
-          if (sessionState.vodMediaSeqVideo === 0 || this._currentAssetId !== sessionState.assetId) {
+          if (this._currentAssetId !== sessionState.assetId) {
             debug(`[${this._sessionId}]: Previous assetId=${this._currentAssetId} != Current assetId=${sessionState.assetId}`);
             this._currentAssetId = sessionState.assetId;
             debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
@@ -951,7 +953,7 @@ class Session {
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
             await this._sessionState.remove("nextVod");
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
-            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomUUID());
+            sessionState.assetId = await this._sessionState.set("assetId", crypto.randomBytes(20).toString('hex'));
             this._currentAssetId = sessionState.assetId;
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
