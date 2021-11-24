@@ -167,12 +167,18 @@ class ChannelEngine {
 
     const StreamSwitchLoop = async (timeIntervalMs) => {
       while(true) {
-        const ts_1 = Date.now();
-        await this.updateStreamSwitchAsync()
-        const ts_2 = Date.now();
-        let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
-        await timer(interval)
-        debug(`StreamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
+        try {
+          const ts_1 = Date.now();
+          await this.updateStreamSwitchAsync()
+          const ts_2 = Date.now();
+          let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
+          await timer(interval)
+          debug(`StreamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
+        } catch (err) {
+          console.error(err)
+          debug(`StreamSwitchLoop iteration failed. Trying Again in 1000ms!`);
+          await timer(1000);
+        }
       }
     }
     StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
