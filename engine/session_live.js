@@ -1172,9 +1172,12 @@ class SessionLive {
           }
         }
       }
+      if (seg.datetime) {
+        m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
+      }
       if (seg.daterange) {
         const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
-        if (seg.daterange['start-date']) {
+        if (!seg.datetime && seg.daterange['start-date']) {
           m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
         }
         m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
