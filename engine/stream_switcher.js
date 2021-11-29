@@ -278,6 +278,9 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ Switched from V2L->LIVE ]`);
           return true;
         } catch (err) {
+          this.streamTypeLive = false;
+          this.working = false;
+          this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from V2L->LIVE ]`);
           throw new Error(err);
         }
@@ -309,6 +312,9 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
           return false;
         } catch (err) {
+          this.streamTypeLive = false;
+          this.working = false;
+          this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from V2L->VOD ]`);
           throw new Error(err);
         }
@@ -349,6 +355,9 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
           return false;
         } catch (err) {
+          this.streamTypeLive = false;
+          this.working = false;
+          this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ]`);
           throw new Error(err);
         }
@@ -389,6 +398,9 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
           return false;
         } catch (err) {
+          this.streamTypeLive = false;
+          this.working = false;
+          this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->VOD ]`);
           throw new Error(err);
         }
@@ -425,6 +437,9 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: Switched from LIVE->LIVE`);
           return true;
         } catch (err) {
+          this.streamTypeLive = false;
+          this.working = false;
+          this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->LIVE ]`);
           throw new Error(err);
         }

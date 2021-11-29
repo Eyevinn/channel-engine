@@ -1018,16 +1018,17 @@ class SessionLive {
         cueData["assetData"] = attributes["assetData"];
       }
       if ("daterange" in attributes) {
-        if(!daterangeData) {
-          daterangeData = {}
+        if (!daterangeData) {
+          daterangeData = {};
         }
-        daterangeData = {
-          id: attributes["daterange"]["ID"],
-          "start-date": attributes["daterange"]["START-DATE"],
-          "planned-duration": parseFloat(
-            attributes["daterange"]["PLANNED-DURATION"]
-          ),
-        };
+        let allDaterangeAttributes = Object.keys(attributes["daterange"]); // array of strings
+        allDaterangeAttributes.forEach((attr) => {
+          if (attr.match(/DURATION$/)) {
+            daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
+          } else {
+            daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
+          }
+        });
       }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
