@@ -1021,7 +1021,7 @@ class SessionLive {
         if (!daterangeData) {
           daterangeData = {};
         }
-        let allDaterangeAttributes = Object.keys(attributes["daterange"]); // array of strings
+        let allDaterangeAttributes = Object.keys(attributes["daterange"]);
         allDaterangeAttributes.forEach((attr) => {
           if (attr.match(/DURATION$/)) {
             daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
