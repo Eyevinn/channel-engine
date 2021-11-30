@@ -1018,16 +1018,17 @@ class SessionLive {
         cueData["assetData"] = attributes["assetData"];
       }
       if ("daterange" in attributes) {
-        if(!daterangeData) {
-          daterangeData = {}
+        if (!daterangeData) {
+          daterangeData = {};
         }
-        daterangeData = {
-          id: attributes["daterange"]["ID"],
-          "start-date": attributes["daterange"]["START-DATE"],
-          "planned-duration": parseFloat(
-            attributes["daterange"]["PLANNED-DURATION"]
-          ),
-        };
+        let allDaterangeAttributes = Object.keys(attributes["daterange"]);
+        allDaterangeAttributes.forEach((attr) => {
+          if (attr.match(/DURATION$/)) {
+            daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
+          } else {
+            daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
+          }
+        });
       }
       if (playlistItem.properties.uri) {
         if (playlistItem.properties.uri.match("^http")) {
@@ -1171,9 +1172,12 @@ class SessionLive {
           }
         }
       }
+      if (seg.datetime) {
+        m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
+      }
       if (seg.daterange) {
         const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
-        if (seg.daterange['start-date']) {
+        if (!seg.datetime && seg.daterange['start-date']) {
           m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
         }
         m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
