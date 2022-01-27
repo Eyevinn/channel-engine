@@ -673,8 +673,8 @@ class Session {
           }
         }
       case SessionState.VOD_PLAYING:
-        if (!isLeader && sessionState.vodMediaSeqVideo === 0) {
-          debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+        if (!isLeader && (sessionState.vodMediaSeqVideo === 0 || sessionState.vodMediaSeqVideo === 1)) {
+          debug(`[${this._sessionId}]: First or second mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
           await this._sessionState.clearCurrentVodCache();
           currentVod = await this._sessionState.getCurrentVod();    
         }
@@ -684,8 +684,8 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
-          if (sessionState.vodMediaSeqVideo === 0) {
-            debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+          if (sessionState.vodMediaSeqVideo === 0 || sessionState.vodMediaSeqVideo === 1) {
+            debug(`[${this._sessionId}]: First or second mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
             await this._sessionState.clearCurrentVodCache();
           }
         }
