@@ -951,7 +951,9 @@ class SessionLive {
         //   this.targetNumSeg = m3u.items.PlaylistItem.length;
         // }
 
-        this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
+        if (this.pushAmount >= 0) {
+          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence"); 
+        } 
         this.targetDuration = m3u.get("targetDuration");
         let amountRemovedDiscSeqs = 0;
         let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
