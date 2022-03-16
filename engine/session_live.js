@@ -136,7 +136,7 @@ class SessionLive {
         if (!this.masterManifestUri) {
           await timer(3000);
           continue;
-        } 
+        }
         if (this.playheadState === PlayheadState.STOPPED) {
           debug(`[${this.sessionId}]: Playhead has Stopped, clearing local session and store.`);
           this.waitForPlayhead = false;
@@ -208,7 +208,7 @@ class SessionLive {
     while (!this.masterManifestUri && attempts > 0) {
       attempts--;
       try {
-        debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`)
+        debug(`[${this.instanceId}][${this.sessionId}]: Going to fetch Live Master Manifest!`);
         // Load & Parse all Media Manifest URIs from Master
         await this._loadMasterManifest(masterManifestUri);
         this.masterManifestUri = masterManifestUri;
@@ -390,7 +390,7 @@ class SessionLive {
   // Generate manifest to give to client
   async getCurrentMediaManifestAsync(bw) {
     if (!this.sessionLiveState) {
-      throw new Error('SessionLive not ready');
+      throw new Error("SessionLive not ready");
     }
     if (bw === null) {
       debug(`[${this.sessionId}]: No bandwidth provided`);
@@ -488,7 +488,11 @@ class SessionLive {
     const size = this.liveSegsForFollowers[liveBws[0]].length;
 
     let newSegCount = 0;
-    this.liveSegsForFollowers[liveBws[0]].map((seg) => {if (seg.uri) { newSegCount++ }});
+    this.liveSegsForFollowers[liveBws[0]].map((seg) => {
+      if (seg.uri) {
+        newSegCount++;
+      }
+    });
 
     debug(`[${this.sessionId}]: FOLLOWER: liveSegsForFollowers Bws=${Object.keys(this.liveSegsForFollowers)}_newSegCount=${newSegCount} `);
     // Remove transitional segs & add live source segs collected from store
@@ -509,7 +513,7 @@ class SessionLive {
     // Push to bottom, new live source segment on all variants
     for (let segIdx = 0; segIdx < size; segIdx++) {
       let incrementDiscSeqCount = false;
-      liveBws.forEach((bw)=>{
+      liveBws.forEach((bw) => {
         let liveSegFromLeader = this.liveSegsForFollowers[bw][segIdx];
         if (!this.liveSegQueue[bw]) {
           this.liveSegQueue[bw] = [];
@@ -517,7 +521,11 @@ class SessionLive {
         this.liveSegQueue[bw].push(liveSegFromLeader);
 
         let segCount = 0;
-        this.liveSegQueue[bw].map((seg) => {if (seg.uri) { segCount++ }});
+        this.liveSegQueue[bw].map((seg) => {
+          if (seg.uri) {
+            segCount++;
+          }
+        });
         if (segCount > this.targetNumSeg) {
           let seg = this.liveSegQueue[bw].shift();
           if (seg && seg.discontinuity) {
@@ -651,7 +659,7 @@ class SessionLive {
       }
 
       // Handle if any promise got rejected
-      if (manifestList.some(result => result.status === "rejected")) {
+      if (manifestList.some((result) => result.status === "rejected")) {
         debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again...`);
         continue;
       }
@@ -663,16 +671,21 @@ class SessionLive {
         return item.value.mediaSeq;
       });
 
-
       // Handle if mediaSeqCounts are NOT synced up!
       if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
-
         debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
         // Decrement fetch counter
         FETCH_ATTEMPTS--;
+        // Calculate retry delay time. Default=1500
+        let retryDelayMs = 1500;
+        if (Object.keys(this.liveSegQueue).length > 0) {
+          const firstBw = Object.keys(this.liveSegQueue)[0];
+          const lastIdx = this.liveSegQueue[firstBw].length - 1;
+          retryDelayMs = this.liveSegQueue[firstBw][lastIdx].duration * 1000 * 0.25;
+        }
         // Wait a little before trying again
-        debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after 1500ms`);
-        await timer(1500);
+        debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after ${retryDelayMs}ms`);
+        await timer(retryDelayMs);
         this.timerCompensation = false;
         continue;
       }
@@ -681,7 +694,7 @@ class SessionLive {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
         let tries = 20;
 
-        while (!leadersFirstSeqCounts.liveSourceMseqCount && tries > 0 || (leadersFirstSeqCounts.liveSourceMseqCount === 0)) {
+        while ((!leadersFirstSeqCounts.liveSourceMseqCount && tries > 0) || leadersFirstSeqCounts.liveSourceMseqCount === 0) {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms (tries left=${tries})`);
           await timer(1000);
           leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
@@ -727,7 +740,7 @@ class SessionLive {
           this.pushAmount = 1; // Follower from start
         } else {
           // RESPAWNED NODES
-          this.pushAmount = (allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount) + 1;
+          this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount + 1;
 
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
@@ -760,7 +773,7 @@ class SessionLive {
     }
 
     if (FETCH_ATTEMPTS === 0) {
-      debug(`[${this.sessionId}]: Fetching from Live-Source did not work! Returning to Playhead Loop...`)
+      debug(`[${this.sessionId}]: Fetching from Live-Source did not work! Returning to Playhead Loop...`);
       return;
     }
 
@@ -781,8 +794,7 @@ class SessionLive {
           this.firstTime = false;
           debug(`[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`);
           return;
-        }
-        else if (leadersCurrentMseqRaw < this.lastRequestedMediaSeqRaw) {
+        } else if (leadersCurrentMseqRaw < this.lastRequestedMediaSeqRaw) {
           // WE ARE A RESPAWN-NODE, and we are ahead of leader.
           this.blockGenerateManifest = true;
         }
@@ -798,7 +810,7 @@ class SessionLive {
       }
       // Segment Pushing
       debug(`[${this.sessionId}]: Executing Promises II: Segment Pushing`);
-      let results = await allSettled(pushPromises);//await Promise.all(pushPromises);
+      let results = await allSettled(pushPromises); //await Promise.all(pushPromises);
       const removedDiscSeqList = results.map((item) => {
         if (item.status === "rejected") {
           return -1;
@@ -962,8 +974,8 @@ class SessionLive {
         }
         let resolveObj = {
           removedDiscSeqs: amountRemovedDiscSeqs,
-          bw: liveTargetBandwidth
-        }
+          bw: liveTargetBandwidth,
+        };
         resolve(resolveObj);
       } catch (exc) {
         console.error("ERROR: " + exc);
@@ -998,7 +1010,7 @@ class SessionLive {
         }
         cueData["out"] = true;
         cueData["duration"] = attributes["cueout"];
-       }
+      }
       if ("cuecont" in attributes) {
         if (!cueData) {
           cueData = {};
@@ -1046,10 +1058,14 @@ class SessionLive {
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
         let segCount = 0;
-        this.liveSegQueue[liveTargetBandwidth].map((seg) => {if (seg.uri) { segCount++ }});
+        this.liveSegQueue[liveTargetBandwidth].map((seg) => {
+          if (seg.uri) {
+            segCount++;
+          }
+        });
         debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
         if (segCount > this.targetNumSeg) {
-          debug(`[${this.sessionId}]: liveTargetBandwidth=${liveTargetBandwidth}_seg=${JSON.stringify(seg,null,2)}`);
+          debug(`[${this.sessionId}]: liveTargetBandwidth=${liveTargetBandwidth}_seg=${JSON.stringify(seg, null, 2)}`);
           seg = this.liveSegQueue[liveTargetBandwidth].shift();
           if (seg) {
             if (seg.discontinuity) {
@@ -1079,8 +1095,7 @@ class SessionLive {
     }
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
     const vodTargetBandwidth = this._findNearestBw(bw, Object.keys(this.vodSegments));
-    debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`)
-
+    debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`);
 
     if (this.blockGenerateManifest) {
       debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Manifest! Waiting to sync-up with Leader...`);
@@ -1154,7 +1169,7 @@ class SessionLive {
         m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
       if (seg.cue) {
-        if(seg.cue.out) {
+        if (seg.cue.out) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-OATCLS-SCTE35:" + seg.cue.scteData + "\n";
           }
@@ -1166,8 +1181,7 @@ class SessionLive {
         if (seg.cue.cont) {
           if (seg.cue.scteData) {
             m3u8 += "#EXT-X-CUE-OUT-CONT:ElapsedTime=" + seg.cue.cont + ",Duration=" + seg.cue.duration + ",SCTE35=" + seg.cue.scteData + "\n";
-          }
-          else {
+          } else {
             m3u8 += "#EXT-X-CUE-OUT-CONT:" + seg.cue.cont + "/" + seg.cue.duration + "\n";
           }
         }
@@ -1176,14 +1190,16 @@ class SessionLive {
         m3u8 += `#EXT-X-PROGRAM-DATE-TIME:${seg.datetime}\n`;
       }
       if (seg.daterange) {
-        const dateRangeAttributes = Object.keys(seg.daterange).map(key => daterangeAttribute(key, seg.daterange[key])).join(',');
-        if (!seg.datetime && seg.daterange['start-date']) {
-          m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange['start-date'] + "\n";
+        const dateRangeAttributes = Object.keys(seg.daterange)
+          .map((key) => daterangeAttribute(key, seg.daterange[key]))
+          .join(",");
+        if (!seg.datetime && seg.daterange["start-date"]) {
+          m3u8 += "#EXT-X-PROGRAM-DATE-TIME:" + seg.daterange["start-date"] + "\n";
         }
         m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
       }
       // Mimick logic used in hls-vodtolive
-      if (seg.cue && seg.cue.in){
+      if (seg.cue && seg.cue.in) {
         m3u8 += "#EXT-X-CUE-IN" + "\n";
       }
       if (seg.uri) {
@@ -1234,13 +1250,13 @@ class SessionLive {
     const profiles = this.sessionLiveProfile;
     const toKeep = new Set();
     let newItem = {};
-    profiles.forEach(profile => {
+    profiles.forEach((profile) => {
       let bwToKeep = this._findNearestBw(profile.bw, Object.keys(this.mediaManifestURIs));
       toKeep.add(bwToKeep);
     });
     toKeep.forEach((bw) => {
       newItem[bw] = this.mediaManifestURIs[bw];
-    })
+    });
     this.mediaManifestURIs = newItem;
   }
 
