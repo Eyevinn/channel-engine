@@ -964,8 +964,8 @@ class SessionLive {
         // }
 
         if (this.pushAmount >= 0) {
-          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence"); 
-        } 
+          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
+        }
         this.targetDuration = m3u.get("targetDuration");
         let amountRemovedDiscSeqs = 0;
         let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
@@ -1096,7 +1096,7 @@ class SessionLive {
       throw new Error("No bandwidth provided");
     }
     const liveTargetBandwidth = this._findNearestBw(bw, Object.keys(this.mediaManifestURIs));
-    const vodTargetBandwidth = this._findNearestBw(bw, Object.keys(this.vodSegments));
+    const vodTargetBandwidth = this._getNearestBandwidth(bw, Object.keys(this.vodSegments));
     debug(`[${this.sessionId}]: Client requesting manifest for bw=(${bw}). Nearest LiveBw=(${liveTargetBandwidth})`);
 
     if (this.blockGenerateManifest) {
@@ -1219,6 +1219,20 @@ class SessionLive {
     });
   }
 
+  _getNearestBandwidth(bandwidthToMatch, array) {
+    const sortedBandwidths = array.sort((a, b) => a - b);
+    const exactMatch = sortedBandwidths.find((a) => a == bandwidthToMatch);
+    if (exactMatch) {
+      return exactMatch;
+    }
+    for (let i = 0; i < sortedBandwidths.length; i++) {
+      if (Number(bandwidthToMatch) <= Number(sortedBandwidths[i])) {
+        return sortedBandwidths[i];
+      }
+    }
+    return sortedBandwidths[sortedBandwidths.length - 1];
+  }
+
   _getFirstBwWithSegmentsInList(allSegments) {
     const bandwidths = Object.keys(allSegments);
     for (let i = 0; i < bandwidths.length; i++) {
@@ -1253,7 +1267,7 @@ class SessionLive {
     const toKeep = new Set();
     let newItem = {};
     profiles.forEach((profile) => {
-      let bwToKeep = this._findNearestBw(profile.bw, Object.keys(this.mediaManifestURIs));
+      let bwToKeep = this._getNearestBandwidth(profile.bw, Object.keys(this.mediaManifestURIs));
       toKeep.add(bwToKeep);
     });
     toKeep.forEach((bw) => {
