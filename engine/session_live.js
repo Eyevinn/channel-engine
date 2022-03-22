@@ -15,6 +15,7 @@ const daterangeAttribute = (key, attr) => {
     return key.toUpperCase() + "=" + `"${attr}"`;
   }
 };
+const TARGET_PLAYLIST_DURATION_SEC = 60;
 const RESET_DELAY = 5000;
 const FAIL_TIMEOUT = 4000;
 const PlayheadState = Object.freeze({
@@ -500,6 +501,7 @@ class SessionLive {
       let incrementDiscSeqCount = false;
       // Shift the top vod segment on all variants
       for (let i = 0; i < vodBws.length; i++) {
+        // ------------------------------------------------------------------------------------ (((( change here))))
         let seg = this.vodSegments[vodBws[i]].shift();
         if (seg && seg.discontinuity) {
           incrementDiscSeqCount = true;
@@ -859,38 +861,47 @@ class SessionLive {
   }
 
   async _incrementAndShift() {
-    const vodBandwidths = Object.keys(this.vodSegments);
-    for (let j = 0; j < this.pushAmount; j++) {
+    // ------------------------------------------------------------------------------------ (((( change here))))
+    const vodBandwidths = Object.keys(his.vodSegments);
+    const liveBandwidths = Object.keys(his.liveSegQueue);
+    let v2l_total_duration = 0;
+    let l2l_total_duration = 0;
+    his.vodSegments[vodBandwidths[0]].forEach((seg) => {
+      if (seg.duration) {
+        v2l_total_duration += seg.duration;
+      }
+    });
+    his.liveSegQueue[liveBandwidths[0]].forEach((seg) => {
+      if (seg.duration) {
+        l2l_total_duration += seg.duration;
+      }
+    });
+    let totalDur = v2l_total_duration + l2l_total_duration;
+    while (totalDur > TARGET_PLAYLIST_DURATION_SEC) {
       let incrementDiscSeqCount = false;
+      let timeToRemove = 0;
       // Shift the top vod segment
       for (let i = 0; i < vodBandwidths.length; i++) {
-        let seg = this.vodSegments[vodBandwidths[i]].shift();
+        let seg = his.vodSegments[vodBandwidths[i]].shift();
         if (seg) {
           if (seg.discontinuity) {
-            this.vodSegments[vodBandwidths[i]].shift();
+            his.vodSegments[vodBandwidths[i]].shift();
             incrementDiscSeqCount = true;
+          }
+          if (seg.duration) {
+            // Reduce duration
+            timeToRemove = seg.duration;
           }
         }
       }
-      if (incrementDiscSeqCount) {
-        this.discSeqCount++;
+      if (timeToRemove) {
+        totalDur -= timeToRemove;
       }
-      this.mediaSeqCount++;
+      if (incrementDiscSeqCount) {
+        his.discSeqCount++;
+      }
+      his.mediaSeqCount++;
     }
-
-    // TODO: LASTLY: SHRINK IF NEEDED. (should only happen once if ever.)
-    // let extraSegments = (this.liveSegQueue[liveTargetBandwidth].length + this.vodSegments[vodBandwidths[0]].length) - this.targetNumSeg;
-    // if(extraSegments > 0) {
-    //   // POP top vod seg, 'extraSegments' times for all variants
-    //   for (let k = 0; k < extraSegments; k++) {
-    //     // Shift the top vod segment
-    //     for (let i = 0; i < vodBandwidths.length; i++) {
-    //       this.vodSegments[vodBandwidths[i]].shift();
-    //     }
-    //     this.mediaSeqCount++;
-    //   }
-    //   debug(`[${this.sessionId}]: Success! We shrunk manifest segment amount by ${extraSegments}_units`);
-    // }
   }
 
   async _loadMediaManifest(bw) {
@@ -1060,22 +1071,28 @@ class SessionLive {
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
         let segCount = 0;
-        this.liveSegQueue[liveTargetBandwidth].map((seg) => {
-          if (seg.uri) {
+        let totalSegDur = 0;
+        this.liveSegQueue[liveTargetBandwidth].forEach((seg) => {
+          if (seg.uri && seg.duration) {
             segCount++;
+            totalSegDur += seg.duration;
           }
         });
-        debug(`[${this.sessionId}]: size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
-        if (segCount > this.targetNumSeg) {
+        debug(`[${this.sessionId}]: queue size=(${segCount}),queue duration=(${totalSegDur}),target duration=(${TARGET_PLAYLIST_DURATION_SEC})`);
+
+        while (totalSegDur > TARGET_PLAYLIST_DURATION_SEC) {
           debug(`[${this.sessionId}]: liveTargetBandwidth=${liveTargetBandwidth}_seg=${JSON.stringify(seg, null, 2)}`);
-          seg = this.liveSegQueue[liveTargetBandwidth].shift();
-          if (seg) {
-            if (seg.discontinuity) {
+          const removedSeg = this.liveSegQueue[liveTargetBandwidth].shift();
+          if (removedSeg) {
+            if (removedSeg.discontinuity) {
               this.liveSegQueue[liveTargetBandwidth].shift();
               amountRemovedDiscSeqs++;
             }
+            if (removedSeg.duration) {
+              totalSegDur -= removedSeg.duration;
+            }
           }
-          debug(`[${this.sessionId}]: After Shifting -> size of queue=${segCount}_targetNumseg=${this.targetNumSeg}`);
+          debug(`[${this.sessionId}]: After Shifting -> queue size=(${segCount}),queue duration=(${totalSegDur}),target duration=(${TARGET_PLAYLIST_DURATION_SEC})`);
         }
       }
     }
