@@ -1056,7 +1056,6 @@ class SessionLive {
    * @param {m3u8.Item.PlaylistItem} playlistItems
    * @param {string} baseUrl
    * @param {string} liveTargetBandwidth
-   * @returns
    */
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth) {
     for (let i = startIdx; i < playlistItems.length; i++) {
@@ -1127,19 +1126,9 @@ class SessionLive {
         if (daterangeData) {
           seg["daterange"] = daterangeData;
         }
+        // Push new Live Segments!
         this.liveSegQueue[liveTargetBandwidth].push(seg);
-        this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
-
-        // Calculate total seg count and seg duration
-        let segCount = 0;
-        let totalSegDur = 0;
-        this.liveSegQueue[liveTargetBandwidth].forEach((seg) => {
-          if (seg.uri && seg.duration) {
-            segCount++;
-            totalSegDur += seg.duration;
-          }
-        });
-        debug(`[${this.sessionId}]: queue size=(${segCount}),queue duration=(${totalSegDur}),target duration=(${TARGET_PLAYLIST_DURATION_SEC})`);
+        this.liveSegsForFollowers[liveTargetBandwidth].push(seg);        
       }
     }
   }
