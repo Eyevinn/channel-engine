@@ -276,7 +276,8 @@ class Session {
         debug(`[${this._sessionId}]: FOLLOWER: WARNING! Attempts=0 - Risk of using wrong currentVod`);
       }
       if (!isLeader || vodReloaded) {
-        debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod`);
+        debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod. Clearing the cache now`);
+        await this._sessionState.clearCurrentVodCache();
         return;
       }
     }
@@ -394,9 +395,20 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const sessionState = await this._sessionState.getValues(["discSeq", "vodMediaSeqVideo"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-    if (playheadState.vodMediaSeqVideo === 0) {
+
+    /*
+      Since sessionState is always newer. If it is a smaller value, then this signals that
+      a new vod has been loaded but playheadState has yet to get the new mseq value in 'incrementAsync()'.
+      Without this, we risk returning an m3u8 with an old mseq on a new vod to the client.
+    */
+    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
+      playheadState.vodMediaSeqVideo = sessionState.vodMediaSeqVideo;
+    }
+
+    if (playheadState.vodMediaSeqVideo === 0 || this.waitingForNextVod) { 
+      this.waitingForNextVod = false;
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -406,6 +418,7 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
+        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
         return m3u8;
@@ -726,10 +739,11 @@ class Session {
         length = currentVod.getLiveMediaSequencesCount();
         lastDiscontinuity = currentVod.getLastDiscontinuity();
       }
+      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+      await this._sessionState.setCurrentVod(slateVod); 
+
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
-      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
-      await this._sessionState.setCurrentVod(slateVod);
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
@@ -813,10 +827,6 @@ class Session {
             debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
             debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
             //debug(newVod);
-            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
-            sessionState.discSeq = await this._sessionState.set("discSeq", 0);
-            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
-            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             await this._playheadState.set("playheadRef", Date.now());
             this.produceEvent({
               type: 'NOW_PLAYING',
@@ -827,6 +837,10 @@ class Session {
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
+            sessionState.discSeq = await this._sessionState.set("discSeq", 0);
+            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
+            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             await this._sessionState.remove("nextVod");
             return;
           } else {
