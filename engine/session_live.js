@@ -781,7 +781,8 @@ class SessionLive {
       await allSettled(pushPromises);
 
       // UPDATE COUNTS, & Shift Segments in vodSegments and liveSegQueue if needed.
-      const newTotalDuration = this._incrementAndShift("LEADER");
+      const leaderORFollower = isLeader ? "LEADER" : "NEW FOLLOWER";
+      const newTotalDuration = this._incrementAndShift(leaderORFollower);
       if (newTotalDuration) {
         debug(`[${this.sessionId}]: New Adjusted Playlist Duration=${newTotalDuration}s`);
       }
