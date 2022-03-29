@@ -18,6 +18,7 @@ const daterangeAttribute = (key, attr) => {
 const TARGET_PLAYLIST_DURATION_SEC = 60;
 const RESET_DELAY = 5000;
 const FAIL_TIMEOUT = 4000;
+const DEFAULT_PLAYHEAD_INTERVAL_MS = 6 * 1000;
 const PlayheadState = Object.freeze({
   RUNNING: 1,
   STOPPED: 2,
@@ -40,7 +41,6 @@ class SessionLive {
     this.mediaManifestURIs = {};
     this.liveSegQueue = {};
     this.lastRequestedMediaSeqRaw = null;
-    this.targetNumSeg = 0;
     this.liveSourceM3Us = {};
     this.playheadState = PlayheadState.IDLE;
     this.liveSegsForFollowers = {};
@@ -117,7 +117,6 @@ class SessionLive {
     this.mediaManifestURIs = {};
     this.liveSegQueue = {};
     this.lastRequestedMediaSeqRaw = null;
-    this.targetNumSeg = 0;
     this.liveSourceM3Us = {};
     this.liveSegsForFollowers = {};
     this.timerCompensation = null;
@@ -149,13 +148,6 @@ class SessionLive {
           return;
         }
 
-        // Let the playhead move at an interval set according to live segment duration
-        let liveSegmentDurationMs = 6000;
-        let liveBws = Object.keys(this.liveSegQueue);
-        if (liveBws.length !== 0 && this.liveSegQueue[liveBws[0]].length !== 0 && this.liveSegQueue[liveBws[0]][0].duration) {
-          liveSegmentDurationMs = this.liveSegQueue[liveBws[0]][0].duration * 1000;
-        }
-
         // Fetch Live-Source Segments, and get ready for on-the-fly manifest generation
         // And also compensate for processing time
 
@@ -164,6 +156,13 @@ class SessionLive {
         await this._loadAllMediaManifests();
         const tsIncrementEnd = Date.now();
         this.waitForPlayhead = false;
+
+        // Let the playhead move at an interval set according to live segment duration
+        let liveSegmentDurationMs = DEFAULT_PLAYHEAD_INTERVAL_MS;
+        let liveBws = Object.keys(this.liveSegQueue);
+        if (liveBws.length !== 0 && this.liveSegQueue[liveBws[0]].length !== 0 && this.liveSegQueue[liveBws[0]][0].duration) {
+          liveSegmentDurationMs = this.liveSegQueue[liveBws[0]][0].duration * 1000;
+        }
 
         // Set the timer
         let timerValueMs = 0;
@@ -242,7 +241,6 @@ class SessionLive {
     }
     // Make it possible to add & share new segments
     this.allowedToSet = true;
-    let segCount = 0;
     const allBws = Object.keys(segments);
     for (let i = 0; i < allBws.length; i++) {
       const bw = allBws[i];
@@ -264,12 +262,6 @@ class SessionLive {
       }
     }
 
-    for (let segIdx = 0; segIdx < segments[allBws[0]].length; segIdx++) {
-      if (segments[allBws[0]][segIdx].uri) {
-        segCount++;
-      }
-    }
-    this.targetNumSeg = segCount;
     debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: [${this.vodSegments[allBws[0]][0].uri}]`);
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
@@ -652,7 +644,6 @@ class SessionLive {
         // Wait a little before trying again
         debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after ${retryDelayMs}ms`);
         await timer(retryDelayMs);
-        this.timerCompensation = false;
         continue;
       }
 
@@ -690,14 +681,6 @@ class SessionLive {
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
-            let discTagCount = 0;
-            const allBws = Object.keys(this.vodSegments);
-            for (let segIdx = 0; segIdx < this.vodSegments[allBws[0]].length; segIdx++) {
-              if (this.vodSegments[allBws[0]][segIdx].discontinuity) {
-                discTagCount++;
-              }
-            }
-            this.targetNumSeg = this.vodSegments[allBws[0]].length - (discTagCount - 1);
           }
         }
 
@@ -713,14 +696,6 @@ class SessionLive {
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
-            let discTagCount = 0;
-            const allBws = Object.keys(this.vodSegments);
-            for (let segIdx = 0; segIdx < this.vodSegments[allBws[0]].length; segIdx++) {
-              if (this.vodSegments[allBws[0]][segIdx].discontinuity) {
-                discTagCount++;
-              }
-            }
-            this.targetNumSeg = this.vodSegments[allBws[0]].length - (discTagCount - 1);
           }
         }
         debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
@@ -1131,7 +1106,7 @@ class SessionLive {
         }
         // Push new Live Segments!
         this.liveSegQueue[liveTargetBandwidth].push(seg);
-        this.liveSegsForFollowers[liveTargetBandwidth].push(seg);        
+        this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
       }
     }
   }
