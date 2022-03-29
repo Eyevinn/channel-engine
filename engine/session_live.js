@@ -645,7 +645,9 @@ class SessionLive {
         if (Object.keys(this.liveSegQueue).length > 0) {
           const firstBw = Object.keys(this.liveSegQueue)[0];
           const lastIdx = this.liveSegQueue[firstBw].length - 1;
-          retryDelayMs = this.liveSegQueue[firstBw][lastIdx].duration * 1000 * 0.25;
+          if (this.liveSegQueue[firstBw][lastIdx].duration) {
+            retryDelayMs = this.liveSegQueue[firstBw][lastIdx].duration * 1000 * 0.25;
+          }
         }
         // Wait a little before trying again
         debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after ${retryDelayMs}ms`);
