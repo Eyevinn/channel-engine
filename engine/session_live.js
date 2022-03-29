@@ -247,7 +247,7 @@ class SessionLive {
       if (!this.vodSegments[bw]) {
         this.vodSegments[bw] = [];
       }
-
+      
       if (segments[bw][0].discontinuity) {
         segments[bw].shift();
       }
@@ -644,6 +644,9 @@ class SessionLive {
         // Wait a little before trying again
         debug(`[${this.sessionId}]: ALERT! Live Source Data NOT in sync! Will try again after ${retryDelayMs}ms`);
         await timer(retryDelayMs);
+        if (isLeader) {
+          this.timerCompensation = false;
+        }
         continue;
       }
 
