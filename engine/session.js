@@ -395,7 +395,7 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["discSeq", "vodMediaSeqVideo"]);
+    const sessionState = await this._sessionState.getValues(["mediaSeq", "discSeq", "vodMediaSeqVideo"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
     /*
@@ -405,6 +405,7 @@ class Session {
     */
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
       playheadState.vodMediaSeqVideo = sessionState.vodMediaSeqVideo;
+      playheadState.mediaSeq = sessionState.mediaSeq;
     }
 
     if (playheadState.vodMediaSeqVideo === 0 || this.waitingForNextVod) { 
