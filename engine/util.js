@@ -1,9 +1,13 @@
-const { version } = require('../package.json');
+const { version } = require("../package.json");
 
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
   let filter = {};
+  
+  if (!conditions) {
+    return filter;
+  }
   conditions.map((c) => {
     const m = c.match(/\(type=="(.*?)"(AND|\|\|)(.*?)(<|>)(.*)\)/);
     if (m) {
@@ -92,27 +96,25 @@ const ItemIsEmpty = (obj) => {
 const cloudWatchLog = (silent, type, logEntry) => {
   if (!silent) {
     logEntry.type = type;
-    logEntry.time = (new Date()).toISOString();
+    logEntry.time = new Date().toISOString();
     console.log(JSON.stringify(logEntry));
   }
 };
 
 const m3u8Header = (instanceId) => {
   let m3u8 = "";
-  m3u8 += `## Created with Eyevinn Channel Engine library (version=${version}${instanceId ? "<" + instanceId + ">" : "" })\n`;
+  m3u8 += `## Created with Eyevinn Channel Engine library (version=${version}${instanceId ? "<" + instanceId + ">" : ""})\n`;
   m3u8 += "##    https://www.npmjs.com/package/eyevinn-channel-engine\n";
   return m3u8;
 };
 
 const toHHMMSS = (secs) => {
-  var sec_num = parseInt(secs, 10)
-  var hours   = Math.floor(sec_num / 3600)
-  var minutes = Math.floor(sec_num / 60) % 60
-  var seconds = sec_num % 60
+  var sec_num = parseInt(secs, 10);
+  var hours = Math.floor(sec_num / 3600);
+  var minutes = Math.floor(sec_num / 60) % 60;
+  var seconds = sec_num % 60;
 
-  return [hours,minutes,seconds]
-      .map(v => v < 10 ? "0" + v : v)
-      .join(":")
+  return [hours, minutes, seconds].map((v) => (v < 10 ? "0" + v : v)).join(":");
 };
 
 const logerror = (sessionId, err) => {
@@ -126,5 +128,5 @@ module.exports = {
   cloudWatchLog,
   m3u8Header,
   toHHMMSS,
-  logerror
-}
+  logerror,
+};
