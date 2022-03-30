@@ -395,21 +395,10 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const sessionState = await this._sessionState.getValues(["mediaSeq", "discSeq", "vodMediaSeqVideo"]);
+    const sessionState = await this._sessionState.getValues(["discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
-    /*
-      Since sessionState is always newer. If it is a smaller value, then this signals that
-      a new vod has been loaded but playheadState has yet to get the new mseq value in 'incrementAsync()'.
-      Without this, we risk returning an m3u8 with an old mseq on a new vod to the client.
-    */
-    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
-      playheadState.vodMediaSeqVideo = sessionState.vodMediaSeqVideo;
-      playheadState.mediaSeq = sessionState.mediaSeq;
-    }
-
-    if (playheadState.vodMediaSeqVideo === 0 || this.waitingForNextVod) { 
-      this.waitingForNextVod = false;
+    if (playheadState.vodMediaSeqVideo === 0) { 
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -466,14 +455,6 @@ class Session {
     let sessionState = await this._sessionState.getValues(
       ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
-    if (playheadState.vodMediaSeqVideo < 2) {
-      // This is due to the possibility that we miss the tick where vodMediaSeqVideo is 0
-      // The worst case scenario is that we clear cache two times in a row on a switch
-      if (!isLeader) {
-        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-      }
-    }
     let currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod ||
         sessionState.vodMediaSeqVideo === null ||
@@ -518,6 +499,12 @@ class Session {
     debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()})`);
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     await this._playheadState.setLastM3u8(m3u8);
+
+    if (!isLeader && playheadState.vodMediaSeqVideo < 2) {
+      debug(`[${this._sessionId}]: Not a leader and have just set playheadState vodMediaSeqVideo to 0|1. Invalidate cache to ensure having the correct VOD.`);
+      await this._sessionState.clearCurrentVodCache();
+    }
+
     return m3u8;
   }
 
