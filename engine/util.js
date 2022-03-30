@@ -5,25 +5,25 @@ const filterQueryParser = (filterQuery) => {
 
   let filter = {};
   conditions.map((c) => {
-    const m = c.match(/\(type=="(.*?)"(&&|\|\|)(.*?)(<|>)(.*)\)/);
+    const m = c.match(/\(type=="(.*?)"(AND|\|\|)(.*?)(<|>)(.*)\)/);
     if (m) {
       const type = m[1];
       const operator = m[2];
       const key = m[3];
       const comp = m[4];
       const value = m[5];
-      
+
       if (!filter[type]) {
         filter[type] = {};
       }
-      if (operator === "&&") {
+      if (operator === "AND") {
         if (!filter[type][key]) {
           filter[type][key] = {};
         }
         if (comp === "<") {
-          filter[type][key].high = parseInt(value, 10); 
+          filter[type][key].high = parseInt(value, 10);
         } else if (comp === ">") {
-          filter[type][key].low = parseInt(value, 10); 
+          filter[type][key].low = parseInt(value, 10);
         }
       }
     }
@@ -32,16 +32,61 @@ const filterQueryParser = (filterQuery) => {
 };
 
 const applyFilter = (profiles, filter) => {
-  return profiles.filter(profile => {
-    if (filter.video && filter.video.systemBitrate) {
-      return (profile.bw >= filter.video.systemBitrate.low && 
-        profile.bw <= filter.video.systemBitrate.high);
-    } else if (filter.video && filter.video.height) {
-      return (profile.resolution[1] >= filter.video.height.low &&
-        profile.resolution[1] <= filter.video.height.high);
+  let filteredProfiles = {};
+  const supportedFilterKeys = ["systemBitrate", "height"];
+
+  if (!filter.video) {
+    return profiles;
+  }
+
+  const keys = Object.keys(filter.video);
+  if (supportedFilterKeys.every((supportedKey) => !keys.includes(supportedKey))) {
+    return profiles;
+  }
+
+  if (filter.video.systemBitrate) {
+    filteredProfiles = profiles.filter((profile) => {
+      if (filter.video.systemBitrate.low && filter.video.systemBitrate.high) {
+        return profile.bw >= filter.video.systemBitrate.low && profile.bw <= filter.video.systemBitrate.high;
+      } else if (filter.video.systemBitrate.low && !filter.video.systemBitrate.high) {
+        return profile.bw >= filter.video.systemBitrate.low;
+      } else if (!filter.video.systemBitrate.low && filter.video.systemBitrate.high) {
+        return profile.bw <= filter.video.systemBitrate.high;
+      }
+      return true;
+    });
+  }
+
+  if (filter.video.height) {
+    let toFilter = profiles;
+    if (!ItemIsEmpty(filteredProfiles)) {
+      toFilter = filteredProfiles;
     }
+    filteredProfiles = toFilter.filter((profile) => {
+      if (filter.video.height.low && filter.video.height.high) {
+        return profile.resolution[1] >= filter.video.height.low && profile.resolution[1] <= filter.video.height.high;
+      } else if (filter.video.height.low) {
+        return profile.resolution[1] >= filter.video.height.low;
+      } else if (filter.video.height.high) {
+        return profile.resolution[1] <= filter.video.height.high;
+      }
+      return true;
+    });
+  }
+
+  return filteredProfiles;
+};
+
+const ItemIsEmpty = (obj) => {
+  if (!obj) {
     return true;
-  });
+  }
+  for (var key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      return false;
+    }
+  }
+  return true;
 };
 
 const cloudWatchLog = (silent, type, logEntry) => {
