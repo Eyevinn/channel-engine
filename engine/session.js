@@ -415,7 +415,7 @@ class Session {
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
       }
     }
-
+    
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
@@ -739,11 +739,10 @@ class Session {
         length = currentVod.getLiveMediaSequencesCount();
         lastDiscontinuity = currentVod.getLastDiscontinuity();
       }
-      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
-      await this._sessionState.setCurrentVod(slateVod); 
-
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
+      await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+      await this._sessionState.setCurrentVod(slateVod); 
       await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
@@ -827,6 +826,10 @@ class Session {
             debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
             debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
             //debug(newVod);
+            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
+            sessionState.discSeq = await this._sessionState.set("discSeq", 0);
+            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
+            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             await this._playheadState.set("playheadRef", Date.now());
             this.produceEvent({
               type: 'NOW_PLAYING',
@@ -837,10 +840,6 @@ class Session {
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
-            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
-            sessionState.discSeq = await this._sessionState.set("discSeq", 0);
-            sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
-            sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             await this._sessionState.remove("nextVod");
             return;
           } else {
