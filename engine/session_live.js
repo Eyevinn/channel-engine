@@ -242,24 +242,28 @@ class SessionLive {
     // Make it possible to add & share new segments
     this.allowedToSet = true;
     const allBws = Object.keys(segments);
-    for (let i = 0; i < allBws.length; i++) {
-      const bw = allBws[i];
-      if (!this.vodSegments[bw]) {
-        this.vodSegments[bw] = [];
-      }
-      
-      if (segments[bw][0].discontinuity) {
-        segments[bw].shift();
-      }
+    if (this._isEmpty(this.vodSegments)) {
+      for (let i = 0; i < allBws.length; i++) {
+        const bw = allBws[i];
+        if (!this.vodSegments[bw]) {
+          this.vodSegments[bw] = [];
+        }
 
-      for (let segIdx = 0; segIdx < segments[bw].length; segIdx++) {
-        this.vodSegments[bw].push(segments[bw][segIdx]);
+        if (segments[bw][0].discontinuity) {
+          segments[bw].shift();
+        }
+
+        for (let segIdx = 0; segIdx < segments[bw].length; segIdx++) {
+          this.vodSegments[bw].push(segments[bw][segIdx]);
+        }
+        if (!segments[bw][segments[bw].length - 1].discontinuity) {
+          this.vodSegments[bw].push({ discontinuity: true, cue: { in: true } });
+        } else {
+          segments[bw][segments[bw].length - 1]["cue"] = { in: true };
+        }
       }
-      if (!segments[bw][segments[bw].length - 1].discontinuity) {
-        this.vodSegments[bw].push({ discontinuity: true, cue: { in: true } });
-      } else {
-        segments[bw][segments[bw].length - 1]["cue"] = { in: true };
-      }
+    } else {
+      debug(`[${this.sessionId}]: 'vodSegments' not empty = Using 'transitSegs'`);
     }
 
     debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: [${this.vodSegments[allBws[0]][0].uri}]`);
@@ -301,6 +305,11 @@ class SessionLive {
       if (leadersMediaSeqCount !== null) {
         this.mediaSeqCount = leadersMediaSeqCount;
         debug(`[${this.sessionId}]: Setting mediaSeqCount to: [${this.mediaSeqCount}]`);
+        const transitSegs = await this.sessionLiveState.get("transitSegs");
+        if (!this._isEmpty(transitSegs)) {
+          debug(`[${this.sessionId}]: Getting and loading 'transitSegs'`);
+          this.vodSegments = transitSegs;
+        }
       }
       if (leadersDiscSeqCount !== null) {
         this.discSeqCount = leadersDiscSeqCount;
@@ -1040,7 +1049,6 @@ class SessionLive {
    */
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth) {
     for (let i = startIdx; i < playlistItems.length; i++) {
-      debug(`[${this.sessionId}]: Adding Live Segment(s) to Queue (for bw=${liveTargetBandwidth})`);
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
@@ -1108,6 +1116,7 @@ class SessionLive {
           seg["daterange"] = daterangeData;
         }
         // Push new Live Segments!
+        debug(`[${this.sessionId}]: Adding Live Segment to Queue (for bw=${liveTargetBandwidth})\n${seg.uri ? seg.uri : ''}`);
         this.liveSegQueue[liveTargetBandwidth].push(seg);
         this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
       }
