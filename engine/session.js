@@ -282,6 +282,7 @@ class Session {
       if (!isLeader || vodReloaded) {
         debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod. Clearing the cache now`);
         await this._sessionState.clearCurrentVodCache();
+        this.isSwitchingBackFromLive = false;
         return;
       }
     }
@@ -317,6 +318,7 @@ class Session {
       await this._playheadState.set("vodMediaSeqAudio", 0);
       await this._playheadState.set("playheadRef", Date.now());
     }
+    this.isSwitchingBackFromLive = false;
   }
 
   async getCurrentMediaSequenceSegments() {
@@ -354,6 +356,9 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
+    
+    this.isSwitchingBackFromLive = true;
+
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (isLeader) {
       await this._sessionState.set("mediaSeq", _mediaSeq);
