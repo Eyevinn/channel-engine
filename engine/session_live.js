@@ -499,8 +499,14 @@ class SessionLive {
         if (!this.liveSegQueue[liveBw]) {
           this.liveSegQueue[liveBw] = [];
         }
-        this.liveSegQueue[liveBw].push(liveSegFromLeader);
-        debug(`[${this.sessionId}]: FOLLOWER: Pushed segment (${liveSegFromLeader.uri ? liveSegFromLeader.uri : "Disc-tag"}) to 'liveSegQueue' (${liveBw})`);
+        // Do not push duplicates
+        const liveSegURIs = this.liveSegQueue[liveBw].filter(seg => seg.uri).map(seg => seg.uri);
+        if (liveSegFromLeader.uri && liveSegURIs.includes(liveSegFromLeader.uri)) {
+          debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push!`);
+        } else {
+          this.liveSegQueue[liveBw].push(liveSegFromLeader);
+          debug(`[${this.sessionId}]: FOLLOWER: Pushed segment (${liveSegFromLeader.uri ? liveSegFromLeader.uri : "Disc-tag"}) to 'liveSegQueue' (${liveBw})`);
+        }
       }
     }
     // Remove older segments and update counts
@@ -520,13 +526,13 @@ class SessionLive {
    */
   async _loadAllMediaManifests() {
     debug(`[${this.sessionId}]: Attempting to load all media manifest URIs in=${Object.keys(this.mediaManifestURIs)}`);
-
+    let currentMseqRaw = null;
     // -------------------------------------
     //  If I am a Follower-node then my job
     //  ends here, where I only read from store.
     // -------------------------------------
     let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader && this.lastRequestedMediaSeqRaw) {
+    if (!isLeader && this.lastRequestedMediaSeqRaw !== null) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
@@ -659,6 +665,8 @@ class SessionLive {
         continue;
       }
 
+      currentMseqRaw = allMediaSeqCounts[0];
+
       if (!isLeader) {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
         let tries = 20;
@@ -687,9 +695,13 @@ class SessionLive {
 
         // Respawners never do this, only starter followers.
         // Edge Case: FOLLOWER transitioned from session with different segments from LEADER
-        const leaderStartedOnCount = leadersFirstSeqCounts.mediaSeqCount;
-        if (leaderStartedOnCount !== this.mediaSeqCount) {
-          this.mediaSeqCount = leaderStartedOnCount;
+        if (leadersFirstSeqCounts.discSeqCount !== this.discSeqCount) {
+          this.discSeqCount = leadersFirstSeqCounts.discSeqCount;
+        }
+        if (leadersFirstSeqCounts.mediaSeqCount !== this.mediaSeqCount) {
+          this.mediaSeqCount = leadersFirstSeqCounts.mediaSeqCount;
+          debug(`[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${
+            this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`);
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
@@ -697,12 +709,12 @@ class SessionLive {
         }
 
         // Prepare to load segments...
-        debug(`[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${allMediaSeqCounts[0]} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
-        if (allMediaSeqCounts[0] === leadersFirstSeqCounts.liveSourceMseqCount) {
+        debug(`[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${currentMseqRaw} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
+        if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCount) {
           this.pushAmount = 1; // Follower from start
         } else {
           // RESPAWNED NODES
-          this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount + 1;
+          this.pushAmount = currentMseqRaw - leadersFirstSeqCounts.liveSourceMseqCount + 1;
 
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
@@ -716,8 +728,8 @@ class SessionLive {
         if (this.firstTime) {
           this.pushAmount = 1; // Leader from start
         } else {
-          this.pushAmount = allMediaSeqCounts[0] - this.lastRequestedMediaSeqRaw;
-          debug(`[${this.sessionId}]: ...calculating pushAmount=${allMediaSeqCounts[0]}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
+          this.pushAmount = currentMseqRaw - this.lastRequestedMediaSeqRaw;
+          debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
         }
         debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
         break;
@@ -737,9 +749,9 @@ class SessionLive {
       const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       const counts = await this.sessionLiveState.get("firstCounts");
       const leadersFirstMseqRaw = counts.liveSourceMseqCount;
-      if (leadersCurrentMseqRaw && leadersCurrentMseqRaw !== this.lastRequestedMediaSeqRaw) {
+      if (leadersCurrentMseqRaw !== null && leadersCurrentMseqRaw !== currentMseqRaw) {
         // if leader never had any segs from prev mseq
-        if (leadersFirstMseqRaw && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
+        if (leadersFirstMseqRaw !== null && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
           // Follower updates it's manifest ingedients (segment holders & counts)
           this.lastRequestedMediaSeqRaw = leadersCurrentMseqRaw;
           this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
