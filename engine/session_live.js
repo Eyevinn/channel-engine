@@ -693,13 +693,11 @@ class SessionLive {
 
         // Respawners never do this, only starter followers.
         // Edge Case: FOLLOWER transitioned from session with different segments from LEADER
-        const leaderStartedOnMseqCount = leadersFirstSeqCounts.mediaSeqCount;
-        const leaderStartedOnDseqCount = leadersFirstSeqCounts.discSeqCount;
-        if (leaderStartedOnDseqCount !== this.discSeqCount) {
-          this.discSeqCount = leaderStartedOnDseqCount;
+        if (leadersFirstSeqCounts.discSeqCount !== this.discSeqCount) {
+          this.discSeqCount = leadersFirstSeqCounts.discSeqCount;
         }
-        if (leaderStartedOnMseqCount !== this.mediaSeqCount) {
-          this.mediaSeqCount = leaderStartedOnMseqCount;
+        if (leadersFirstSeqCounts.mediaSeqCount !== this.mediaSeqCount) {
+          this.mediaSeqCount = leadersFirstSeqCounts.mediaSeqCount;
           debug(`[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${
             this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`);
           const transitSegs = await this.sessionLiveState.get("transitSegs");
