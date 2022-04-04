@@ -483,8 +483,8 @@ class SessionLive {
     });
   }
 
-  // FOLLOWER only function
-  _updateLiveSegQueue() {
+   // FOLLOWER only function
+   _updateLiveSegQueue() {
     if (Object.keys(this.liveSegsForFollowers).length === 0) {
       debug(`[${this.sessionId}]: FOLLOWER: Error No Segments found at all.`);
     }
@@ -499,8 +499,14 @@ class SessionLive {
         if (!this.liveSegQueue[liveBw]) {
           this.liveSegQueue[liveBw] = [];
         }
-        this.liveSegQueue[liveBw].push(liveSegFromLeader);
-        debug(`[${this.sessionId}]: FOLLOWER: Pushed segment (${liveSegFromLeader.uri ? liveSegFromLeader.uri : "Disc-tag"}) to 'liveSegQueue' (${liveBw})`);
+        // Do not push duplicates
+        const liveSegURIs = this.liveSegQueue[liveBw].filter(seg => seg.uri).map(seg => seg.uri);
+        if (liveSegFromLeader.uri && liveSegURIs.includes(liveSegFromLeader.uri)) {
+          debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push!`);
+        } else {
+          this.liveSegQueue[liveBw].push(liveSegFromLeader);
+          debug(`[${this.sessionId}]: FOLLOWER: Pushed segment (${liveSegFromLeader.uri ? liveSegFromLeader.uri : "Disc-tag"}) to 'liveSegQueue' (${liveBw})`);
+        }
       }
     }
     // Remove older segments and update counts
@@ -526,7 +532,7 @@ class SessionLive {
     //  ends here, where I only read from store.
     // -------------------------------------
     let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader && this.lastRequestedMediaSeqRaw) {
+    if (!isLeader && this.lastRequestedMediaSeqRaw !== null) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
@@ -687,9 +693,15 @@ class SessionLive {
 
         // Respawners never do this, only starter followers.
         // Edge Case: FOLLOWER transitioned from session with different segments from LEADER
-        const leaderStartedOnCount = leadersFirstSeqCounts.mediaSeqCount;
-        if (leaderStartedOnCount !== this.mediaSeqCount) {
-          this.mediaSeqCount = leaderStartedOnCount;
+        const leaderStartedOnMseqCount = leadersFirstSeqCounts.mediaSeqCount;
+        const leaderStartedOnDseqCount = leadersFirstSeqCounts.discSeqCount;
+        if (leaderStartedOnDseqCount !== this.discSeqCount) {
+          this.discSeqCount = leaderStartedOnDseqCount;
+        }
+        if (leaderStartedOnMseqCount !== this.mediaSeqCount) {
+          this.mediaSeqCount = leaderStartedOnMseqCount;
+          debug(`[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${
+            this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`);
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
@@ -737,9 +749,11 @@ class SessionLive {
       const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       const counts = await this.sessionLiveState.get("firstCounts");
       const leadersFirstMseqRaw = counts.liveSourceMseqCount;
-      if (leadersCurrentMseqRaw && leadersCurrentMseqRaw !== this.lastRequestedMediaSeqRaw) {
+      if (leadersCurrentMseqRaw !== null &&
+         this.lastRequestedMediaSeqRaw !== null &&
+          leadersCurrentMseqRaw !== this.lastRequestedMediaSeqRaw) {
         // if leader never had any segs from prev mseq
-        if (leadersFirstMseqRaw && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
+        if (leadersFirstMseqRaw !== null && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
           // Follower updates it's manifest ingedients (segment holders & counts)
           this.lastRequestedMediaSeqRaw = leadersCurrentMseqRaw;
           this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
