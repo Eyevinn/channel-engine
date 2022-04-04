@@ -483,8 +483,8 @@ class SessionLive {
     });
   }
 
-   // FOLLOWER only function
-   _updateLiveSegQueue() {
+  // FOLLOWER only function
+  _updateLiveSegQueue() {
     if (Object.keys(this.liveSegsForFollowers).length === 0) {
       debug(`[${this.sessionId}]: FOLLOWER: Error No Segments found at all.`);
     }
