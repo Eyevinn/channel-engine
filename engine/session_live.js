@@ -526,7 +526,7 @@ class SessionLive {
    */
   async _loadAllMediaManifests() {
     debug(`[${this.sessionId}]: Attempting to load all media manifest URIs in=${Object.keys(this.mediaManifestURIs)}`);
-
+    let currentMseqRaw = null;
     // -------------------------------------
     //  If I am a Follower-node then my job
     //  ends here, where I only read from store.
@@ -665,6 +665,8 @@ class SessionLive {
         continue;
       }
 
+      currentMseqRaw = allMediaSeqCounts[0];
+
       if (!isLeader) {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
         let tries = 20;
@@ -707,12 +709,12 @@ class SessionLive {
         }
 
         // Prepare to load segments...
-        debug(`[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${allMediaSeqCounts[0]} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
-        if (allMediaSeqCounts[0] === leadersFirstSeqCounts.liveSourceMseqCount) {
+        debug(`[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${currentMseqRaw} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`);
+        if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCount) {
           this.pushAmount = 1; // Follower from start
         } else {
           // RESPAWNED NODES
-          this.pushAmount = allMediaSeqCounts[0] - leadersFirstSeqCounts.liveSourceMseqCount + 1;
+          this.pushAmount = currentMseqRaw - leadersFirstSeqCounts.liveSourceMseqCount + 1;
 
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
@@ -726,8 +728,8 @@ class SessionLive {
         if (this.firstTime) {
           this.pushAmount = 1; // Leader from start
         } else {
-          this.pushAmount = allMediaSeqCounts[0] - this.lastRequestedMediaSeqRaw;
-          debug(`[${this.sessionId}]: ...calculating pushAmount=${allMediaSeqCounts[0]}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
+          this.pushAmount = currentMseqRaw - this.lastRequestedMediaSeqRaw;
+          debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
         }
         debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
         break;
@@ -747,9 +749,7 @@ class SessionLive {
       const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       const counts = await this.sessionLiveState.get("firstCounts");
       const leadersFirstMseqRaw = counts.liveSourceMseqCount;
-      if (leadersCurrentMseqRaw !== null &&
-         this.lastRequestedMediaSeqRaw !== null &&
-          leadersCurrentMseqRaw !== this.lastRequestedMediaSeqRaw) {
+      if (leadersCurrentMseqRaw !== null && leadersCurrentMseqRaw !== currentMseqRaw) {
         // if leader never had any segs from prev mseq
         if (leadersFirstMseqRaw !== null && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
           // Follower updates it's manifest ingedients (segment holders & counts)
