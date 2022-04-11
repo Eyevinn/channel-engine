@@ -219,37 +219,42 @@ describe("The Stream Switcher", () => {
 
   it("should return false if no StreamSwitchManager was given.", async () => {
     const assetMgr = new TestAssetManager();
+    const testStreamSwitcher = new StreamSwitcher();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher();
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   it("should validate uri and switch back to linear-vod (session) from event-livestream (sessionLive) if uri is unreachable", async () => {
     const switchMgr = new TestSwitchManager(0);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
     spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-0");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-0");
 
     jasmine.clock().tick((25 * 1000) + (10 * 1000));
     spyOn(switchMgr, "getSchedule").and.returnValue([{
@@ -260,204 +265,222 @@ describe("The Stream Switcher", () => {
       end_time: tsNow + 1 * 60 * 1000,
       uri: "https://www.google.com/nothere",
     }]);
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toEqual(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toEqual(null);
   });
 
   it("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule", async () => {
     const switchMgr = new TestSwitchManager(0);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
     spyOn(sessionLive, "resetSession").and.callFake( () => true );
     spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-0");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-0");
   });
 
   it("should switch from event-livestream (sessionLive) to linear-vod (session) according to schedule", async () => {
     const switchMgr = new TestSwitchManager(0);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
 
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
-    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
-    spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-0");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-0");
     jasmine.clock().tick((60 * 1000 + 25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   it("should switch from linear-vod (session) to event-vod (session) according to schedule", async () => {
     const switchMgr = new TestSwitchManager(1);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
+
     await session.initAsync();
     await session.incrementAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
-    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+
+    expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-0");
+    expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-0");
   });
 
   it("should switch from event-vod (session) to linear-vod (session) according to schedule", async () => {
     const switchMgr = new TestSwitchManager(1);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
+
     await session.initAsync();
     await session.incrementAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-0");
+    expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-0");
     jasmine.clock().tick((1 + (60 * 1000 + 25 * 1000)));
-    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   it("should not switch from linear-vod (session) to event-vod (session) if duration is not set in schedule", async () => {
     const switchMgr = new TestSwitchManager(6);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
+
     await session.initAsync();
     await session.incrementAsync();
 
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, null)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   xit("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
      "\nThen directly to event-vod (session) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(2);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+
     await session.initAsync();
     await session.incrementAsync();
     sessionLive.initAsync();
-    const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-1");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-1");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)));
     await sessionLive.getCurrentMediaManifestAsync(180000);
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-1");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-1");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)) + (60*1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   xit("should switch from linear-vod (session) to event-livestream (sessionLive) according to schedule. " +
      "\nThen directly to 2nd event-livestream (sessionLive) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(3);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-2");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-2");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)));
     await sessionLive.getCurrentMediaManifestAsync(180000);
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-3");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-3");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)) + (60*1000));
     await sessionLive.getCurrentMediaManifestAsync(180000);
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   it("should switch from linear-vod (session) to event-vod (session) according to schedule. " +
      "\nThen directly to event-livestream (sessionLive) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(4);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
+    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
 
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
-    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
-    spyOn(sessionLive, "resetSession").and.callFake( () => true );
-    spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
-    sessionLive.startPlayheadAsync();
 
-    const TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
+    sessionLive.startPlayheadAsync();
 
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-2");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-2");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
-    expect(TestStreamSwitcher.getEventId()).toBe("live-4");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
+    expect(testStreamSwitcher.getEventId()).toBe("live-4");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)) + (60*1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 
   it("should switch from linear-vod (session) to event-vod (session) according to schedule. " +
      "\nThen directly to 2nd event-vod (session) and finally switch back to linear-vod (session)", async () => {
     const switchMgr = new TestSwitchManager(5);
+    const testStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, {sessionId: "1"}, sessionStore);
     const sessionLive = new SessionLive({sessionId: "1"}, sessionLiveStore);
     spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+    spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
+    spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
+
     await session.initAsync();
     await session.incrementAsync();
     await sessionLive.initAsync();
-    let TestStreamSwitcher = new StreamSwitcher({streamSwitchManager: switchMgr});
 
     jasmine.clock().mockDate(tsNow);
     jasmine.clock().tick((25 * 1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-3");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-3");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe("vod-4");
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe("vod-4");
     jasmine.clock().tick((1 + (60 * 1000 + 20 * 1000)) + (60*1000));
-    expect(await TestStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
-    expect(TestStreamSwitcher.getEventId()).toBe(null);
+    expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
+    expect(testStreamSwitcher.getEventId()).toBe(null);
   });
 });

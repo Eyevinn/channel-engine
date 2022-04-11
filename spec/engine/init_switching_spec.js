@@ -2,7 +2,7 @@ const SessionLive = require("../../engine/session_live.js");
 const Session = require("../../engine/session.js");
 const nock = require("nock");
 const { v4: uuidv4 } = require("uuid");
-const { SessionStateStore } = require("../../engine/session_state.js");
+const { SessionStateStore, SessionState } = require("../../engine/session_state.js");
 const { PlayheadStateStore } = require("../../engine/playhead_state.js");
 const { SessionLiveStateStore } = require("../../engine/session_live_state.js");
 
@@ -331,19 +331,14 @@ describe("The initialize switching", () => {
       timelinePosition: null,
       cue: null,
     });
-    expect(
-      currVodSegments[1313000][currVodSegments[1313000].length - 1]
-    ).toEqual({
+    expect(currVodSegments[1313000][currVodSegments[1313000].length - 1]).toEqual({
       duration: 7.5,
       uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00008.ts",
       timelinePosition: null,
       cue: null,
     });
 
-    await sessionLive.setCurrentMediaAndDiscSequenceCount(
-      currVodCounts.mediaSeq,
-      currVodCounts.discSeq
-    );
+    await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
     await sessionLive.setLiveUri(mockLiveUri);
     let counts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
@@ -379,39 +374,49 @@ describe("The initialize switching", () => {
     }
     await sessionLive.initAsync();
 
-    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
-    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake(() => true);
+    spyOn(sessionLive, "resetSession").and.callFake(() => true);
     spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(13, 1);
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
     await sessionLive.setLiveUri(mockLiveUri);
 
+    sessionLive.mediaSeqCount += 7;
+
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
 
-    await session.setCurrentMediaAndDiscSequenceCount(
-      currCounts.mediaSeq + 1,
-      currCounts.discSeq
-    );
-    await session.setCurrentMediaSequenceSegments(currSegments.currMseqSegs, currSegments.segCount);
-    currCounts.mediaSeq = currCounts.mediaSeq + 2;
-    await session.incrementAsync();
+    session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
+    session.setCurrentMediaSequenceSegments(currSegments.currMseqSegs, currSegments.segCount);
+
+    await session.incrementAsync(); // sets state to VOD_RELOAD_INIT
+    await session.incrementAsync(); // performs VOD_RELOAD_INIT
+    await session.incrementAsync(); // sets state to VOD_PLAYING and increments with 1
+    await session.incrementAsync(); // +1
+    await session.incrementAsync(); // +1
 
     const sessionCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const sessionCurrentSegs = await session.getCurrentMediaSequenceSegments();
     const size = sessionCurrentSegs["1313000"].length;
-    expect(currCounts).toEqual(sessionCounts);
+
+    const expectedCounts = {
+      mediaSeq: 23,
+      discSeq: 1,
+    };
+
+    expect(expectedCounts).toEqual(sessionCounts);
     expect(sessionCurrentSegs["1313000"][0]).toEqual({
       duration: 7,
-      uri: "http://mock.mock.com/180000/seg10.ts",
+      uri: "http://mock.mock.com/180000/seg12.ts",
     });
-    expect(sessionCurrentSegs["1313000"][size - 1 - 1]).toEqual({
-      discontinuity: true, cue: { in: true }
+    expect(sessionCurrentSegs["1313000"][size - 1 - 2]).toEqual({
+      discontinuity: true,
+      cue: { in: true },
     });
     expect(sessionCurrentSegs["1313000"][size - 1]).toEqual({
       duration: 7.5,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00014.ts",
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00016.ts",
       timelinePosition: null,
       cue: null,
     });
@@ -421,8 +426,7 @@ describe("The initialize switching", () => {
   it("should give correct segments and sequence counts from session back to session (case: V2L->VOD)", async () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
-    const vodUri =
-      "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
+    const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
     const vodEventDurationMs = 60 * 1000;
 
     await session.initAsync();
@@ -430,21 +434,27 @@ describe("The initialize switching", () => {
       await session.incrementAsync();
     }
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-    const eventSegments = await session.getTruncatedVodSegments(
-      vodUri,
-      vodEventDurationMs / 1000
-    );
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, vodEventDurationMs / 1000);
 
-    await session.setCurrentMediaAndDiscSequenceCount(
-      currVodCounts.mediaSeq,
-      currVodCounts.discSeq
-    );
-    await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+    session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
+    session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
+    await session.incrementAsync(); // sets state to VOD_RELOAD_INIT
+    await session.incrementAsync(); // performs VOD_RELOAD_INIT
+    await session.incrementAsync(); // sets state to VOD_PLAYING and increments with 1
+    await session.incrementAsync(); // +1
     const sessionCounts = await session.getCurrentMediaAndDiscSequenceCount();
-    expect(currVodCounts).toEqual(sessionCounts);
 
-    await session.incrementAsync();
+    const expectedCounts = {
+      mediaSeq: 8,
+      discSeq: 0,
+    };
+
+    expect(expectedCounts).toEqual(sessionCounts);
+
+    await session.incrementAsync(); // +1
+    await session.incrementAsync(); // +1
+
     const sessionCurrentSegs = await session.getCurrentMediaSequenceSegments();
     let manifest = await session.getCurrentMediaManifestAsync(180000);
     const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
@@ -452,35 +462,27 @@ describe("The initialize switching", () => {
     if (m) {
       mseqNo = Number(m[1]);
     }
-    expect(mseqNo).toBe(7);
+    expect(mseqNo).toBe(10);
     const size = sessionCurrentSegs["1313000"].length;
     expect(sessionCurrentSegs["1313000"][0]).toEqual({
-      duration: 11.25,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00007.ts",
+      duration: 7.5,
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00011.ts",
       timelinePosition: null,
       cue: null,
     });
-    expect(sessionCurrentSegs["1313000"][size - 1 - 1]).toEqual({
+    expect(sessionCurrentSegs["1313000"][size - 1 - 4]).toEqual({
       discontinuity: true,
-      cue: { in: true }
+      cue: { in: true },
     });
-    expect(
-      sessionCurrentSegs["1313000"][size - 1].daterange["planned-duration"]
-    ).toEqual(vodEventDurationMs / 1000);
-    expect(
-      "start-date" in sessionCurrentSegs["1313000"][size - 1].daterange
-    ).toBe(true);
-    expect("id" in sessionCurrentSegs["1313000"][size - 1].daterange).toBe(
-      true
-    );
-    expect(sessionCurrentSegs["1313000"][size - 1].duration).toEqual(10.88);
-    expect(sessionCurrentSegs["1313000"][size - 1].timelinePosition).toEqual(
-      null
-    );
-    expect(sessionCurrentSegs["1313000"][size - 1].cue).toEqual(null);
-    expect(sessionCurrentSegs["1313000"][size - 1].uri).toEqual(
-      "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00000.ts"
-    );
+    const borderSegment = sessionCurrentSegs["1313000"][size - 1 - 3];
+    expect(borderSegment.duration).toBe(10.880);
+    expect(borderSegment.cue).toBe(null);
+    expect(borderSegment.timelinePosition).toBe(null);
+    expect(borderSegment.uri).toBe("https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00000.ts");
+    expect(borderSegment.daterange["id"]).not.toBe(null);
+    expect(borderSegment.daterange["start-date"]).not.toBe(null);
+    expect(borderSegment.daterange["planned-duration"]).toBe(vodEventDurationMs/1000);
+    
   });
 
   xit("should give correct segments and sequence counts from session to sessionLive (case: VOD->LIVE)", async () => {
@@ -532,20 +534,14 @@ describe("The initialize switching", () => {
     for (let i = 0; i < 3; i++) {
       await session.incrementAsync();
     }
-    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake( () => true );
-    spyOn(sessionLive, "resetSession").and.callFake( () => true );
+    spyOn(sessionLive, "resetLiveStoreAsync").and.callFake(() => true);
+    spyOn(sessionLive, "resetSession").and.callFake(() => true);
     spyOn(sessionLive, "getCurrentMediaSequenceSegments").and.returnValue({ currMseqSegs: mockLiveSegments, segCount: 8 });
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-    const eventSegments = await session.getTruncatedVodSegments(
-      vodUri,
-      vodEventDurationMs / 1000
-    );
-    await session.setCurrentMediaAndDiscSequenceCount(
-      currVodCounts.mediaSeq,
-      currVodCounts.discSeq
-    );
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, vodEventDurationMs / 1000);
+    await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
     for (let i = 0; i < 8; i++) {
       await session.incrementAsync();
@@ -554,10 +550,7 @@ describe("The initialize switching", () => {
     const newVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     const newVodSegments = await session.getCurrentMediaSequenceSegments();
     // Set to sessionLive
-    await sessionLive.setCurrentMediaAndDiscSequenceCount(
-      newVodCounts.mediaSeq,
-      newVodCounts.discSeq
-    );
+    await sessionLive.setCurrentMediaAndDiscSequenceCount(newVodCounts.mediaSeq, newVodCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(newVodSegments);
     await sessionLive.setLiveUri(mockLiveUri);
     // Get and inspect counts from sessionLive
@@ -644,8 +637,7 @@ describe("The initialize switching", () => {
     const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
     const sessionLive = new SessionLive({ sessionId: "1" }, sessionLiveStore);
 
-    const vodUri =
-      "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
+    const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
     const vodEventDurationMs = 70 * 1000;
 
     await session.initAsync();
@@ -665,16 +657,10 @@ describe("The initialize switching", () => {
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();
     await sessionLive.resetSessionAsync();
 
-    await session.setCurrentMediaAndDiscSequenceCount(
-      currCounts.mediaSeq,
-      currCounts.discSeq
-    );
+    await session.setCurrentMediaAndDiscSequenceCount(currCounts.mediaSeq, currCounts.discSeq);
     await session.setCurrentMediaSequenceSegments(currSegments);
 
-    const eventSegments = await session.getTruncatedVodSegments(
-      vodUri,
-      vodEventDurationMs / 1000
-    );
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, vodEventDurationMs / 1000);
     await session.setCurrentMediaSequenceSegments(eventSegments, true);
 
     await session.incrementAsync();
@@ -692,19 +678,13 @@ describe("The initialize switching", () => {
     }
     expect(mseqNo).toBe(14);
     expect(dseqNo).toBe(1);
-    expect(
-      newSegments["1313000"][size - 1].daterange["planned-duration"]
-    ).toEqual(vodEventDurationMs / 1000);
-    expect("start-date" in newSegments["1313000"][size - 1].daterange).toBe(
-      true
-    );
+    expect(newSegments["1313000"][size - 1].daterange["planned-duration"]).toEqual(vodEventDurationMs / 1000);
+    expect("start-date" in newSegments["1313000"][size - 1].daterange).toBe(true);
     expect("id" in newSegments["1313000"][size - 1].daterange).toBe(true);
     expect(newSegments["1313000"][size - 1].duration).toEqual(10.88);
     expect(newSegments["1313000"][size - 1].timelinePosition).toEqual(null);
     expect(newSegments["1313000"][size - 1].cue).toEqual(null);
-    expect(newSegments["1313000"][size - 1].uri).toEqual(
-      "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00000.ts"
-    );
+    expect(newSegments["1313000"][size - 1].uri).toEqual("https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00000.ts");
     expect(newSegments["1313000"][size - 1 - 1]).toEqual({
       discontinuity: true,
     });
@@ -722,10 +702,8 @@ describe("The initialize switching", () => {
   it("should give correct segments and sequence counts from session to session (case: VOD->VOD)", async () => {
     const assetMgr = new TestAssetManager();
     const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
-    const vodUri =
-      "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
-    const vodUri2 =
-      "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8";
+    const vodUri = "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8";
+    const vodUri2 = "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/master.m3u8";
     const vodEventDurationMs = 70 * 1000;
     const vodEventDurationMs2 = 70 * 1000;
 
@@ -734,79 +712,72 @@ describe("The initialize switching", () => {
       await session.incrementAsync();
     }
     const currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-    const eventSegments = await session.getTruncatedVodSegments(
-      vodUri,
-      vodEventDurationMs / 1000
-    );
-    await session.setCurrentMediaAndDiscSequenceCount(
-      currVodCounts.mediaSeq,
-      currVodCounts.discSeq
-    );
-    await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+    const eventSegments = await session.getTruncatedVodSegments(vodUri, vodEventDurationMs / 1000);
+    session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
+    session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+
+    await session.incrementAsync(); // sets state to VOD_RELOAD_INIT
+    await session.incrementAsync(); // performs VOD_RELOAD_INIT
+    await session.incrementAsync(); // sets state to VOD_PLAYING and increments with 1
+
     for (let i = 0; i < 10; i++) {
       await session.incrementAsync();
     }
     const newVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     let newVodSegments = await session.getCurrentMediaSequenceSegments();
-    const eventSegments2 = await session.getTruncatedVodSegments(
-      vodUri2,
-      vodEventDurationMs2 / 1000
-    );
-    // Make sure VOD_NEXT_INIT has run before setting
-    await session.setCurrentMediaAndDiscSequenceCount(
-      newVodCounts.mediaSeq,
-      newVodCounts.discSeq
-    );
-    await session.setCurrentMediaSequenceSegments(eventSegments2, 0, true);
+    const eventSegments2 = await session.getTruncatedVodSegments(vodUri2, vodEventDurationMs2 / 1000);
+
+    session.setCurrentMediaAndDiscSequenceCount(newVodCounts.mediaSeq, newVodCounts.discSeq);
+    session.setCurrentMediaSequenceSegments(eventSegments2, 0, true);
+
+    await session.incrementAsync(); // sets state to VOD_RELOAD_INIT
+    await session.incrementAsync(); // performs VOD_RELOAD_INIT
+    await session.incrementAsync(); // sets state to VOD_PLAYING and increments with 1
+
     for (let i = 0; i < 2; i++) {
       await session.incrementAsync();
     }
 
     newVodSegments = await session.getCurrentMediaSequenceSegments();
-    const size = newVodSegments["1313000"].length;
-    expect(newVodSegments["1313000"][size - 1 - 1 - 1 - 1 - 1 - 1]).toEqual({
+    const borderSegment = newVodSegments["1313000"][6];
+
+    const expectedLastVODSegItem = {
       duration: 7.2,
       uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00008.ts",
       timelinePosition: null,
       cue: null,
-    });
-    expect(newVodSegments["1313000"][size - 1 - 1 - 1 - 1 - 1]).toEqual({
-      discontinuity: true,
-      daterange: null,
-    });
-    expect(newVodSegments["1313000"][size - 1 - 1 - 1 - 1]).toEqual({
+    }
+    const expectedFirstV2LSegItem = {
       duration: 10.846444,
       uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00000.ts",
       timelinePosition: null,
       cue: null,
-    });
-    expect(newVodSegments["1313000"][size - 1 - 1 - 1]).toEqual({
-      discontinuity: true,
-      cue: { in: true }
-    });
-    expect(
-      newVodSegments["1313000"][size - 1 - 1].daterange["planned-duration"]
-    ).toEqual(vodEventDurationMs2 / 1000);
-    expect(
-      "start-date" in newVodSegments["1313000"][size - 1 - 1].daterange
-    ).toBe(true);
-    expect("id" in newVodSegments["1313000"][size - 1 - 1].daterange).toBe(
-      true
-    );
-    expect(newVodSegments["1313000"][size - 1 - 1].duration).toEqual(11.3077);
-    expect(newVodSegments["1313000"][size - 1 - 1].timelinePosition).toEqual(
-      null
-    );
-    expect(newVodSegments["1313000"][size - 1 - 1].cue).toEqual(null);
-    expect(newVodSegments["1313000"][size - 1 - 1].uri).toEqual(
-      "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/600/600-00000.ts"
-    );
-    expect(newVodSegments["1313000"][size - 1]).toEqual({
+    }
+    const expectedSecondVODSegItem = {
       duration: 7.5075,
       uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/600/600-00001.ts",
       timelinePosition: null,
       cue: null,
+    }
+
+    expect(newVodSegments["1313000"][0]).toEqual(expectedLastVODSegItem);
+    expect(newVodSegments["1313000"][1]).toEqual({
+      discontinuity: true,
+      daterange: null,
     });
+    expect(newVodSegments["1313000"][2]).toEqual(expectedFirstV2LSegItem);
+    expect(newVodSegments["1313000"][5]).toEqual({
+      discontinuity: true,
+      cue: { in: true },
+    });
+    expect(borderSegment.daterange["planned-duration"]).toEqual(vodEventDurationMs2 / 1000);
+    expect("start-date" in borderSegment.daterange).toBe(true);
+    expect("id" in borderSegment.daterange).toBe(true);
+    expect(borderSegment.duration).toEqual(11.3077);
+    expect(borderSegment.timelinePosition).toEqual(null);
+    expect(borderSegment.cue).toEqual(null);
+    expect(borderSegment.uri).toEqual("https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/600/600-00000.ts");
+    expect(newVodSegments["1313000"][7]).toEqual(expectedSecondVODSegItem);
   });
 
   xit("should give correct segments and sequence counts from sessionLive to sessionLive (case: LIVE->LIVE)", async () => {
@@ -867,10 +838,7 @@ describe("The initialize switching", () => {
     currVodSegments = await session.getCurrentMediaSequenceSegments();
     currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
 
-    await sessionLive.setCurrentMediaAndDiscSequenceCount(
-      currVodCounts.mediaSeq,
-      currVodCounts.discSeq
-    );
+    await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
     await sessionLive.setLiveUri(mockLiveUri);
 
@@ -882,10 +850,7 @@ describe("The initialize switching", () => {
     let liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     await sessionLive.resetSessionAsync();
 
-    await sessionLive.setCurrentMediaAndDiscSequenceCount(
-      liveCounts.mediaSeq,
-      liveCounts.discSeq
-    );
+    await sessionLive.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(liveSegs);
     await sessionLive.setLiveUri(mockLiveUri);
 
