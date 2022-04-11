@@ -7,6 +7,8 @@ const SessionState = Object.freeze({
   VOD_PLAYING: 2,
   VOD_NEXT_INIT: 3,
   VOD_NEXT_INITIATING: 4,
+  VOD_RELOAD_INIT: 5,
+  VOD_RELOAD_INITIATING: 6
 });
 
 const CURRENTVOD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -157,6 +159,11 @@ class SessionStateStore extends SharedStateStore {
     await this.setVolatile("", instanceId, t);
   }
 
+  async clearLeaderCache() {
+    debug(`[${this.instanceId}]: clearing 'leader' cache`);
+    this.cache.leader.value = null;
+  }
+
   async isLeader(instanceId) {
     if (!instanceId) {
       throw new Error("Cannot determine leader without instance id");
@@ -164,7 +171,7 @@ class SessionStateStore extends SharedStateStore {
     let leader;
     if (this.cache.leader.value && Date.now() < this.cache.leader.ts + this.cacheTTL) {
       leader = this.cache.leader.value;
-      debug(`[${instanceId}]: reading 'leader' from cache: I am ${leader === instanceId ? "" : "NOT"} the leader!`);
+      debug(`[${instanceId}]: reading 'leader' from cache: I am${leader === instanceId ? "" : " NOT"} the leader!`);
       return leader === instanceId;
     }
     leader = await this.get("", "leader");
@@ -189,7 +196,7 @@ class SessionStateStore extends SharedStateStore {
         }
       }
     }
-    debug(`[${instanceId}]: I am ${leader === instanceId ? "" : "NOT"} the leader!`);
+    debug(`[${instanceId}]: I am${leader === instanceId ? "" : " NOT"} the leader!`);
     this.cache.leader.ts = Date.now();
     this.cache.leader.value = leader;
     return leader === instanceId;

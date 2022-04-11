@@ -2,6 +2,7 @@ const debug = require("debug")("engine-stream-switcher");
 const crypto = require("crypto");
 const fetch = require("node-fetch");
 const { AbortController } = require("abort-controller");
+const { SessionState } = require('./session_state');
 
 const SwitcherState = Object.freeze({
   V2L_TO_LIVE: 1,
@@ -88,8 +89,8 @@ class StreamSwitcher {
       return null;
     }
     // Handle Complete Storage Reset
-    let sessionState = await session._sessionState.get("state");
-    if (sessionState === 1 || !sessionState) {
+    let sessionState = await session.getSessionState();
+    if (sessionState === SessionState.VOD_INIT || !sessionState) {
       this.working = true;
       sessionLive.waitForPlayhead = false;
       sessionLive.allowedToSet = false; // only have effect on leader
@@ -341,13 +342,13 @@ class StreamSwitcher {
             return false;
           }
 
-          await session.setCurrentMediaSequenceSegments(
-            liveSegments.currMseqSegs,
-            liveSegments.segCount
-          );
           await session.setCurrentMediaAndDiscSequenceCount(
             liveCounts.mediaSeq,
             liveCounts.discSeq
+          );
+          await session.setCurrentMediaSequenceSegments(
+            liveSegments.currMseqSegs,
+            liveSegments.segCount
           );
 
           this.working = false;
