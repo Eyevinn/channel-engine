@@ -446,7 +446,7 @@ class Session {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo", "discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
-    if (!this.prevVodMediaSeq.video) {
+    if (this.prevVodMediaSeq.video !== null) {
       this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
     }
 
@@ -940,7 +940,7 @@ class Session {
           }
         } else {
           // Handle edge case where store has been reset, but leader has not cleared cache.
-          if (!this.prevVodMediaSeq.video) {
+          if (this.prevVodMediaSeq.video !== null) {
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
           if (this.prevVodMediaSeq.video < sessionState.vodMediaSeqVideo) {
