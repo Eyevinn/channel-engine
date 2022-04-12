@@ -43,9 +43,20 @@ class Session {
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
+    this.prevVodMediaSeq = {
+      video: null,
+      audio: null
+    }
     this.waitingForNextVod = false;
     this.leaderIsSettingNextVod = false;
-    this.isSwitchingBackFromLive = false;
+    this.isSwitchingBackToV2L = false;
+    this.switchDataForSession = {
+      mediaSeq: null,
+      discSeq: null,
+      mediaSeqOffset: null,
+      transitionSegments: null,
+      reloadBehind: null,
+    }
 
     if (config) {
       if (config.sessionId) {
@@ -139,7 +150,14 @@ class Session {
         state = await this._playheadState.getState();
 
         const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-        if (isLeader && [SessionState.VOD_NEXT_INIT, SessionState.VOD_NEXT_INITIATING].indexOf(sessionState.state) !== -1) {
+        if (isLeader && 
+          [
+            SessionState.VOD_NEXT_INIT,
+            SessionState.VOD_NEXT_INITIATING,
+            SessionState.VOD_RELOAD_INIT,
+            SessionState.VOD_RELOAD_INITIATING
+          ].indexOf(sessionState.state) !== -1) {
+
           const firstDuration = await this._getFirstDuration(manifest);
           const tickInterval = firstDuration < 2 ? 2 : firstDuration;
           debug(`[${this._sessionId}]: I am the leader and updated tick interval to ${tickInterval} sec`);
@@ -152,13 +170,13 @@ class Session {
         } else {
           const reqTickInterval = playheadState.tickInterval;
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
-          let tickInterval = (reqTickInterval) - timeSpentInIncrement;
+          let tickInterval = reqTickInterval - timeSpentInIncrement;
           const delta = await this._getCurrentDeltaTime();
           if (delta != 0) {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval`);
             tickInterval += delta;
           }
-          const position = await this._getCurrentPlayheadPosition() * 1000;
+          const position = (await this._getCurrentPlayheadPosition()) * 1000;
           const timePosition = Date.now() - playheadState.playheadRef;
           const diff = position - timePosition;
           debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
@@ -214,7 +232,7 @@ class Session {
     if (this.disabledPlayhead) {
       return {
         sessionId: this._sessionId,
-      }
+      };
     } else {
       const playheadState = await this._playheadState.getValues(["tickMs", "mediaSeq", "vodMediaSeqVideo"]);
       const state = await this._playheadState.getState();
@@ -243,11 +261,16 @@ class Session {
     await this._playheadStateStore.reset(this._sessionId);
   }
 
+  async getSessionState() {
+    const state = await this._sessionState.get("state");
+    return state;
+  }
+
   async getTruncatedVodSegments(vodUri, duration) {
     try {
       const hlsVod = await this._truncateSlate(null, duration, vodUri);
       let vodSegments = hlsVod.getMediaSegments();
-      Object.keys(vodSegments).forEach(bw => vodSegments[bw].unshift({ discontinuity: true, cue: { in: true } }));
+      Object.keys(vodSegments).forEach((bw) => vodSegments[bw].unshift({ discontinuity: true, cue: { in: true } }));
       return vodSegments;
     } catch (exc) {
       debug(`[${this._sessionId}]: Failed to generate truncated VOD!`);
@@ -257,20 +280,25 @@ class Session {
 
   async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
     if (!this._sessionState) {
-      throw new Error('Session not ready');
+      throw new Error("Session not ready");
     }
+    this.isSwitchingBackToV2L = true;
 
-    this.isSwitchingBackFromLive = true;
+    this.switchDataForSession.reloadBehind = reloadBehind;
+    this.switchDataForSession.transitionSegments = segments;
+    this.switchDataForSession.mediaSeqOffset = mSeqOffset;
 
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (!isLeader) {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
       await this._sessionState.clearCurrentVodCache();
+
       let vodReloaded = await this._sessionState.get("vodReloaded");
       let attempts = 9;
       while (!isLeader && !vodReloaded && attempts > 0) {
         debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (1000ms) for LEADER to reload currentVod in store! (tries left=${attempts})`);
         await timer(1000);
+        await this._sessionStateStore.clearLeaderCache();
         isLeader = await this._sessionStateStore.isLeader(this._instanceId);
         vodReloaded = await this._sessionState.get("vodReloaded");
         attempts--;
@@ -282,43 +310,26 @@ class Session {
       if (!isLeader || vodReloaded) {
         debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod. Clearing the cache now`);
         await this._sessionState.clearCurrentVodCache();
-        this.isSwitchingBackFromLive = false;
         return;
       }
-    }
+      debug(`[${this._sessionId}]: NEW LEADER: Setting state=VOD_RELOAD_INIT`);
+      this.isSwitchingBackToV2L = true;
+      await this._sessionState.set("state", SessionState.VOD_RELOAD_INIT)
 
-    if (isLeader) {
-      let state = await this._sessionState.get("state");
-      let ATTEMPTS = 5;
-      // Do Not want to reload when session is loading next Vod
-      while (state !== SessionState.VOD_PLAYING && ATTEMPTS > 0) {
-        debug(`[${this._sessionId}]: LEADER: Wait for session to initialize next VOD. (tries left=${ATTEMPTS})`);
+    } else {
+      let vodReloaded = await this._sessionState.get("vodReloaded");
+      let attempts = 9;
+      while (!vodReloaded && attempts > 0) {
+        debug(`[${this._sessionId}]: LEADER: Waiting (1000ms) to buy some time reloading vod and adding it to store! (tries left=${attempts})`);
         await timer(1000);
-        state = await this._sessionState.get("state");
-        ATTEMPTS--;
+        vodReloaded = await this._sessionState.get("vodReloaded");
+        attempts--;
       }
-      if (ATTEMPTS === 0) {
-        throw new Error("Failed to reload currentVod! Need a new LEADER!");
+      if (attempts === 0) {
+        debug(`[${this._sessionId}]: LEADER: WARNING! Vod was never Reloaded!`);
+        return; 
       }
-
-      debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
-      const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
-      let currentVod = await this._sessionState.getCurrentVod();
-      let currentMseq = playheadState.vodMediaSeqVideo + mSeqOffset;
-      if (currentMseq > currentVod.getLiveMediaSequencesCount() - 1) {
-        currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
-      }
-      // TODO: Support reloading with audioSegments as well
-      await currentVod.reload(currentMseq, segments, null, reloadBehind);
-      await this._sessionState.setCurrentVod(currentVod, { ttl: (currentVod.getDuration() * 1000) });
-      await this._sessionState.set("vodReloaded", 1);
-      await this._sessionState.set("vodMediaSeqVideo", 0);
-      await this._sessionState.set("vodMediaSeqAudio", 0);
-      await this._playheadState.set("vodMediaSeqVideo", 0);
-      await this._playheadState.set("vodMediaSeqAudio", 0);
-      await this._playheadState.set("playheadRef", Date.now());
     }
-    this.isSwitchingBackFromLive = false;
   }
 
   async getCurrentMediaSequenceSegments() {
@@ -329,6 +340,18 @@ class Session {
     if (isLeader) {
       await this._sessionState.set("vodReloaded", 0);
     }
+
+    // Only read data from store if state is VOD_PLAYING
+    let state = await this.getSessionState();
+    let tries = 12;
+    while (state !== SessionState.VOD_PLAYING && tries > 0) {
+    const waitTimeMs = 500; 
+    debug(`[${this._sessionId}]: state=${state} - Waiting ${waitTimeMs}ms_${tries} until Leader has finished loading next vod.`);
+      await timer(waitTimeMs);
+      tries--;
+      state = await this.getSessionState();
+    }
+
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     if (playheadState.vodMediaSeqVideo === 0) {
       if (!isLeader) {
@@ -340,7 +363,7 @@ class Session {
     if (currentVod) {
       try {
         const mediaSegments = currentVod.getLiveMediaSequenceSegments(playheadState.vodMediaSeqVideo);
-        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence: ${playheadState.vodMediaSeqVideo}`);
+        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence: ${playheadState.vodMediaSeqVideo}_${currentVod.getLiveMediaSequencesCount()}`);
         return mediaSegments;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -354,25 +377,31 @@ class Session {
 
   async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) {
     if (!this._sessionState) {
-      throw new Error('Session not ready');
+      throw new Error("Session not ready");
     }
-    
-    this.isSwitchingBackFromLive = true;
 
-    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-    if (isLeader) {
-      await this._sessionState.set("mediaSeq", _mediaSeq);
-      await this._playheadState.set("mediaSeq", _mediaSeq);
-      await this._sessionState.set("discSeq", _discSeq);
-      debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${_mediaSeq}]:[${_discSeq}]`);
-    }
-    this.isSwitchingBackFromLive = false;
+    this.isSwitchingBackToV2L = true;
+
+    this.switchDataForSession.mediaSeq = _mediaSeq;
+    this.switchDataForSession.discSeq = _discSeq;
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
+
+    // Only read data from store if state is VOD_PLAYING
+    let state = await this.getSessionState();
+    let tries = 12;
+    while (state !== SessionState.VOD_PLAYING && tries > 0) {
+      const waitTimeMs = 500; 
+      debug(`[${this._sessionId}]: state=${state} - Waiting ${waitTimeMs}ms_${tries} until Leader has finished loading next vod.`);
+      await timer(waitTimeMs);
+      tries--;
+      state = await this.getSessionState();
+    }
+    
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const discSeqOffset = await this._sessionState.get("discSeq");
     if (playheadState.vodMediaSeqVideo === 0) {
@@ -407,8 +436,8 @@ class Session {
     }
     // Be sure that the leader is not in the middle of setting new vod data in store.
     // Followers will never run this part...
-    let tries = 4;
-    while(tries > 0 && this.leaderIsSettingNextVod) {
+    let tries = 12;
+    while (tries > 0 && this.leaderIsSettingNextVod) {
       debug(`[${this._sessionId}]: Leader is setting the next vod. Waiting 500ms_${tries}`);
       await timer(500);
       tries--;
@@ -417,17 +446,23 @@ class Session {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo", "discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
+    if (this.prevVodMediaSeq.video !== null) {
+      this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
+    }
+
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
       debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
       const m3u8 = await this._playheadState.getLastM3u8();
       if (m3u8) {
+        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         return m3u8;
       } else {
         debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
       }
     }
 
-    if (playheadState.vodMediaSeqVideo < 2) { 
+    if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
+      debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -441,6 +476,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
+        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -482,13 +518,6 @@ class Session {
   async incrementAsync() {
     await this._tickAsync(); 
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-    // Avoid reading old values if new ones are on their way...
-    let tries = 10;
-    while (tries > 0 && this.isSwitchingBackFromLive) {
-      debug(`[${this._sessionId}]: Leader is currently setting new data in store. Waiting 500ms_${tries}`);
-      await timer(500);
-      tries--;
-    }
 
     let sessionState = await this._sessionState.getValues(
       ["state", "mediaSeq", "discSeq", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
@@ -502,15 +531,17 @@ class Session {
         sessionState.discSeq === null) {
       debug(`[${this._sessionId}]: Session is not ready yet`);
       debug(sessionState);
+      await this._sessionState.clearCurrentVodCache();
       if (isLeader) {
         debug(`[${this._sessionId}]: I am the leader, trying to initiate the session`);
         sessionState.state = await this._sessionState.set("state", SessionState.VOD_INIT);
       }
       return null;
     }
-    if (sessionState.state === SessionState.VOD_NEXT_INITIATING) {
+    if (sessionState.state === SessionState.VOD_NEXT_INITIATING || sessionState.state === SessionState.VOD_RELOAD_INITIATING) {
       if (isLeader) {
-        debug(`[${this._sessionId}]: I am the leader and have just initiated next VOD, let's move to VOD_PLAYING`);
+        const leaderAction = sessionState.state === SessionState.VOD_NEXT_INITIATING ? "initiated" : "reloaded";
+        debug(`[${this._sessionId}]: I am the leader and have just ${leaderAction} next VOD, let's move to VOD_PLAYING`);
         sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
       } else {
         debug(`[${this._sessionId}]: Return the last generated m3u8 to give the leader some time`);
@@ -530,6 +561,11 @@ class Session {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);
+    }
+
+    if (this.isSwitchingBackToV2L) {
+      sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INIT);
+      this.isSwitchingBackToV2L = false;
     }
 
     playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
@@ -809,6 +845,10 @@ class Session {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
         try {
+          // Needed if store was reset
+          await this._sessionStateStore.clearLeaderCache();
+          isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+
           let nextVodPromise;
           if (sessionState.state === SessionState.VOD_INIT) {
             debug(`[${this._sessionId}]: state=VOD_INIT`);
@@ -897,6 +937,17 @@ class Session {
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
             this.waitingForNextVod = false;
+          }
+        } else {
+          // Handle edge case where store has been reset, but leader has not cleared cache.
+          if (this.prevVodMediaSeq.video !== null) {
+            this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
+          }
+          if (this.prevVodMediaSeq.video < sessionState.vodMediaSeqVideo) {
+            debug(`[${this._sessionId}]: current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
+            await this._sessionState.clearCurrentVodCache();
+            currentVod = await this._sessionState.getCurrentVod();
+            this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
@@ -1014,6 +1065,77 @@ class Session {
           }
         }
         break;
+        case SessionState.VOD_RELOAD_INIT:
+          try {
+            debug(`[${this._sessionId}]: state=VOD_RELOAD_INIT`);
+            if (isLeader) {
+
+              const startTS = Date.now();
+
+              // 1) To tell Follower that, Leader is working on it!
+              sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
+
+              // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
+              const mSeq = this.switchDataForSession.mediaSeq;
+              const dSeq = this.switchDataForSession.discSeq;
+              const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
+              const reloadBehind = this.switchDataForSession.reloadBehind;
+              const segments = this.switchDataForSession.transitionSegments;
+
+              if ([mSeq,dSeq,mSeqOffset,reloadBehind,segments].includes(null)) {
+                debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
+                return;
+              }
+
+              await this._sessionState.set("mediaSeq", mSeq);
+              await this._playheadState.set("mediaSeq", mSeq);
+              await this._sessionState.set("discSeq", dSeq);
+              debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
+
+              // 3) Set new media segments/currentVod, to carry on the continuity from session-live
+              debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
+              const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
+              let currentVod = await this._sessionState.getCurrentVod();
+              let currentMseq = playheadState.vodMediaSeqVideo + mSeqOffset;
+              if (currentMseq > currentVod.getLiveMediaSequencesCount() - 1) {
+                currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
+              }
+
+              // TODO: Support reloading with audioSegments as well
+
+              await currentVod.reload(currentMseq, segments, null, reloadBehind);
+              await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+              await this._sessionState.set("vodReloaded", 1);
+              await this._sessionState.set("vodMediaSeqVideo", 0);
+              await this._sessionState.set("vodMediaSeqAudio", 0);
+              await this._playheadState.set("vodMediaSeqVideo", 0);
+              await this._playheadState.set("vodMediaSeqAudio", 0);
+              await this._playheadState.set("playheadRef", Date.now());
+              debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
+              // 4) emit cloudwatch event object
+              cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "switchback", channel: this._sessionId, reqTimeMs: Date.now() - startTS });
+
+              return;
+            } else {
+              debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_RELOAD_INITIATING`);
+              sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
+            }
+          } catch (err) {
+            debug("Failed to init reload vod");
+            throw err;
+          } 
+        break;
+        case SessionState.VOD_RELOAD_INITIATING:
+          debug(`[${this._sessionId}]: state=VOD_RELOAD_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
+          if (!isLeader) {
+            debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be reloaded`);
+            if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
+              debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
+              await this._sessionState.clearCurrentVodCache();
+            }
+            this.waitingForNextVod = true;
+          }
+          return;
       default:
         throw new Error("Invalid state: " + sessionState.state);
     }
