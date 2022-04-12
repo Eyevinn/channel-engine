@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const fetch = require("node-fetch");
 const { AbortController } = require("abort-controller");
 const { SessionState } = require('./session_state');
+const { timer } = require("./util")
 
 const SwitcherState = Object.freeze({
   V2L_TO_LIVE: 1,
@@ -151,6 +152,11 @@ class StreamSwitcher {
       );
       validURI = await this._validURI(scheduleObj.uri);
       tries++;
+      if (!validURI) {
+        const delayMs = tries * 500;
+        debug(`[${this.sessionId}]: Going to try validating Master URI again in ${delayMs}ms`);
+        await timer(delayMs);
+      }
     }
     if (!validURI) {
       debug(`[${this.sessionId}]: Unreachable URI: [${scheduleObj.uri}]`);
