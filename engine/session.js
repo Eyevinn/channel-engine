@@ -43,6 +43,10 @@ class Session {
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
+    this.prevVodMediaSeq = {
+      video: null,
+      audio: null
+    }
     this.waitingForNextVod = false;
     this.leaderIsSettingNextVod = false;
     this.isSwitchingBackToV2L = false;
@@ -442,17 +446,23 @@ class Session {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo", "discSeq"]);
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
+    if (!this.prevVodMediaSeq.video) {
+      this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
+    }
+
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
       debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
       const m3u8 = await this._playheadState.getLastM3u8();
       if (m3u8) {
+        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         return m3u8;
       } else {
         debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
       }
     }
 
-    if (playheadState.vodMediaSeqVideo < 2) { 
+    if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
+      debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -466,6 +476,7 @@ class Session {
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
+        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -926,6 +937,17 @@ class Session {
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
             this.waitingForNextVod = false;
+          }
+        } else {
+          // Handle edge case where store has been reset, but leader has not cleared cache.
+          if (!this.prevVodMediaSeq.video) {
+            this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
+          }
+          if (this.prevVodMediaSeq.video < sessionState.vodMediaSeqVideo) {
+            debug(`[${this._sessionId}]: current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
+            await this._sessionState.clearCurrentVodCache();
+            currentVod = await this._sessionState.getCurrentVod();
+            this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
