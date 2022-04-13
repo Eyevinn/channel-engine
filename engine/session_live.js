@@ -159,16 +159,16 @@ class SessionLive {
         this.waitForPlayhead = false;
 
         // Let the playhead move at an interval set according to live segment duration
-        let liveSegmentDurationMs = DEFAULT_PLAYHEAD_INTERVAL_MS;
-        let liveBws = Object.keys(this.liveSegQueue);
-        if (liveBws.length !== 0 && this.liveSegQueue[liveBws[0]].length !== 0 && this.liveSegQueue[liveBws[0]][0].duration) {
-          liveSegmentDurationMs = this.liveSegQueue[liveBws[0]][0].duration * 1000;
-        }
+        const liveSegmentDurationMs = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
 
         // Set the timer
         let timerValueMs = 0;
         if (this.timerCompensation) {
-          if (liveSegmentDurationMs - (tsIncrementEnd - tsIncrementBegin) > 0) {
+          const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+          const incrementDuration = tsIncrementEnd - tsIncrementBegin;
+          if (incrementDuration >= liveSegmentDurationMs * 0.5 && isLeader) {
+            timerValueMs = liveSegmentDurationMs;
+          } else {
             timerValueMs = liveSegmentDurationMs - (tsIncrementEnd - tsIncrementBegin);
           }
         } else {
@@ -541,12 +541,14 @@ class SessionLive {
       if (!leadersMediaSeqRaw < this.lastRequestedMediaSeqRaw && this.blockGenerateManifest) {
         this.blockGenerateManifest = false;
       }
-      let attempts = 5;
 
+      let attempts = 5;
       //  CHECK AGAIN CASE 1: Store Empty
       while (!leadersMediaSeqRaw && attempts > 0) {
-        debug(`[${this.sessionId}]: FOLLOWER: Leader has not put anything in store... Will check again in 2000ms (Tries left=[${attempts}])`);
-        await timer(2000);
+        const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
+        const waitTimeMs = parseInt(segDur / 3, 10);
+        debug(`[${this.sessionId}]: FOLLOWER: Leader has not put anything in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
+        await timer(waitTimeMs);
         this.timerCompensation = false;
         leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
         attempts--;
@@ -566,8 +568,10 @@ class SessionLive {
       attempts = 5;
       //  CHECK AGAIN CASE 2: Store Old
       while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
-        debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in 2000ms (Tries left=[${attempts}])`);
-        await timer(2000);
+        const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
+        const waitTimeMs = parseInt(segDur / 3, 10);
+        debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
+        await timer(waitTimeMs);
         this.timerCompensation = false;
         leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
         attempts--;
@@ -1360,6 +1364,27 @@ class SessionLive {
       newItem[bw] = this.mediaManifestURIs[bw];
     });
     this.mediaManifestURIs = newItem;
+  }
+
+  _getAnyFirstSegmentDurationMs() {
+    if (this._isEmpty(this.liveSegQueue)) {
+      return null;
+    }
+  
+    const bw0 = Object.keys(this.liveSegQueue)[0]; 
+    if (this.liveSegQueue[bw0].length === 0) {
+      return null;
+    }
+    
+    for (let i = 0; i < this.liveSegQueue[bw0].length; i++) {
+      const segment = this.liveSegQueue[bw0][i];
+      if (!segment.duration) {
+        continue;
+      }
+      return segment.duration * 1000;
+    }
+
+    return null;
   }
 
   _isEmpty(obj) {

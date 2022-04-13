@@ -122,6 +122,8 @@ const logerror = (sessionId, err) => {
   console.error(err);
 };
 
+const timer = ms => new Promise(res => setTimeout(res, ms));
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -129,4 +131,5 @@ module.exports = {
   m3u8Header,
   toHHMMSS,
   logerror,
+  timer
 };
