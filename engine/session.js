@@ -591,6 +591,8 @@ class Session {
       // Reset the value
       this.alreadyClearedVodCache = false;
     }
+    // Update Value for Previous Sequence
+    this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
 
     return m3u8;
   }
