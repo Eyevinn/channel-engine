@@ -636,7 +636,9 @@ class SessionLive {
 
       // Handle if any promise got rejected
       if (manifestList.some((result) => result.status === "rejected")) {
-        debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again...`);
+        FETCH_ATTEMPTS--;
+        debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again in 1000ms...`);
+        await timer(1000)
         continue;
       }
 
