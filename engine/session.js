@@ -57,6 +57,7 @@ class Session {
       transitionSegments: null,
       reloadBehind: null,
     }
+    this.alreadyClearedVodCache = null;
 
     if (config) {
       if (config.sessionId) {
@@ -353,12 +354,9 @@ class Session {
     }
 
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-    if (playheadState.vodMediaSeqVideo === 0) {
-      if (!isLeader) {
-        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-      }
-    }
+
+    // NOTE: Assume that VOD cache was already cleared in 'getCurrentMediaAndDiscSequenceCount()'
+    // and that we now have access to the correct vod cache
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
@@ -404,10 +402,11 @@ class Session {
     
     const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     const discSeqOffset = await this._sessionState.get("discSeq");
+    // Clear Vod Cache here when Switching to Live just to be safe...
     if (playheadState.vodMediaSeqVideo === 0) {
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader) {
-        debug(`[${this._sessionId}]: Not a leader and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
+        debug(`[${this._sessionId}]: Not a leader, about to switch, and first media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
       }
     }
@@ -461,13 +460,18 @@ class Session {
       }
     }
 
+    // Force reading up from store, but only once if the condition is right
     if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
       debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-      if (!isLeader) {
+      if (!isLeader && !this.alreadyClearedVodCache) {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        await this._sessionState.clearCurrentVodCache();
+        this.alreadyClearedVodCache = true;
       }
+    } else {
+      // Reset the value
+      this.alreadyClearedVodCache = false;
     }
 
     const currentVod = await this._sessionState.getCurrentVod();
@@ -575,9 +579,17 @@ class Session {
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     await this._playheadState.setLastM3u8(m3u8);
 
-    if (!isLeader && playheadState.vodMediaSeqVideo < 2) {
-      debug(`[${this._sessionId}]: Not a leader and have just set playheadState vodMediaSeqVideo to 0|1. Invalidate cache to ensure having the correct VOD.`);
-      await this._sessionState.clearCurrentVodCache();
+    // As a FOLLOWER, we might need to read up from shared store... 
+    if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
+      debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
+      if (!isLeader && !this.alreadyClearedVodCache) {
+        debug(`[${this._sessionId}]: Not a leader and have just set 'playheadState.vodMediaSeqVideo' to 0|1. Invalidate cache to ensure having the correct VOD.`);
+        await this._sessionState.clearCurrentVodCache();
+        this.alreadyClearedVodCache = true;
+      }
+    } else {
+      // Reset the value
+      this.alreadyClearedVodCache = false;
     }
 
     return m3u8;
@@ -834,13 +846,6 @@ class Session {
       sessionState.state = SessionState.VOD_INIT;
     }
 
-    if (!isLeader && this.waitingForNextVod) {
-      // By now Leader should have added the next Vod in store
-      debug(`[${this._sessionId}]: Not leader! New VOD loaded during last tick. Invalidate current VOD cache`);
-      await this._sessionState.clearCurrentVodCache();
-      this.waitingForNextVod = false;
-    }
-
     switch (sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -931,19 +936,13 @@ class Session {
           }
         }
       case SessionState.VOD_PLAYING:
-        if (!isLeader) {
-          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
-            debug(`[${this._sessionId}]: Not leader! Invalidate current VOD cache and fetch the new one from the leader`);
-            await this._sessionState.clearCurrentVodCache();
-            currentVod = await this._sessionState.getCurrentVod();
-            this.waitingForNextVod = false;
-          }
-        } else {
+        if (isLeader) {
           // Handle edge case where store has been reset, but leader has not cleared cache.
           if (this.prevVodMediaSeq.video === null) {
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
-          if (this.prevVodMediaSeq.video < sessionState.vodMediaSeqVideo) {
+          // Clear Cache if prev count is HIGHER than current...
+          if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video ) {
             debug(`[${this._sessionId}]: current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
@@ -956,11 +955,6 @@ class Session {
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
-          if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
-            debug(`[${this._sessionId}]: First mediasequence in VOD and I am not the leader so invalidate current VOD cache and fetch the new one from the leader`);
-            await this._sessionState.clearCurrentVodCache();
-          }
-          this.waitingForNextVod = true;
         }
         return;
       case SessionState.VOD_NEXT_INIT:

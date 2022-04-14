@@ -122,7 +122,33 @@ const logerror = (sessionId, err) => {
   console.error(err);
 };
 
-const timer = ms => new Promise(res => setTimeout(res, ms));
+const timer = (ms) => new Promise((res) => setTimeout(res, ms));
+
+class WaitTimeGenerator {
+  constructor(defaultIntervalMs, minValue) {
+    (this.timestamp = null), (this.prevWaitTime = null), (this.defaultIntervalMs = defaultIntervalMs || 3000), (this.minValue = minValue);
+  }
+  _getWaitTimeFromTimestamp() {
+    if (!this.timestamp) {
+      this.timestamp = new Date();
+    }
+    const sec = this.timestamp.getSeconds();
+    const defaultSec = this.defaultIntervalMs / 1000;
+    const d = parseInt(sec / defaultSec);
+    const waitSec = defaultSec * (d + 1) - sec;
+    return waitSec * 1000;
+  }
+  async getWaitTime(plannedTime) {
+    if (!this.timestamp || (this.prevWaitTime === this.minValue && plannedTime !== this.minValue)) {
+      this.timestamp = new Date();
+      const waitMs = this._getWaitTimeFromTimestamp();
+      this.prevWaitTime = waitMs;
+      return waitMs;
+    }
+    this.prevWaitTime = plannedTime;
+    return plannedTime;
+  }
+}
 
 module.exports = {
   filterQueryParser,
@@ -131,5 +157,6 @@ module.exports = {
   m3u8Header,
   toHHMMSS,
   logerror,
-  timer
+  timer,
+  WaitTimeGenerator,
 };

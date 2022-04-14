@@ -12,7 +12,7 @@ const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
 
-const { filterQueryParser, toHHMMSS } = require('./util.js');
+const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
 const { version } = require('../package.json');
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
@@ -166,14 +166,17 @@ class ChannelEngine {
     }, 3000);
 
     const StreamSwitchLoop = async (timeIntervalMs) => {
+      const minIntervalMs = 50;
+      const WTG = new WaitTimeGenerator(timeIntervalMs, minIntervalMs);
       while(true) {
         try {
           const ts_1 = Date.now();
           await this.updateStreamSwitchAsync()
           const ts_2 = Date.now();
-          let interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? 50 : (timeIntervalMs - (ts_2 - ts_1)); 
-          await timer(interval)
-          debug(`StreamSwitchLoop waited for all channels. Next tick in: ${interval}ms`)
+          const  interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? minIntervalMs : (timeIntervalMs - (ts_2 - ts_1)); 
+          const tickInterval = await WTG.getWaitTime(interval);
+          await timer(tickInterval)
+          debug(`StreamSwitchLoop waited for all channels. Next tick in: ${tickInterval}ms`)
         } catch (err) {
           console.error(err)
           debug(`StreamSwitchLoop iteration failed. Trying Again in 1000ms!`);
