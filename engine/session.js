@@ -582,6 +582,9 @@ class Session {
     // As a FOLLOWER, we might need to read up from shared store... 
     if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
       debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
+      if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
+        this.alreadyCleredVodCache = false;
+      }
       if (!isLeader && !this.alreadyClearedVodCache) {
         debug(`[${this._sessionId}]: Not a leader and have just set 'playheadState.vodMediaSeqVideo' to 0|1. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache();
