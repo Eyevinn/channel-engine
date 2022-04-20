@@ -289,6 +289,14 @@ class Session {
     this.switchDataForSession.transitionSegments = segments;
     this.switchDataForSession.mediaSeqOffset = mSeqOffset;
 
+    let waitTimeMs = 2000;
+    for (let i = segments[Object.keys(segments)[0]].length - 1; 0 < i; i--) {
+      if (segments[Object.keys(segments)[0]][i].duration) {
+        waitTimeMs = parseInt(1000 * (segments[Object.keys(segments)[0]][i].duration / 3), 10);
+        break;
+      }
+    }
+    
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (!isLeader) {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
@@ -315,14 +323,14 @@ class Session {
       }
       debug(`[${this._sessionId}]: NEW LEADER: Setting state=VOD_RELOAD_INIT`);
       this.isSwitchingBackToV2L = true;
-      await this._sessionState.set("state", SessionState.VOD_RELOAD_INIT)
+      await this._sessionState.set("state", SessionState.VOD_RELOAD_INIT);
 
     } else {
       let vodReloaded = await this._sessionState.get("vodReloaded");
-      let attempts = 9;
+      let attempts = 12;
       while (!vodReloaded && attempts > 0) {
-        debug(`[${this._sessionId}]: LEADER: Waiting (1000ms) to buy some time reloading vod and adding it to store! (tries left=${attempts})`);
-        await timer(1000);
+        debug(`[${this._sessionId}]: LEADER: Waiting (${waitTimeMs}ms) to buy some time reloading vod and adding it to store! (tries left=${attempts})`);
+        await timer(waitTimeMs);
         vodReloaded = await this._sessionState.get("vodReloaded");
         attempts--;
       }
@@ -961,6 +969,7 @@ class Session {
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
         }
+        this.alreadyClearedVodCache = false;
         return;
       case SessionState.VOD_NEXT_INIT:
         try {
