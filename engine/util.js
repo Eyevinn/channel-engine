@@ -1,4 +1,5 @@
 const { version } = require("../package.json");
+const fetch = require("node-fetch");
 
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
@@ -150,6 +151,68 @@ class WaitTimeGenerator {
   }
 }
 
+const findNearestValue = (val, array) => {
+  const sorted = array.sort((a, b) => b - a);
+  return sorted.reduce((a, b) => {
+    return Math.abs(b - val) < Math.abs(a - val) ? b : a;
+  });
+}
+
+const isValidUrl = (url) => {
+  try {
+    const _url = new URL(url);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+
+const fetchWithRetry = async (uri, opts, maxRetries, retryDelayMs, timeoutMs, debug) => {
+  if (!debug) {
+    var debug = (msg) => { console.log(msg); };
+  } 
+  let tryFetchCount = 0;
+  const RETRY_LIMIT = maxRetries || 5;
+  const TIMEOUT_LIMIT = timeoutMs || 10 * 1000;
+  const RETRY_DELAY = retryDelayMs || 1000;
+  while (tryFetchCount < RETRY_LIMIT) {
+    tryFetchCount++;
+    debug(`Fetching URI -> ${uri}, attempt ${tryFetchCount} of ${maxRetries}`);
+    //
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      `Request Timeout after (${TIMEOUT_LIMIT})ms @ ${uri}`;
+      controller.abort();
+    }, TIMEOUT_LIMIT);
+    try {
+      const fetchOpts = Object.assign({ signal: controller.signal }, opts);
+      const response = await fetch(uri, fetchOpts);
+
+      if (response.status >= 400 && response.status < 600) {
+        const msg = `Bad response from URI: ${uri}\nReturned Status Code: ${response.status}`;
+        debug(msg);
+        if (tryFetchCount === maxRetries) {
+          return Promise.resolve(response);
+        }
+        debug(`Going to try fetch again in ${RETRY_DELAY}ms`);
+        await timer(RETRY_DELAY);
+        continue;
+      }
+      // Return Good response
+      return Promise.resolve(response);
+    } catch (err) {
+      debug(`Node-Fetch Error on URI: ${uri}\nFull Error -> ${err}`);
+      if (tryFetchCount === maxRetries) {
+        return Promise.reject(err);
+      }
+      continue;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -159,4 +222,7 @@ module.exports = {
   logerror,
   timer,
   WaitTimeGenerator,
+  findNearestValue,
+  isValidUrl,
+  fetchWithRetry
 };
