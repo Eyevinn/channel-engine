@@ -136,6 +136,11 @@ class StreamSwitchManager {
     return uuidv4();
   }
 
+  getPrerollUri(channelId) {
+    const defaultPrerollSlateUri = "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
+    return defaultPrerollSlateUri;
+  }
+
   getSchedule(channelId) {
     return new Promise((resolve, reject) => {
       if (this.schedule[channelId]) {
@@ -155,7 +160,7 @@ class StreamSwitchManager {
             type: StreamType.LIVE,
             start_time: startOffset,
             end_time: endTime,
-            uri: "https://d2fz24s2fts31b.cloudfront.net/out/v1/2e5b17b7dd0548c7b844eb1b311b6434/manifest.m3u8",
+            uri: "https://d2fz24s2fts31b.cloudfront.net/out/v1/6484d7c664924b77893f9b4f63080e5d/manifest.m3u8",
           },
           {
             eventId: this.generateID(),
