@@ -112,7 +112,7 @@ class StreamSwitcher {
       // Load Preroll, if any, once per channel every (maxAge) seconds
       if (!this.prerollsCache[this.sessionId] || this.prerollsCache[this.sessionId].maxAge < tsNow) {
         if (this.streamSwitchManager.getPrerollUri) {
-          const prerollUri = this.streamSwitchManager.getPrerollUri(this.sessionId);
+          const prerollUri = await this.streamSwitchManager.getPrerollUri(this.sessionId);
           if (isValidUrl(prerollUri)) {
             try {
               const segments = await this._loadPreroll(prerollUri);

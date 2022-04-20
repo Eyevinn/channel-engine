@@ -138,7 +138,7 @@ class StreamSwitchManager {
 
   getPrerollUri(channelId) {
     const defaultPrerollSlateUri = "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
-    return defaultPrerollSlateUri;
+    return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
   getSchedule(channelId) {
