@@ -341,7 +341,7 @@ class Session {
     }
   }
 
-  async getCurrentMediaSequenceSegments() {
+  async getCurrentMediaSequenceSegments(opts) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
@@ -361,7 +361,10 @@ class Session {
       state = await this.getSessionState();
     }
 
-    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
+    if (opts && opts.targetMseq) {
+      playheadState.vodMediaSeqVideo = opts.targetMseq;
+    }
 
     // NOTE: Assume that VOD cache was already cleared in 'getCurrentMediaAndDiscSequenceCount()'
     // and that we now have access to the correct vod cache
@@ -426,6 +429,7 @@ class Session {
         return {
           'mediaSeq': (playheadState.mediaSeq + playheadState.vodMediaSeqVideo),
           'discSeq': discSeqCount,
+          'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
         };
       } catch (err) {
         logerror(this._sessionId, err);

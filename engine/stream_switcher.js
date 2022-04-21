@@ -233,7 +233,7 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ INIT Switching from V2L->LIVE ]`);
           this.eventId = scheduleObj.eventId;
           currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
-          currVodSegments = await session.getCurrentMediaSequenceSegments();
+          currVodSegments = await session.getCurrentMediaSequenceSegments({ targetMseq: currVodCounts.vodMediaSeqVideo });
 
           // Insert preroll if available for current channel
           if (this.prerollsCache[this.sessionId]) {
