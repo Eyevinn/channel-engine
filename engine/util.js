@@ -1,5 +1,6 @@
 const { version } = require("../package.json");
 const fetch = require("node-fetch");
+const { AbortController } = require("abort-controller");
 
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
