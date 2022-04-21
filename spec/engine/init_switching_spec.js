@@ -324,6 +324,7 @@ describe("The initialize switching", () => {
     expect(currVodCounts).toEqual({
       mediaSeq: 2,
       discSeq: 0,
+      vodMediaSeqVideo: 2
     });
     expect(currVodSegments[1313000][0]).toEqual({
       duration: 7.5,
@@ -403,6 +404,7 @@ describe("The initialize switching", () => {
     const expectedCounts = {
       mediaSeq: 23,
       discSeq: 1,
+      vodMediaSeqVideo: 3
     };
 
     expect(expectedCounts).toEqual(sessionCounts);
@@ -448,6 +450,7 @@ describe("The initialize switching", () => {
     const expectedCounts = {
       mediaSeq: 8,
       discSeq: 0,
+      vodMediaSeqVideo: 2
     };
 
     expect(expectedCounts).toEqual(sessionCounts);
