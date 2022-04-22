@@ -57,7 +57,7 @@ class Session {
       transitionSegments: null,
       reloadBehind: null,
     }
-    this.alreadyClearedVodCache = null;
+    this.isAllowedToClearVodCache = null;
 
     if (config) {
       if (config.sessionId) {
@@ -476,14 +476,13 @@ class Session {
     if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
       debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-      if (!isLeader && !this.alreadyClearedVodCache) {
+      if (!isLeader && this.isAllowedToClearVodCache) {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache();
-        this.alreadyClearedVodCache = true;
+        this.isAllowedToClearVodCache = false;
       }
     } else {
-      // Reset the value
-      this.alreadyClearedVodCache = false;
+      this.isAllowedToClearVodCache = true;
     }
 
     const currentVod = await this._sessionState.getCurrentVod();
@@ -597,14 +596,13 @@ class Session {
       if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
         this.alreadyCleredVodCache = false;
       }
-      if (!isLeader && !this.alreadyClearedVodCache) {
+      if (!isLeader && this.isAllowedToClearVodCache) {
         debug(`[${this._sessionId}]: Not a leader and have just set 'playheadState.vodMediaSeqVideo' to 0|1. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache();
-        this.alreadyClearedVodCache = true;
+        this.isAllowedToClearVodCache = false;
       }
     } else {
-      // Reset the value
-      this.alreadyClearedVodCache = false;
+      this.isAllowedToClearVodCache = true;
     }
     // Update Value for Previous Sequence
     this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
@@ -959,11 +957,18 @@ class Session {
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
           // Clear Cache if prev count is HIGHER than current...
-          if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video ) {
-            debug(`[${this._sessionId}]: current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
+          if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
+            debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
+          }
+        } else {
+          // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
+          if (this.prevVodMediaSeq.video !== null & sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
+            debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
+            // Allow Follower to clear VodCache...
+            this.isAllowedToClearVodCache = true;
           }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()})`);
@@ -973,7 +978,8 @@ class Session {
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
         }
-        this.alreadyClearedVodCache = false;
+        // Allow Leader|Follower to clear vodCache...
+        this.isAllowedToClearVodCache = true;
         return;
       case SessionState.VOD_NEXT_INIT:
         try {
