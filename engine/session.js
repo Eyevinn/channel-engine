@@ -1153,6 +1153,8 @@ class Session {
             }
             this.waitingForNextVod = true;
           }
+          // Allow Leader|Follower to clear vodCache...
+          this.isAllowedToClearVodCache = true;
           return;
       default:
         throw new Error("Invalid state: " + sessionState.state);
