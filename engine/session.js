@@ -361,9 +361,13 @@ class Session {
       state = await this.getSessionState();
     }
 
-    const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
-    if (opts && opts.targetMseq) {
+    const playheadState = {
+      vodMediaSeqVideo: null
+    }
+    if (opts && opts.targetMseq !== undefined) {
       playheadState.vodMediaSeqVideo = opts.targetMseq;
+    } else {
+      playheadState.vodMediaSeqVideo = await this._playheadState.get("vodMediaSeqVideo");
     }
 
     // NOTE: Assume that VOD cache was already cleared in 'getCurrentMediaAndDiscSequenceCount()'
@@ -566,6 +570,7 @@ class Session {
         } else {
           debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
         }
+        this.isAllowedToClearVodCache = true;
       }
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
@@ -1065,6 +1070,8 @@ class Session {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_NEXT_INITIATING`);
             this.waitingForNextVod = true;
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
+            // Allow Leader|Follower to clear vodCache...
+            this.isAllowedToClearVodCache = true;
             sessionState.currentVod = await this._sessionState.getCurrentVod();
           }
         } catch (err) {
@@ -1081,6 +1088,8 @@ class Session {
             debug("No slate to load");
             throw err;
           }
+          // Allow Leader|Follower to clear vodCache...
+          this.isAllowedToClearVodCache = true;
         }
         break;
         case SessionState.VOD_RELOAD_INIT:
