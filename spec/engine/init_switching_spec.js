@@ -413,12 +413,14 @@ describe("The initialize switching", () => {
       uri: "http://mock.mock.com/180000/seg12.ts",
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 2]).toEqual({
-      discontinuity: true,
-      cue: { in: true },
+      duration: 7.5,
+      timelinePosition: null,
+      uri: 'https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00008.ts',
+      cue: null
     });
     expect(sessionCurrentSegs["1313000"][size - 1]).toEqual({
       duration: 7.5,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00016.ts",
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00010.ts",
       timelinePosition: null,
       cue: null,
     });
@@ -469,7 +471,7 @@ describe("The initialize switching", () => {
     const size = sessionCurrentSegs["1313000"].length;
     expect(sessionCurrentSegs["1313000"][0]).toEqual({
       duration: 7.5,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00011.ts",
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00012.ts",
       timelinePosition: null,
       cue: null,
     });
@@ -745,41 +747,41 @@ describe("The initialize switching", () => {
     const borderSegment = newVodSegments["1313000"][6];
 
     const expectedLastVODSegItem = {
-      duration: 7.2,
-      uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/1000/1000-00008.ts",
-      timelinePosition: null,
-      cue: null,
+      discontinuity: true,
+      daterange: null
     }
     const expectedFirstV2LSegItem = {
-      duration: 10.846444,
-      uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00000.ts",
+      duration: 7.2,
       timelinePosition: null,
       cue: null,
+      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00001.ts'
     }
     const expectedSecondVODSegItem = {
       duration: 7.5075,
-      uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/600/600-00001.ts",
+      uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/1000/1000-00001.ts",
       timelinePosition: null,
       cue: null,
     }
 
     expect(newVodSegments["1313000"][0]).toEqual(expectedLastVODSegItem);
     expect(newVodSegments["1313000"][1]).toEqual({
-      discontinuity: true,
-      daterange: null,
+      duration: 10.846444,
+      timelinePosition: null,
+      cue: null,
+      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00000.ts'
     });
     expect(newVodSegments["1313000"][2]).toEqual(expectedFirstV2LSegItem);
-    expect(newVodSegments["1313000"][5]).toEqual({
-      discontinuity: true,
-      cue: { in: true },
-    });
+    // expect(newVodSegments["1313000"][5]).toEqual({
+    //   discontinuity: true,
+    //   cue: { in: true },
+    // });
     expect(borderSegment.daterange["planned-duration"]).toEqual(vodEventDurationMs2 / 1000);
     expect("start-date" in borderSegment.daterange).toBe(true);
     expect("id" in borderSegment.daterange).toBe(true);
-    expect(borderSegment.duration).toEqual(11.3077);
+    expect(borderSegment.duration).toEqual(11.3447);
     expect(borderSegment.timelinePosition).toEqual(null);
     expect(borderSegment.cue).toEqual(null);
-    expect(borderSegment.uri).toEqual("https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/600/600-00000.ts");
+    expect(borderSegment.uri).toEqual("https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/1000/1000-00000.ts");
     expect(newVodSegments["1313000"][7]).toEqual(expectedSecondVODSegItem);
   });
 
