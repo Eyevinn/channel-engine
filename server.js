@@ -14,12 +14,12 @@ class RefAssetManager {
         {
           id: 1,
           title: "Tears of Steel",
-          uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8",
+          uri: "https://lab-live.cdn.eyevinn.technology/TEST_PDT_3/master.m3u8",
         },
         {
           id: 2,
           title: "VINN",
-          uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
+          uri: "https://lab-live.cdn.eyevinn.technology/SHORT60SEC/master.m3u8",
         },
       ],
     };
@@ -96,8 +96,9 @@ const engineOptions = {
     "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
+  alwaysNewSegments: true
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.port || 8000);
+engine.listen(process.env.PORT || 8000);

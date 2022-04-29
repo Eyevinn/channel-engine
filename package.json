@@ -22,7 +22,7 @@
   "dependencies": {
     "@eyevinn/hls-repeat": "^0.1.1",
     "@eyevinn/hls-truncate": "^0.1.0",
-    "@eyevinn/hls-vodtolive": "^1.17.1",
+    "@eyevinn/hls-vodtolive": "^2.0.0",
     "@eyevinn/m3u8": "^0.4.1",
     "abort-controller": "^3.0.0",
     "debug": "^3.2.7",

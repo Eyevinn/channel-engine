@@ -33,8 +33,12 @@ class ChannelEngine {
       this.adXchangeUri = options.adXchangeUri;
     }
     this.useDemuxedAudio = false;
-    if (options && options.useDemuxedAudio === true) {
+    if (options && options.useDemuxedAudio) {
       this.useDemuxedAudio = true;
+    }
+    this.alwaysNewSegments = false;
+    if (options && options.alwaysNewSegments) {
+      this.alwaysNewSegments = true;
     }
     if (options && options.defaultSlateUri) {
       this.defaultSlateUri = options.defaultSlateUri;
@@ -228,6 +232,7 @@ class ChannelEngine {
         sessionId: channel.id,
         averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
         useDemuxedAudio: options.useDemuxedAudio,
+        alwaysNewSegments: options.alwaysNewSegments,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         targetDurationPadding: channel.options && channel.options.targetDurationPadding ? channel.options.targetDurationPadding : this.streamerOpts.targetDurationPadding,
@@ -444,6 +449,7 @@ class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.defaultAverageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
+      options.alwaysNewSegments = this.alwaysNewSegments;
       options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
       options.targetDurationPadding = this.streamerOpts.targetDurationPadding;

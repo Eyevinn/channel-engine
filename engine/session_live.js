@@ -542,7 +542,7 @@ class SessionLive {
         this.blockGenerateManifest = false;
       }
 
-      let attempts = 5;
+      let attempts = 10;
       //  CHECK AGAIN CASE 1: Store Empty
       while (!leadersMediaSeqRaw && attempts > 0) {
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
@@ -565,7 +565,7 @@ class SessionLive {
         }
       }
 
-      attempts = 5;
+      attempts = 10;
       //  CHECK AGAIN CASE 2: Store Old
       while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;

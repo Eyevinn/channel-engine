@@ -47,6 +47,10 @@ class Session {
       video: null,
       audio: null
     }
+    this.prevMediaSeqOffset = {
+      video: null,
+      audio: null
+    }
     this.waitingForNextVod = false;
     this.leaderIsSettingNextVod = false;
     this.isSwitchingBackToV2L = false;
@@ -58,8 +62,12 @@ class Session {
       reloadBehind: null,
     }
     this.isAllowedToClearVodCache = null;
-
+    this.alwaysNewSegments = null;
     if (config) {
+      if (config.alwaysNewSegments) {
+        this.alwaysNewSegments = config.alwaysNewSegments;
+      }
+
       if (config.sessionId) {
         this._sessionId = config.sessionId;
       }
@@ -195,7 +203,7 @@ class Session {
             this.diffCompensation -= DIFF_COMPENSATION;
           }
           debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
-          if (tickInterval <= 0) {
+          if (tickInterval <= 0.5) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
             tickInterval = this.maxTickInterval / 1000;
@@ -376,7 +384,16 @@ class Session {
     if (currentVod) {
       try {
         const mediaSegments = currentVod.getLiveMediaSequenceSegments(playheadState.vodMediaSeqVideo);
-        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence: ${playheadState.vodMediaSeqVideo}_${currentVod.getLiveMediaSequencesCount()}`);
+
+        let mediaSequenceValue = 0;
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
+          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}`);
+        } else {
+          mediaSequenceValue = playheadState.vodMediaSeqVideo;
+        }
+
+        debug(`[${this._sessionId}]: Requesting all segments from Media Sequence: ${playheadState.vodMediaSeqVideo}(${mediaSequenceValue})_${currentVod.getLiveMediaSequencesCount()}`);
         return mediaSegments;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -428,10 +445,18 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
+        let mediaSequenceValue = 0;
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
+          debug(`[${this._sessionId}]: seqIndex=${playheadState.vodMediaSeqVideo}_seqValue=${mediaSequenceValue}`)
+        } else {
+          mediaSequenceValue = playheadState.vodMediaSeqVideo;
+        }
         const discSeqCount = discSeqOffset + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
-        debug(`[${this._sessionId}]: MediaSeq: (${(playheadState.mediaSeq + playheadState.vodMediaSeqVideo)}) and DiscSeq: (${discSeqCount}) requested `);
+        
+        debug(`[${this._sessionId}]: MediaSeq: (${playheadState.mediaSeq}+${mediaSequenceValue}=${(playheadState.mediaSeq + mediaSequenceValue)}) and DiscSeq: (${discSeqCount}) requested `);
         return {
-          'mediaSeq': (playheadState.mediaSeq + playheadState.vodMediaSeqVideo),
+          'mediaSeq': (playheadState.mediaSeq + mediaSequenceValue),
           'discSeq': discSeqCount,
           'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
         };
@@ -464,6 +489,9 @@ class Session {
     if (this.prevVodMediaSeq.video === null) {
       this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
     }
+    if (this.prevMediaSeqOffset.video === null) {
+      this.prevMediaSeqOffset.video = playheadState.mediaSeq;
+    }
 
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
       debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
@@ -477,8 +505,13 @@ class Session {
     }
 
     // Force reading up from store, but only once if the condition is right
-    if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
+    if (playheadState.vodMediaSeqVideo < 2 || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) { 
       debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
+      debug(`[${this._sessionId}]: current-offset[${playheadState.mediaSeq}]_prev-offset[${this.prevMediaSeqOffset.video}]`);
+      // If true, then we have not updated the prev-values and not cleared the cache yet.
+      if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
+        this.isAllowedToClearVodCache = true;
+      }
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       if (!isLeader && this.isAllowedToClearVodCache) {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
@@ -492,10 +525,17 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
+
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
+          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
+        }
+
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
         debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
         this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
+        this.prevMediaSeqOffset.video = playheadState.mediaSeq;
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -591,19 +631,25 @@ class Session {
     playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
     playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
     playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
+
+    if (currentVod.sequenceAlwaysContainNewSegments) {
+      const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
+      debug(`[${this._sessionId}]: Session can now serve mseq={${playheadState.mediaSeq + mediaSequenceValue}}`);
+    }
+
     debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()})`);
-    let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
-    await this._playheadState.setLastM3u8(m3u8);
 
     // As a FOLLOWER, we might need to read up from shared store... 
-    if (playheadState.vodMediaSeqVideo < 2 || playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) { 
+    if (playheadState.vodMediaSeqVideo < 2 || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) { 
       debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
-      if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
-        this.alreadyCleredVodCache = false;
+      debug(`[${this._sessionId}]: current-offset[${playheadState.mediaSeq}]_prev-offset[${this.prevMediaSeqOffset.video}]`);
+      if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
+        this.isAllowedToClearVodCache = true;
       }
       if (!isLeader && this.isAllowedToClearVodCache) {
         debug(`[${this._sessionId}]: Not a leader and have just set 'playheadState.vodMediaSeqVideo' to 0|1. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache();
+        currentVod = await this._sessionState.getCurrentVod();
         this.isAllowedToClearVodCache = false;
       }
     } else {
@@ -611,7 +657,10 @@ class Session {
     }
     // Update Value for Previous Sequence
     this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
+    this.prevMediaSeqOffset.video = playheadState.mediaSeq;
 
+    let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
+    await this._playheadState.setLastM3u8(m3u8);
     return m3u8;
   }
 
@@ -828,17 +877,21 @@ class Session {
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
       const sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq"]);
-      let length = 0;
+      let endValue = 0;
       let lastDiscontinuity = 0;
       if (currentVod) {
-        length = currentVod.getLiveMediaSequencesCount();
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          endValue = currentVod.getLastSequenceMediaSequenceValue();
+        } else {
+          endValue = currentVod.getLiveMediaSequencesCount();
+        }
         lastDiscontinuity = currentVod.getLastDiscontinuity();
       }
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
       await this._sessionState.setCurrentVod(slateVod); 
-      await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
+      await this._sessionState.set("mediaSeq", sessionState.mediaSeq + endValue);
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
       await this._playheadState.set("playheadRef", Date.now());
@@ -891,7 +944,8 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-              newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+              newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -961,6 +1015,9 @@ class Session {
           if (this.prevVodMediaSeq.video === null) {
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
           }
+          if (this.prevMediaSeqOffset.video === null) {
+            this.prevMediaSeqOffset.video = sessionState.mediaSeq;
+          }
           // Clear Cache if prev count is HIGHER than current...
           if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
@@ -970,8 +1027,9 @@ class Session {
           }
         } else {
           // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
-          if (this.prevVodMediaSeq.video !== null & sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
+          if (this.prevMediaSeqOffset.video !== null & sessionState.mediaSeq !== this.prevMediaSeqOffset.video) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
+            debug(`[${this._sessionId}]: mediaSeq offsets -> current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}]`);
             // Allow Follower to clear VodCache...
             this.isAllowedToClearVodCache = true;
           }
@@ -996,6 +1054,12 @@ class Session {
               return;
             }
             const length = currentVod.getLiveMediaSequencesCount();
+            let endMseqValue;
+            if (currentVod.sequenceAlwaysContainNewSegments) {
+              endMseqValue = currentVod.getLastSequenceMediaSequenceValue();
+            } else {
+              endMseqValue = currentVod.getLiveMediaSequencesCount();
+            }
             const lastDiscontinuity = currentVod.getLastDiscontinuity();
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
             let vodPromise = this._getNextVod();
@@ -1013,7 +1077,8 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-              newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId));
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+              newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -1049,10 +1114,10 @@ class Session {
             debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
+            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + endMseqValue);
+            sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
-            sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + length);
-            sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
             debug(`[${this._sessionId}]: new sequence data set in store [${sessionState.mediaSeq}][${sessionState.discSeq}]`);
             await this._sessionState.remove("nextVod");
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
@@ -1103,7 +1168,12 @@ class Session {
               sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
 
               // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
-              const mSeq = this.switchDataForSession.mediaSeq;
+              let mSeq = this.switchDataForSession.mediaSeq;
+              let currentVod = await this._sessionState.getCurrentVod();
+              if (currentVod.sequenceAlwaysContainNewSegments) {
+                // (!) will need to compensate if using this setting on HLSVod Object.
+                mSeq -= 1;
+              } 
               const dSeq = this.switchDataForSession.discSeq;
               const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
               const reloadBehind = this.switchDataForSession.reloadBehind;
@@ -1122,15 +1192,14 @@ class Session {
               // 3) Set new media segments/currentVod, to carry on the continuity from session-live
               debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
               const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
-              let currentVod = await this._sessionState.getCurrentVod();
-              let currentMseq = playheadState.vodMediaSeqVideo + mSeqOffset;
-              if (currentMseq > currentVod.getLiveMediaSequencesCount() - 1) {
-                currentMseq = currentVod.getLiveMediaSequencesCount() - 1;
+              let nextMseq = playheadState.vodMediaSeqVideo + 1;
+              if (nextMseq > currentVod.getLiveMediaSequencesCount() - 1) {
+                nextMseq = currentVod.getLiveMediaSequencesCount() - 1;
               }
 
               // TODO: Support reloading with audioSegments as well
 
-              await currentVod.reload(currentMseq, segments, null, reloadBehind);
+              await currentVod.reload(nextMseq, segments, null, reloadBehind);
               await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
               await this._sessionState.set("vodReloaded", 1);
               await this._sessionState.set("vodMediaSeqVideo", 0);
@@ -1210,7 +1279,8 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId));
+          const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+          hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
@@ -1254,7 +1324,8 @@ class Session {
 
         slateVod.load()
         .then(() => {
-          hlsVod = new HLSVod(nexVodUri, null, null, null, m3u8Header(this._instanceId));
+          const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+          hlsVod = new HLSVod(nexVodUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
           const timestamp = Date.now();
           hlsVod.addMetadata('id', `slate-${timestamp}`);
           hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
