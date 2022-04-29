@@ -108,6 +108,7 @@ Available options when constructing the Channel Engine object are:
 - `maxTickInterval`: The maximum interval for playhead tick interval. Default is 10000 ms.
 - `cloudWatchMetrics`: Output CloudWatch JSON metrics on console log. Default is false.
 - `useDemuxedAudio`: Enable playing VODs with multiple audio tracks. Default is false.
+- `alwaysNewSegments`: Force all new HLS media sequences to always contain at least 1 new segment. Default is false.
 
 ## High Availability
 
