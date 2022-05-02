@@ -654,8 +654,8 @@ class SessionLive {
         debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
         // Decrement fetch counter
         FETCH_ATTEMPTS--;
-        // Calculate retry delay time. Default=1500
-        let retryDelayMs = 1500;
+        // Calculate retry delay time. Default=1000
+        let retryDelayMs = 1000;
         if (Object.keys(this.liveSegQueue).length > 0) {
           const firstBw = Object.keys(this.liveSegQueue)[0];
           const lastIdx = this.liveSegQueue[firstBw].length - 1;
