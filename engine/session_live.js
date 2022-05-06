@@ -267,7 +267,7 @@ class SessionLive {
       debug(`[${this.sessionId}]: 'vodSegments' not empty = Using 'transitSegs'`);
     }
 
-    debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: [${this.vodSegments[allBws[0]][0].uri}]`);
+    debug(`[${this.sessionId}]: Setting CurrentMediaSequenceSegments. First seg is: [${this.vodSegments[Object.keys(this.vodSegments)[0]][0].uri}]`);
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (isLeader) {
@@ -501,7 +501,7 @@ class SessionLive {
           this.liveSegQueue[liveBw] = [];
         }
         // Do not push duplicates
-        const liveSegURIs = this.liveSegQueue[liveBw].filter(seg => seg.uri).map(seg => seg.uri);
+        const liveSegURIs = this.liveSegQueue[liveBw].filter((seg) => seg.uri).map((seg) => seg.uri);
         if (liveSegFromLeader.uri && liveSegURIs.includes(liveSegFromLeader.uri)) {
           debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push! (${liveBw})`);
         } else {
@@ -638,7 +638,7 @@ class SessionLive {
       if (manifestList.some((result) => result.status === "rejected")) {
         FETCH_ATTEMPTS--;
         debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again in 1000ms...`);
-        await timer(1000)
+        await timer(1000);
         continue;
       }
 
@@ -678,7 +678,7 @@ class SessionLive {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
         let tries = 20;
 
-        while (!isLeader && (!leadersFirstSeqCounts.liveSourceMseqCount && tries > 0) || leadersFirstSeqCounts.liveSourceMseqCount === 0) {
+        while ((!isLeader && !leadersFirstSeqCounts.liveSourceMseqCount && tries > 0) || leadersFirstSeqCounts.liveSourceMseqCount === 0) {
           debug(`[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms (tries left=${tries})`);
           await timer(1000);
           leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
@@ -719,8 +719,9 @@ class SessionLive {
         }
         if (leadersFirstSeqCounts.mediaSeqCount !== this.mediaSeqCount) {
           this.mediaSeqCount = leadersFirstSeqCounts.mediaSeqCount;
-          debug(`[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${
-            this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`);
+          debug(
+            `[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`
+          );
           const transitSegs = await this.sessionLiveState.get("transitSegs");
           if (!this._isEmpty(transitSegs)) {
             this.vodSegments = transitSegs;
@@ -1070,7 +1071,7 @@ class SessionLive {
         if (startIdx < 0) {
           this.restAmount = startIdx * -1;
           startIdx = 0;
-        } 
+        }
         if (mediaManifestUri) {
           // push segments
           this._addLiveSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetBandwidth, isLeader);
@@ -1092,7 +1093,7 @@ class SessionLive {
    * @param {string} liveTargetBandwidth
    */
   _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetBandwidth, isLeader) {
-    const leaderOrFollower = isLeader ? "LEADER": "NEW FOLLOWER";
+    const leaderOrFollower = isLeader ? "LEADER" : "NEW FOLLOWER";
 
     for (let i = startIdx; i < playlistItems.length; i++) {
       let seg = {};
@@ -1162,7 +1163,7 @@ class SessionLive {
           seg["daterange"] = daterangeData;
         }
         // Push new Live Segments! But do not push duplicates
-        const liveSegURIs = this.liveSegQueue[liveTargetBandwidth].filter(seg => seg.uri).map(seg => seg.uri);
+        const liveSegURIs = this.liveSegQueue[liveTargetBandwidth].filter((seg) => seg.uri).map((seg) => seg.uri);
         if (seg.uri && liveSegURIs.includes(seg.uri)) {
           debug(`[${this.sessionId}]: ${leaderOrFollower}: Found duplicate live segment. Skip push! (${liveTargetBandwidth})`);
         } else {
@@ -1372,12 +1373,12 @@ class SessionLive {
     if (this._isEmpty(this.liveSegQueue)) {
       return null;
     }
-  
-    const bw0 = Object.keys(this.liveSegQueue)[0]; 
+
+    const bw0 = Object.keys(this.liveSegQueue)[0];
     if (this.liveSegQueue[bw0].length === 0) {
       return null;
     }
-    
+
     for (let i = 0; i < this.liveSegQueue[bw0].length; i++) {
       const segment = this.liveSegQueue[bw0][i];
       if (!segment.duration) {
