@@ -15,6 +15,7 @@ const ChaosMonkey = require('./chaos_monkey.js');
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
+const DIFF_CORRECTION_RATE = 0.5;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -212,7 +213,7 @@ class Session {
             }
           // Apply external diff compensation if available.
           if (this.diffCompensation && this.diffCompensation > 0) {
-            const DIFF_COMPENSATION = (reqTickInterval / 2).toFixed(2) * 1000;
+            const DIFF_COMPENSATION = (reqTickInterval * DIFF_CORRECTION_RATE).toFixed(2) * 1000;
             debug(`[${this._sessionId}]: Adding ${DIFF_COMPENSATION}msec to tickInterval to compensate for schedule diff (current=${this.diffCompensation}msec)`);
             tickInterval += (DIFF_COMPENSATION / 1000);
             this.diffCompensation -= DIFF_COMPENSATION;
