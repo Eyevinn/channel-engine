@@ -413,14 +413,12 @@ describe("The initialize switching", () => {
       uri: "http://mock.mock.com/180000/seg12.ts",
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 2]).toEqual({
-      duration: 7.5,
-      timelinePosition: null,
-      uri: 'https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00008.ts',
-      cue: null
+      discontinuity: true,
+      cue: { in: true }
     });
     expect(sessionCurrentSegs["1313000"][size - 1]).toEqual({
-      duration: 7.5,
-      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00010.ts",
+      duration: 11.25,
+      uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00015.ts",
       timelinePosition: null,
       cue: null,
     });
