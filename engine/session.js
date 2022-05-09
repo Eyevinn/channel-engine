@@ -43,6 +43,7 @@ class Session {
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
     this.diffCompensation = null;
+    this.timePositionOffset = 0;
     this.prevVodMediaSeq = {
       video: null,
       audio: null
@@ -180,50 +181,43 @@ class Session {
           const reqTickInterval = playheadState.tickInterval;
           const timeSpentInIncrement = (tsIncrementEnd - tsIncrementBegin) / 1000;
           let tickInterval = reqTickInterval - timeSpentInIncrement;
+          // Apply HLSVod delta time for current msequence.
           const delta = await this._getCurrentDeltaTime();
           if (delta != 0) {
             tickInterval += delta;
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval. tick=${tickInterval}`);
-            
           }
           const position = (await this._getCurrentPlayheadPosition()) * 1000;
-          const timePosition = Date.now() - playheadState.playheadRef;
+          let timePosition = Date.now() - playheadState.playheadRef;
+          // Apply time position offset if set, only after external diff compensation has concluded.
+          if (this.timePositionOffset && this.diffCompensation <= 0 && this.alwaysNewSegments) {
+            timePosition -= this.timePositionOffset;
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset });
+          }
           const diff = position - timePosition;
           debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
-          if (!this.alwaysNewSegments) {
-            if (diff > this.playheadDiffThreshold) {
-              const timeToAdd = ((diff / 1000)) - (this.playheadDiffThreshold / 1000);
-              debug(`[${this._sessionId}]: We are stepping msequences too early. Need to wait longer. adding ${timeToAdd}s`);
-              tickInterval += timeToAdd;
-            } else if (diff < -this.playheadDiffThreshold) {
-              const timeToAdd = ((diff / 1000)) + (this.playheadDiffThreshold / 1000);
-              debug(`[${this._sessionId}]: We are stepping msequences too LATE. Need to fast-forward. adding ${timeToAdd}s`);
-              tickInterval += timeToAdd;
-            }
-          } else {
-            // new mode
-            if (!this.diffCompensation) {
-              // only compensate the playhead if we never got a scedule diff compensation
-              if (diff > this.playheadDiffThreshold) {
-                const timeToAdd = ((diff / 1000)) - (this.playheadDiffThreshold / 1000);
-                debug(`[${this._sessionId}]: We are stepping msequences too early. Need to wait longer. adding ${timeToAdd}s`);
-                tickInterval += timeToAdd;
-              } else if (diff < -this.playheadDiffThreshold) {
-                const timeToAdd = ((diff / 1000)) + (this.playheadDiffThreshold / 1000);
-                debug(`[${this._sessionId}]: We are stepping msequences too LATE. Need to fast-forward. adding ${timeToAdd}s`);
+            if (this.alwaysNewSegments) {
+              // Apply Playhead diff compensation, only after external diff compensation has concluded.
+              if (this.diffCompensation <= 0) {
+                const timeToAdd = this._getPlayheadDiffCompesationValue(diff, this.playheadDiffThreshold);
                 tickInterval += timeToAdd;
               }
+            } else {
+              // Apply Playhead diff compensation, always.
+              const timeToAdd = this._getPlayheadDiffCompesationValue(diff, this.playheadDiffThreshold);
+              tickInterval += timeToAdd;
             }
-          }
-
+          // Apply external diff compensation if available.
           if (this.diffCompensation && this.diffCompensation > 0) {
-            const DIFF_COMPENSATION = 2000;
+            const DIFF_COMPENSATION = (reqTickInterval / 2).toFixed(2) * 1000;
             debug(`[${this._sessionId}]: Adding ${DIFF_COMPENSATION}msec to tickInterval to compensate for schedule diff (current=${this.diffCompensation}msec)`);
             tickInterval += (DIFF_COMPENSATION / 1000);
             this.diffCompensation -= DIFF_COMPENSATION;
           }
+          // Keep tickInterval within upper and lower limits.
           debug(`[${this._sessionId}]: Requested tickInterval=${tickInterval}s (max=${this.maxTickInterval / 1000}s, diffThreshold=${this.playheadDiffThreshold}msec)`);
           if (tickInterval <= 0.5) {
             tickInterval = 0.5;
@@ -237,7 +231,7 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'tickInterval', channel: this._sessionId, tickTimeMs: (tsTickEnd - tsIncrementBegin) });
           if (this.alwaysNewSegments) {
-            // new dynamic base-tickInterval is dur of latest segment
+            // Use dynamic base-tickInterval. Set according to duration of latest segment.
             const lastDuration = await this._getLastDuration(manifest);
             const nextTickInterval = lastDuration < 2 ? 2 : lastDuration;
             await this._playheadState.set("tickInterval", nextTickInterval);
@@ -546,6 +540,18 @@ class Session {
         debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
         await this._sessionState.clearCurrentVodCache();
         this.isAllowedToClearVodCache = false;
+        const diffMs = await this._playheadState.get("diffCompensation");
+        if (diffMs) {
+          this.diffCompensation = diffMs;
+          debug(`[${this._sessionId}]: Setting diffCompensation->${this.diffCompensation}`);
+          if (this.diffCompensation) {
+            this.timePositionOffset = this.diffCompensation;
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'timePositionOffsetUpdated', channel: this._sessionId, offsetMs: this.timePositionOffset });
+          } else{
+            this.timePositionOffset = 0;
+          }
+        }
       }
     } else {
       this.isAllowedToClearVodCache = true;
@@ -683,6 +689,13 @@ class Session {
         if (diffMs) {
           this.diffCompensation = diffMs;
           debug(`[${this._sessionId}]: Setting diffCompensation->${this.diffCompensation}`);
+          if (this.diffCompensation) {
+            this.timePositionOffset = this.diffCompensation;
+            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'timePositionOffsetUpdated', channel: this._sessionId, offsetMs: this.timePositionOffset });
+          } else{
+            this.timePositionOffset = 0;
+          }
         }
         this.isAllowedToClearVodCache = false;
       }
@@ -1129,6 +1142,13 @@ class Session {
               loadPromise = newVod.loadAfter(currentVod);
               if (vodResponse.diffMs) {
                 this.diffCompensation = vodResponse.diffMs;
+                if (this.diffCompensation) {
+                  this.timePositionOffset = this.diffCompensation;
+                  cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+                  { event: 'timePositionOffsetUpdated', channel: this._sessionId, offsetMs: this.timePositionOffset });
+                } else{
+                  this.timePositionOffset = 0;
+                }
               }
             } else {
               loadPromise = new Promise((resolve, reject) => {
@@ -1178,6 +1198,13 @@ class Session {
             if (diffMs) {
               this.diffCompensation = diffMs;
               debug(`[${this._sessionId}]: Setting diffCompensation=${this.diffCompensation}`);
+              if (this.diffCompensation) {
+                this.timePositionOffset = this.diffCompensation;
+                cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+                { event: 'timePositionOffsetUpdated', channel: this._sessionId, offsetMs: this.timePositionOffset });
+              } else{
+                this.timePositionOffset = 0;
+              }
             }
           }
         } catch (err) {
@@ -1504,6 +1531,21 @@ class Session {
         reject(err);
       }
     });
+  }
+
+  _getPlayheadDiffCompesationValue(diffMs, thresholdMs) {
+    let compensationSec = 0;
+    if (diffMs > thresholdMs) {
+      compensationSec = (diffMs / 1000) - (thresholdMs / 1000);
+      debug(`[${this._sessionId}]: Playhead stepping msequences too early. Need to wait longer. adding ${compensationSec}s`);
+      return compensationSec;
+    } else if (diffMs < -thresholdMs) {
+      compensationSec = (diffMs / 1000) + (thresholdMs / 1000);
+      debug(`[${this._sessionId}]: Playhead stepping msequences too LATE. Need to fast-forward. adding ${compensationSec}s`);
+      return compensationSec;
+    } else {
+      return compensationSec;
+    }
   }
 }
 
