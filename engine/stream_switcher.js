@@ -482,7 +482,7 @@ class StreamSwitcher {
           if (mediaUri.match("^http")) {
             mediaURIs[bw] = mediaUri;
           } else {
-            mediaURIs[bw] = new URL(mediaUri, uri);
+            mediaURIs[bw] = new URL(mediaUri, uri).href;
           }
         }
 
@@ -575,7 +575,7 @@ class StreamSwitcher {
             if (playlistItem.properties.uri.match("^http")) {
               segmentUri = playlistItem.properties.uri;
             } else {
-              segmentUri = new URL(playlistItem.properties.uri, mediaURIs[bw]);
+              segmentUri = new URL(playlistItem.properties.uri, mediaURIs[bw]).href;
             }
             seg["duration"] = playlistItem.properties.duration;
             seg["uri"] = segmentUri;
