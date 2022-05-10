@@ -109,6 +109,9 @@ class ChannelEngine {
     if (options && options.forceTargetDuration) {
       this.streamerOpts.forceTargetDuration = options.forceTargetDuration;
     }
+    if (options && options.diffCompensationRate) {
+      this.streamerOpts.diffCompensationRate = options.diffCompensationRate;
+    }
     const handleMasterRoute = async (req, res, next) => {
       debug(req.params);
       let m;
@@ -237,6 +240,7 @@ class ChannelEngine {
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         targetDurationPadding: channel.options && channel.options.targetDurationPadding ? channel.options.targetDurationPadding : this.streamerOpts.targetDurationPadding,
         forceTargetDuration: channel.options && channel.options.forceTargetDuration ? channel.options.forceTargetDuration : this.streamerOpts.forceTargetDuration,
+        diffCompensationRate: channel.options && channel.options.diffCompensationRate ? channel.options.diffCompensationRate : this.streamerOpts.diffCompensationRate,
         profile: channel.profile,
         audioTracks: channel.audioTracks,
         closedCaptions: channel.closedCaptions,
@@ -454,6 +458,7 @@ class ChannelEngine {
       options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
       options.targetDurationPadding = this.streamerOpts.targetDurationPadding;
       options.forceTargetDuration = this.streamerOpts.forceTargetDuration;
+      options.diffCompensationRate = this.streamerOpts.diffCompensationRate;
       // if we are initiating a master manifest
       // outside of specific Channel context,
       // if slate options are set at the ChannelEngine level, then set these here
