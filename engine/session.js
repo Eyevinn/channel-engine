@@ -15,7 +15,7 @@ const ChaosMonkey = require('./chaos_monkey.js');
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
-const DIFF_CORRECTION_RATE = 0.5;
+const DEFAULT_DIFF_COMPENSATION_RATE = 0.5;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -43,6 +43,7 @@ class Session {
     this.cloudWatchLogging = false;
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
+    this.diffCompensationRate = DEFAULT_DIFF_COMPENSATION_RATE;
     this.diffCompensation = null;
     this.timePositionOffset = 0;
     this.prevVodMediaSeq = {
@@ -118,6 +119,9 @@ class Session {
       }
       if (config.forceTargetDuration) {
         this.forceTargetDuration = config.forceTargetDuration;
+      }
+      if (config.diffCompensationRate) {
+        this.diffCompensationRate = config.diffCompensationRate;
       }
     }
   }
@@ -213,7 +217,7 @@ class Session {
             }
           // Apply external diff compensation if available.
           if (this.diffCompensation && this.diffCompensation > 0) {
-            const DIFF_COMPENSATION = (reqTickInterval * DIFF_CORRECTION_RATE).toFixed(2) * 1000;
+            const DIFF_COMPENSATION = (reqTickInterval * this.diffCompensationRate).toFixed(2) * 1000;
             debug(`[${this._sessionId}]: Adding ${DIFF_COMPENSATION}msec to tickInterval to compensate for schedule diff (current=${this.diffCompensation}msec)`);
             tickInterval += (DIFF_COMPENSATION / 1000);
             this.diffCompensation -= DIFF_COMPENSATION;

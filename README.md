@@ -109,6 +109,7 @@ Available options when constructing the Channel Engine object are:
 - `cloudWatchMetrics`: Output CloudWatch JSON metrics on console log. Default is false.
 - `useDemuxedAudio`: Enable playing VODs with multiple audio tracks. Default is false.
 - `alwaysNewSegments`: Force all new HLS media sequences to always contain at least 1 new segment. Default is false.
+- `diffCompensationRate`: The rate for how much time is added on each sequence to slow down the playhead until it is back on schedule. Default is 0.5 (delay with half a segment duration).
 
 ## High Availability
 
