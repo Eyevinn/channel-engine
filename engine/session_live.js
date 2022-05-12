@@ -253,14 +253,30 @@ class SessionLive {
         if (segments[bw][0].discontinuity) {
           segments[bw].shift();
         }
-
+        let cueInExists = null;
         for (let segIdx = 0; segIdx < segments[bw].length; segIdx++) {
-          this.vodSegments[bw].push(segments[bw][segIdx]);
+          const v2lSegment = segments[bw][segIdx];
+          if (v2lSegment.cue) {
+            if (v2lSegment.cue["in"]) {
+              cueInExists = true;
+            } else {
+              cueInExists = false;
+            }
+          }
+          this.vodSegments[bw].push(v2lSegment);
         }
-        if (!segments[bw][segments[bw].length - 1].discontinuity) {
-          this.vodSegments[bw].push({ discontinuity: true, cue: { in: true } });
+
+        const endIdx = segments[bw].length - 1;
+        if (!segments[bw][endIdx].discontinuity) {
+          const finalSegItem = { discontinuity: true };
+          if (!cueInExists) {
+            finalSegItem["cue"] = { in: true };
+          }
+          this.vodSegments[bw].push(finalSegItem);
         } else {
-          segments[bw][segments[bw].length - 1]["cue"] = { in: true };
+          if (!cueInExists) {
+            segments[bw][endIdx]["cue"] = { in: true };
+          }
         }
       }
     } else {
