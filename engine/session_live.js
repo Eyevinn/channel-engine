@@ -218,6 +218,7 @@ class SessionLive {
         this.masterManifestUri = masterManifestUri;
         if (this.sessionLiveProfile) {
           this._filterLiveProfiles();
+          debug(`[${this.sessionId}]: Filtered Live profiles! (${Object.keys(this.mediaManifestURIs).length}) profiles left!`);
         }
       } catch (err) {
         this.masterManifestUri = null;
@@ -617,7 +618,7 @@ class SessionLive {
     // ---------------------------------
     let FETCH_ATTEMPTS = 10;
     this.liveSegsForFollowers = {};
-
+    let bandwidthsToSkipOnRetry = [];
     while (FETCH_ATTEMPTS > 0) {
       if (isLeader) {
         debug(`[${this.sessionId}]: LEADER: Trying to fetch manifests for all bandwidths\n Attempts left=[${FETCH_ATTEMPTS}]`);
@@ -635,9 +636,15 @@ class SessionLive {
       let manifestList = [];
       this.pushAmount = 0;
       try {
+        if (bandwidthsToSkipOnRetry.length > 0) {
+          debug(`[${this.sessionId}]: (X) Skipping loadMedia promises for bws ${JSON.stringify(bandwidthsToSkipOnRetry)}`);
+        }
         // Collect Live Source Requesting Promises
         for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
           let bw = Object.keys(this.mediaManifestURIs)[i];
+          if (bandwidthsToSkipOnRetry.includes(bw)) {
+            continue;
+          }
           livePromises.push(this._loadMediaManifest(bw));
           debug(`[${this.sessionId}]: Pushed loadMedia promise for bw=[${bw}]`);
         }
@@ -658,16 +665,28 @@ class SessionLive {
         continue;
       }
 
-      const allMediaSeqCounts = manifestList.map((item) => {
-        if (item.status === "rejected") {
-          return item.reason.mediaSeq;
+      // Store the results locally
+      manifestList.forEach((variantItem) => {
+        const bw = variantItem.value.bandwidth;
+        if (!this.liveSourceM3Us[bw]) {
+          this.liveSourceM3Us[bw] = {};
         }
-        return item.value.mediaSeq;
+        this.liveSourceM3Us[bw] = variantItem.value;
       });
 
+      const allStoredMediaSeqCounts = Object.keys(this.liveSourceM3Us).map((variant) => this.liveSourceM3Us[variant].mediaSeq);
+
       // Handle if mediaSeqCounts are NOT synced up!
-      if (!allMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
-        debug(`[${this.sessionId}]: Live Mseq counts=[${allMediaSeqCounts}]`);
+      if (!allStoredMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+        debug(`[${this.sessionId}]: Live Mseq counts=[${allStoredMediaSeqCounts}]`);
+        // Figure out what bw's are behind.
+        const higestMediaSeqCount = Math.max(...allStoredMediaSeqCounts);
+        bandwidthsToSkipOnRetry = Object.keys(this.liveSourceM3Us).filter((bw) => {
+          if (this.liveSourceM3Us[bw].mediaSeq === higestMediaSeqCount) {
+            return true;
+          }
+          return false;
+        });
         // Decrement fetch counter
         FETCH_ATTEMPTS--;
         // Calculate retry delay time. Default=1000
@@ -688,7 +707,7 @@ class SessionLive {
         continue;
       }
 
-      currentMseqRaw = allMediaSeqCounts[0];
+      currentMseqRaw = allStoredMediaSeqCounts[0];
 
       if (!isLeader) {
         let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
@@ -749,7 +768,6 @@ class SessionLive {
         if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCount) {
           this.pushAmount = 1; // Follower from start
         } else {
-
           // TODO: To support and account for past discontinuity tags in the Live Source stream,
           // we will need to get the real 'current' discontinuity-sequence count from Leader somehow.
 
@@ -1046,8 +1064,8 @@ class SessionLive {
           const resolveObj = {
             M3U: m3u,
             mediaSeq: m3u.get("mediaSequence"),
+            bandwidth: liveTargetBandwidth,
           };
-          this.liveSourceM3Us[liveTargetBandwidth] = resolveObj;
           resolve(resolveObj);
         } catch (exc) {
           debug(`[${this.sessionId}]: Error when parsing latest manifest`);
