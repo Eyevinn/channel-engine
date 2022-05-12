@@ -1236,12 +1236,9 @@ class Session {
           try {
             debug(`[${this._sessionId}]: state=VOD_RELOAD_INIT`);
             if (isLeader) {
-
               const startTS = Date.now();
-
               // 1) To tell Follower that, Leader is working on it!
               sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
-
               // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
               let mSeq = this.switchDataForSession.mediaSeq;
               let currentVod = await this._sessionState.getCurrentVod();
@@ -1258,17 +1255,14 @@ class Session {
               const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
               const reloadBehind = this.switchDataForSession.reloadBehind;
               const segments = this.switchDataForSession.transitionSegments;
-
               if ([mSeq,dSeq,mSeqOffset,reloadBehind,segments].includes(null)) {
                 debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
                 return;
               }
-
               await this._sessionState.set("mediaSeq", mSeq);
               await this._playheadState.set("mediaSeq", mSeq);
               await this._sessionState.set("discSeq", dSeq);
               debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
-
               // 3) Set new media segments/currentVod, to carry on the continuity from session-live
               debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
               const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
@@ -1277,8 +1271,10 @@ class Session {
                 nextMseq = currentVod.getLiveMediaSequencesCount() - 1;
               }
 
-              // TODO: Support reloading with audioSegments as well
-
+              // ---------------------------------------------------.
+              // TODO: Support reloading with audioSegments as well |
+              // ---------------------------------------------------'
+              
               await currentVod.reload(nextMseq, segments, null, reloadBehind);
               await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
               await this._sessionState.set("vodReloaded", 1);
@@ -1287,13 +1283,12 @@ class Session {
               await this._playheadState.set("vodMediaSeqVideo", 0);
               await this._playheadState.set("vodMediaSeqAudio", 0);
               await this._playheadState.set("playheadRef", Date.now());
+               // 4) Log to debug and cloudwatch
               debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
-              // 4) emit cloudwatch event object
               debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
               debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
               debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
               cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "switchback", channel: this._sessionId, reqTimeMs: Date.now() - startTS });
-
               return;
             } else {
               debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_RELOAD_INITIATING`);
