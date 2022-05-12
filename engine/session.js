@@ -566,14 +566,16 @@ class Session {
     if (currentVod) {
       try {
 
+        let manifestMseq = playheadState.mediaSeq + playheadState.vodMediaSeqVideo;
         if (currentVod.sequenceAlwaysContainNewSegments) {
           const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
           debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
+          manifestMseq = playheadState.mediaSeq + mediaSequenceValue;
         }
 
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
+        debug(`[${this._sessionId}]: [${manifestMseq}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
         this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         this.prevMediaSeqOffset.video = playheadState.mediaSeq;
         return m3u8;
@@ -1234,34 +1236,33 @@ class Session {
           try {
             debug(`[${this._sessionId}]: state=VOD_RELOAD_INIT`);
             if (isLeader) {
-
               const startTS = Date.now();
-
               // 1) To tell Follower that, Leader is working on it!
               sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
-
               // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
               let mSeq = this.switchDataForSession.mediaSeq;
               let currentVod = await this._sessionState.getCurrentVod();
               if (currentVod.sequenceAlwaysContainNewSegments) {
                 // (!) will need to compensate if using this setting on HLSVod Object.
-                mSeq -= 1;
-              } 
+                Object.keys(this.switchDataForSession.transitionSegments).forEach(bw => {
+                  let shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  if (shiftedSeg && shiftedSeg.discontinuity) {
+                    shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  }
+                });
+              }
               const dSeq = this.switchDataForSession.discSeq;
               const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
               const reloadBehind = this.switchDataForSession.reloadBehind;
               const segments = this.switchDataForSession.transitionSegments;
-
               if ([mSeq,dSeq,mSeqOffset,reloadBehind,segments].includes(null)) {
                 debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
                 return;
               }
-
               await this._sessionState.set("mediaSeq", mSeq);
               await this._playheadState.set("mediaSeq", mSeq);
               await this._sessionState.set("discSeq", dSeq);
               debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
-
               // 3) Set new media segments/currentVod, to carry on the continuity from session-live
               debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
               const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
@@ -1270,8 +1271,10 @@ class Session {
                 nextMseq = currentVod.getLiveMediaSequencesCount() - 1;
               }
 
-              // TODO: Support reloading with audioSegments as well
-
+              // ---------------------------------------------------.
+              // TODO: Support reloading with audioSegments as well |
+              // ---------------------------------------------------'
+              
               await currentVod.reload(nextMseq, segments, null, reloadBehind);
               await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
               await this._sessionState.set("vodReloaded", 1);
@@ -1280,13 +1283,12 @@ class Session {
               await this._playheadState.set("vodMediaSeqVideo", 0);
               await this._playheadState.set("vodMediaSeqAudio", 0);
               await this._playheadState.set("playheadRef", Date.now());
+               // 4) Log to debug and cloudwatch
               debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
-              // 4) emit cloudwatch event object
               debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
               debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
               debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
               cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "switchback", channel: this._sessionId, reqTimeMs: Date.now() - startTS });
-
               return;
             } else {
               debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_RELOAD_INITIATING`);
