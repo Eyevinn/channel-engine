@@ -566,14 +566,16 @@ class Session {
     if (currentVod) {
       try {
 
+        let manifestMseq = playheadState.mediaSeq + playheadState.vodMediaSeqVideo;
         if (currentVod.sequenceAlwaysContainNewSegments) {
           const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
           debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
+          manifestMseq = playheadState.mediaSeq + mediaSequenceValue;
         }
 
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
+        debug(`[${this._sessionId}]: [${manifestMseq}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
         this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         this.prevMediaSeqOffset.video = playheadState.mediaSeq;
         return m3u8;
@@ -1245,8 +1247,13 @@ class Session {
               let currentVod = await this._sessionState.getCurrentVod();
               if (currentVod.sequenceAlwaysContainNewSegments) {
                 // (!) will need to compensate if using this setting on HLSVod Object.
-                mSeq -= 1;
-              } 
+                Object.keys(this.switchDataForSession.transitionSegments).forEach(bw => {
+                  let shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  if (shiftedSeg && shiftedSeg.discontinuity) {
+                    shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  }
+                });
+              }
               const dSeq = this.switchDataForSession.discSeq;
               const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
               const reloadBehind = this.switchDataForSession.reloadBehind;
