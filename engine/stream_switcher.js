@@ -628,6 +628,9 @@ class StreamSwitcher {
         if (lastSeg.uri && !lastSeg.discontinuity) {
           toSegments[bw].push({ discontinuity: true, cue: { in: true } });
           OUTPUT_SEGMENTS[bw] = toSegments[bw].concat(fromSegments[targetBw]);
+        } else if (lastSeg.discontinuity && !lastSeg.cue) {
+          toSegments[bw][toSegments[bw].length - 1].cue = { in: true }
+          OUTPUT_SEGMENTS[bw] = toSegments[bw].concat(fromSegments[targetBw]);
         } else {
           OUTPUT_SEGMENTS[bw] = toSegments[bw].concat(fromSegments[targetBw]);
           OUTPUT_SEGMENTS[bw].push({ discontinuity: true });
