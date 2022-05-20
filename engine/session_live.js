@@ -562,6 +562,18 @@ class SessionLive {
       let attempts = 10;
       //  CHECK AGAIN CASE 1: Store Empty
       while (!leadersMediaSeqRaw && attempts > 0) {
+        if (!leadersMediaSeqRaw) {
+          isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+          if (isLeader) {
+            debug(`[${this.instanceId}]: I'm the new leader`);
+            return;
+          }
+        }
+
+        if (!this.allowedToSet) {
+          debug(`[${this.sessionId}]: We are about to switch away from LIVE. Abort fetching from Store`);
+          break;
+        }
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
         const waitTimeMs = parseInt(segDur / 3, 10);
         debug(`[${this.sessionId}]: FOLLOWER: Leader has not put anything in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
@@ -572,19 +584,25 @@ class SessionLive {
       }
 
       if (!leadersMediaSeqRaw) {
-        isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-        if (isLeader) {
-          debug(`[${this.instanceId}]: I'm the new leader`);
-          return;
-        } else {
-          debug(`[${this.instanceId}]: The leader is still alive`);
-          return;
-        }
+        debug(`[${this.instanceId}]: The leader is still alive`);
+        return;
       }
 
       attempts = 10;
       //  CHECK AGAIN CASE 2: Store Old
       while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
+        if (!this.allowedToSet) {
+          debug(`[${this.sessionId}]: We are about to switch away from LIVE. Abort fetching from Store`);
+          break;
+        }
+        if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+          isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
+          if (isLeader) {
+            debug(`[${this.instanceId}][${this.sessionId}]: I'm the new leader`);
+            return;
+          }
+        }
+
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
         const waitTimeMs = parseInt(segDur / 3, 10);
         debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
@@ -593,18 +611,10 @@ class SessionLive {
         leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
         attempts--;
       }
-
-      if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
-        isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-        if (isLeader) {
-          debug(`[${this.instanceId}][${this.sessionId}]: I'm the new leader`);
-          return;
-        } else {
-          debug(`[${this.instanceId}][${this.sessionId}]: The leader is still alive`);
-          return;
-        }
+      if(leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+        debug(`[${this.instanceId}][${this.sessionId}]: The leader is still alive`);
+        return;
       }
-
       // Follower updates its manifest building blocks (segment holders & counts)
       this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
       this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
@@ -807,7 +817,7 @@ class SessionLive {
       const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
       const counts = await this.sessionLiveState.get("firstCounts");
       const leadersFirstMseqRaw = counts.liveSourceMseqCount;
-      if (leadersCurrentMseqRaw !== null && leadersCurrentMseqRaw !== currentMseqRaw) {
+      if (leadersCurrentMseqRaw !== null && leadersCurrentMseqRaw > currentMseqRaw) {
         // if leader never had any segs from prev mseq
         if (leadersFirstMseqRaw !== null && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
           // Follower updates it's manifest ingedients (segment holders & counts)
@@ -855,8 +865,8 @@ class SessionLive {
         // Do not replace old data with empty data
         if (segListSize > 0) {
           debug(`[${this.sessionId}]: LEADER: Adding data to store!`);
-          await this.sessionLiveState.set("liveSegsForFollowers", this.liveSegsForFollowers);
           await this.sessionLiveState.set("lastRequestedMediaSeqRaw", this.lastRequestedMediaSeqRaw);
+          await this.sessionLiveState.set("liveSegsForFollowers", this.liveSegsForFollowers);
         }
       }
 
