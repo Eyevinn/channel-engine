@@ -307,9 +307,6 @@ class StreamSwitcher {
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
-          await sessionLive.resetSession();
-          sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
-
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
@@ -331,6 +328,9 @@ class StreamSwitcher {
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
           await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
 
+          await sessionLive.resetSession();
+          sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
+
           this.working = false;
           this.streamTypeLive = false;
           debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
@@ -349,8 +349,6 @@ class StreamSwitcher {
           this.eventId = scheduleObj.eventId;
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-          await sessionLive.resetSession();
-          sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
 
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
           if (!eventSegments) {
@@ -369,9 +367,11 @@ class StreamSwitcher {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
           }
-
           await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
+          await sessionLive.resetSession();
+          sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
+          
           this.working = false;
           this.streamTypeLive = false;
           debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
