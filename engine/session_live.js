@@ -85,7 +85,7 @@ class SessionLive {
     if (resetDelay === null || resetDelay < 0) {
       resetDelay = RESET_DELAY;
     }
-
+    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Resetting SessionLive values in Store ${resetDelay === 0 ? "Immediately" : `after a delay=(${resetDelay}ms)`}`);
     await timer(resetDelay);
     await this.sessionLiveState.set("liveSegsForFollowers", null);
     await this.sessionLiveState.set("lastRequestedMediaSeqRaw", null);
@@ -95,7 +95,7 @@ class SessionLive {
       mediaSeqCount: null,
       discSeqCount: null,
     });
-    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: Resetting SessionLive values in Store ${resetDelay === 0 ? "Immediately" : `after a delay=(${resetDelay}ms)`}`);
+    debug(`[${this.instanceId}][${this.sessionId}]: LEADER: SessionLive values in Store have now been reset!`);
   }
 
   async resetSession() {
