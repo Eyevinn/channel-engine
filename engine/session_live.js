@@ -604,7 +604,7 @@ class SessionLive {
           }
         }
         if (this._containsSegment(this.liveSegsForFollowers, liveSegsInStore)) {
-          debug(`[${this.sessionId}]: FOLLOWER: _containsSegment=true,leadersMediaSeqRaw=${leadersMediaSeqRaw},this.lastRequestedMediaSeqRaw=${this.lastRequestedMediaSeqRaw}`);
+          debug(`[${this.sessionId}]: FOLLOWER: _containsSegment=true,${leadersMediaSeqRaw},${this.lastRequestedMediaSeqRaw}`);
         }
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
         const waitTimeMs = parseInt(segDur / 3, 10);
