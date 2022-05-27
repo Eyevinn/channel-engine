@@ -588,9 +588,10 @@ class SessionLive {
         return;
       }
 
+      let liveSegsInStore = await this.sessionLiveState.get("liveSegsForFollowers");
       attempts = 10;
       //  CHECK AGAIN CASE 2: Store Old
-      while (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) {
+      while ((leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) || (this._containsSegment(this.liveSegsForFollowers, liveSegsInStore) && attempts > 0)) {
         if (!this.allowedToSet) {
           debug(`[${this.sessionId}]: We are about to switch away from LIVE. Abort fetching from Store`);
           break;
@@ -602,22 +603,26 @@ class SessionLive {
             return;
           }
         }
-
+        if (this._containsSegment(this.liveSegsForFollowers, liveSegsInStore)) {
+          debug(`[${this.sessionId}]: FOLLOWER: _containsSegment=true,leadersMediaSeqRaw=${leadersMediaSeqRaw},this.lastRequestedMediaSeqRaw=${this.lastRequestedMediaSeqRaw}`);
+        }
         const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
         const waitTimeMs = parseInt(segDur / 3, 10);
         debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
         await timer(waitTimeMs);
         this.timerCompensation = false;
         leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+        liveSegsInStore = await this.sessionLiveState.get("liveSegsForFollowers");
         attempts--;
       }
-      if(leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+      // FINALLY
+      if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
         debug(`[${this.instanceId}][${this.sessionId}]: The leader is still alive`);
         return;
       }
       // Follower updates its manifest building blocks (segment holders & counts)
       this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
-      this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
+      this.liveSegsForFollowers = liveSegsInStore;
       debug(`[${this.sessionId}]: These are the segments from store: [${JSON.stringify(this.liveSegsForFollowers)}]`);
       this._updateLiveSegQueue();
       return;
@@ -1444,6 +1449,26 @@ class SessionLive {
       }
     }
     return true;
+  }
+
+  _containsSegment(segments, newSegments) {
+    if (!segments || !newSegments) {
+      return false;
+    }
+    if (Object.keys(segments).length === 0 || Object.keys(newSegments).length === 0) {
+      return false;
+    }
+    const someBw = Object.keys(segments)[0];
+    const segList = segments[someBw];
+    const mostRecentSegment = segList[segList.length - 1];
+
+    const segListNew = newSegments[someBw];
+    const mostRecentSegmentNew = segListNew[segListNew.length - 1];
+
+    if (mostRecentSegmentNew.uri === mostRecentSegment.uri) {
+      return true;
+    }
+    return false;
   }
 }
 
