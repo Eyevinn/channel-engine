@@ -512,7 +512,7 @@ class Session {
     }
 
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo", "discSeq"]);
-    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
 
     if (this.prevVodMediaSeq.video === null) {
       this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
@@ -522,13 +522,20 @@ class Session {
     }
 
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
-      debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
-      const m3u8 = await this._playheadState.getLastM3u8();
-      if (m3u8) {
-        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
-        return m3u8;
+      const state = await this._sessionState.get("state");
+      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_NEXT_INITIATING].includes(state)) {
+        debug(`[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date. Waiting 500ms before reading from store again`);
+        await timer(500);
+        playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
       } else {
-        debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
+        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
+        const m3u8 = await this._playheadState.getLastM3u8();
+        if (m3u8) {
+          this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
+          return m3u8;
+        } else {
+          debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
+        }
       }
     }
 
