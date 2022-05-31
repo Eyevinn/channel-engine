@@ -523,8 +523,8 @@ class Session {
 
     if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
       const state = await this._sessionState.get("state");
-      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_NEXT_INITIATING].includes(state)) {
-        debug(`[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date. Waiting 500ms before reading from store again`);
+      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state)) {
+        debug(`[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqVideo}_${sessionState.vodMediaSeqVideo}). Waiting 500ms before reading from store again`);
         await timer(500);
         playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
       } else {
