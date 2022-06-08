@@ -521,7 +521,9 @@ class Session {
       this.prevMediaSeqOffset.video = playheadState.mediaSeq;
     }
 
-    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo) {
+    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo ||
+      (playheadState.vodMediaSeqVideo < sessionState.vodMediaSeqVideo &&
+         playheadState.mediaSeq === this.prevMediaSeqOffset.video)) {
       const state = await this._sessionState.get("state");
       if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state)) {
         debug(`[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqVideo}_${sessionState.vodMediaSeqVideo}). Waiting 500ms before reading from store again`);
@@ -572,8 +574,8 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-
         let manifestMseq = playheadState.mediaSeq + playheadState.vodMediaSeqVideo;
+        let manifestDseq = sessionState.discSeq + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
         if (currentVod.sequenceAlwaysContainNewSegments) {
           const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
           debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
@@ -582,7 +584,7 @@ class Session {
 
         debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
         const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-        debug(`[${this._sessionId}]: [${manifestMseq}][${sessionState.discSeq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
+        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
         this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
         this.prevMediaSeqOffset.video = playheadState.mediaSeq;
         return m3u8;
