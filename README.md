@@ -4,6 +4,16 @@ The Eyevinn Channel Engine is an NPM library that provides the functionality to 
 
 Live demo here: [https://vod2live.eyevinn.technology](https://vod2live.eyevinn.technology)
 
+## Requirements
+
+Supported Node.js Versions
+
+| Version | Supported | 
+| ------- | --------- |
+| 14.x    | Yes       |
+| 16.x    | Yes       |
+| 18.x    | No        |
+
 ## Usage
 
 To use this library in your NodeJS project download and install the library in your project by running the following in your project folder.
