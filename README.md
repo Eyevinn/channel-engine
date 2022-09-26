@@ -1,10 +1,25 @@
-The Eyevinn Channel Engine is an NPM library that provides the functionality to generate "fake" live HLS stream by stitching HLS VOD's together. The library is provided as open source and this repository includes a basic reference implementation as a guide on how the library can be used.
+# Eyevinn Channel Engine
+> *Open Source FAST Channel Engine based on VOD2Live technology*
+
+[![Slack](http://slack.streamingtech.se/badge.svg)](http://slack.streamingtech.se)
+
+Eyevinn Channel Engine is a core component library for creating FAST channels based on VOD2Live technology. Combine this vod2live technology component with your business and scheduling logic to build your very own and unique FAST channel engine. 
+
+Please see the [Documentation](https://vod2live.docs.eyevinn.technology) for introductory tutorials and how to get started building your own FAST channel engine.
 
 ![Screenshot of demo site](docs/demosite.png)
 
-Live demo here: [https://vod2live.eyevinn.technology](https://vod2live.eyevinn.technology)
+A live demo and example is available here: [https://vod2live.eyevinn.technology](https://vod2live.eyevinn.technology)
 
-## Requirements
+## Features
+
+- Produce 24/7 HLS live channels based on already transcoded HLS VODs
+- Produce a personalized 24/7 HLS live channel unique for each viewer
+- Mix VOD2Live channel with a "real" live HLS stream
+- Develop adapters to plugin with custom scheduling endpoints
+- And much more!
+
+## System Requirements
 
 Supported Node.js Versions
 
@@ -14,36 +29,20 @@ Supported Node.js Versions
 | 16.x    | Yes       |
 | 18.x    | No        |
 
+## Support
+
+Join our [community on Slack](http://slack.streamingtech.se) where you can post any questions regarding any of our open source projects. Eyevinn's consulting business can also offer you:
+
+- Further development of this component
+- Customization and integration of this component into your platform
+- Support and maintenance agreement
+
+
 ## Usage
 
-To use this library in your NodeJS project download and install the library in your project by running the following in your project folder.
+Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.html) to get started building your own FAST channel engine.
 
-```
-$ npm install --save eyevinn-channel-engine
-```
-
-To run the basic reference implementation included in this repository you run:
-
-```
-$ npm start
-```
-
-To run the basic reference implementation for using demuxed VODs you run:
-
-```
-$ npm run start-demux
-```
-
-And to run the basic reference implementation for using live-mixing you run:
-
-```
-$ npm run start-livemix
-```
-
-
-Then point your HLS video player to `http://localhost:8000/channels/1/master.m3u8` to start playing the linear live stream.
-
-## Master manifest filtering
+### Master manifest filtering
 
 The engine supports a very simplistic and basic filtering of media playlists included in the master manifest. Currently supports to filter on video bandwidth and video height. To specify a filter provide the query parameter `filter` when loading the master manifest, e.g. `(type=="video"ANDheight>200)AND(type=="video"ANDheight<400)`. This needs to be URL encoded resulting in the following URL: `http://localhost:8000/channels/1/master.m3u8?filter=%28type%3D%3D%22video%22ANDheight%3E200%29AND%28type%3D%3D%22video%22ANDheight%3C400%29`.
 
@@ -51,7 +50,7 @@ To filter by video bandwidth use the `systemBitrate` keyword in the query, e.g. 
 
 You can also combine the filter conditions, e.g. `(type=="video"ANDheight>240)AND(type=="video"ANDsystemBitrate<4141000)`
 
-## API
+### API
 
 Initiate and start the engine as below.
 
@@ -121,7 +120,7 @@ Available options when constructing the Channel Engine object are:
 - `alwaysNewSegments`: Force all new HLS media sequences to always contain at least 1 new segment. Default is false.
 - `diffCompensationRate`: The rate for how much time is added on each sequence to slow down the playhead until it is back on schedule. Default is 0.5 (delay with half a segment duration).
 
-## High Availability
+### High Availability
 
 As the engine is not a stateless microservice accomplish high availablity and redundancy is not a trivial task, and requires a shared cache cluster (also redundant) to store current state.
 
@@ -145,7 +144,7 @@ engine.listen(process.env.port || 8000);
 ```
 
 
-## Live Mixing (BETA)
+### Live Mixing
 
 This feature gives the possibility to mix in a true live stream in a Channel Engine powered linear channel (VOD2Live).
 
@@ -265,10 +264,6 @@ If the connection to the Live stream ends or if the current time has passed the 
 
 
 Note that this feature is also currently in beta which means that it is close to production-ready but has not been run in production yet. We appreciate all efforts to try this out and provide feedback.
-
-## Support
-
-Join our [community on Slack](http://slack.streamingtech.se) where you can post any questions regarding any of our open source projects. If you fancy any help in enhancing or integrating this component just drop an email to sales@eyevinn.se and we'll figure something out together.
 
 ## About Eyevinn Technology
 
