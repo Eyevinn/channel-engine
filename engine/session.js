@@ -150,6 +150,7 @@ class Session {
 
     let playheadState = await this._playheadState.getValues(["state"]);
     let state = await this._playheadState.setState(PlayheadState.RUNNING);
+    let numberOfLargeTicks = 0;
     while (state !== PlayheadState.CRASHED) {
       try {
         const tsIncrementBegin = Date.now();
@@ -227,6 +228,12 @@ class Session {
           if (tickInterval <= 0.5) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
+            if (numberOfLargeTicks > 3) {
+              this.maxTickInterval += 2000;
+              numberOfLargeTicks = 0;
+            } else {
+              numberOfLargeTicks++;
+            }
             tickInterval = this.maxTickInterval / 1000;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
