@@ -228,13 +228,17 @@ class Session {
           if (tickInterval <= 0.5) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
+            const change = ceil(abs(tickInterval - this.maxTickInterval));
+            if (DEFAULT_MAX_TICK_INTERVAL === this.maxTickInterval) {
             if (numberOfLargeTicks > 2) {
-              const change = ceil(abs(tickInterval - this.maxTickInterval));
               this.maxTickInterval += change;
               numberOfLargeTicks = 0;
             } else {
               numberOfLargeTicks++;
             }
+          } else {
+            console.warn("Max tick interval is lower than segment length, It should be increased by ", change)
+          }
             tickInterval = this.maxTickInterval / 1000;
           }
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
