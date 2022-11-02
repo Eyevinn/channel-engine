@@ -228,8 +228,9 @@ class Session {
           if (tickInterval <= 0.5) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
-            if (numberOfLargeTicks > 3) {
-              this.maxTickInterval += 2000;
+            if (numberOfLargeTicks > 2) {
+              const change = ceil(abs(tickInterval - this.maxTickInterval));
+              this.maxTickInterval += change;
               numberOfLargeTicks = 0;
             } else {
               numberOfLargeTicks++;
