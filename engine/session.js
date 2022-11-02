@@ -11,7 +11,6 @@ const { PlayheadState } = require('./playhead_state.js');
 
 const { applyFilter, cloudWatchLog, m3u8Header, logerror } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
-const { config } = require('process');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
@@ -230,7 +229,7 @@ class Session {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
             const changeMaxTick = ceil(abs(tickInterval * 1000 - (this.maxTickInterval))) + 1000;
-            if (!config.maxTickInterval) {
+            if (DEFAULT_MAX_TICK_INTERVAL === this.maxTickInterval) {
               if (numberOfLargeTicks > 2) {
                 this.maxTickInterval += changeMaxTick;
                 numberOfLargeTicks = 0;
