@@ -231,7 +231,7 @@ class Session {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
             const changeMaxTick = Math.ceil(Math.abs(tickInterval * 1000 - (this.maxTickInterval))) + 1000;
-            if (!this.maxTickIntervalIsDefault) {
+            if (this.maxTickIntervalIsDefault) {
               if (numberOfLargeTicks > 2) {
                 this.maxTickInterval += changeMaxTick;
                 numberOfLargeTicks = 0;
