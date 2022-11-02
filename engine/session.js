@@ -43,6 +43,7 @@ class Session {
     this.cloudWatchLogging = false;
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
+    this.maxTickIntervalIsDefault = true;
     this.diffCompensationRate = DEFAULT_DIFF_COMPENSATION_RATE;
     this.diffCompensation = null;
     this.timePositionOffset = 0;
@@ -110,6 +111,7 @@ class Session {
       }
       if (config.maxTickInterval) {
         this.maxTickInterval = config.maxTickInterval;
+        this.maxTickIntervalIsDefault = false;
       }
       if (config.disabledPlayhead) {
         this.disabledPlayhead = true;
@@ -228,8 +230,8 @@ class Session {
           if (tickInterval <= 0.5) {
             tickInterval = 0.5;
           } else if (tickInterval > (this.maxTickInterval / 1000)) {
-            const changeMaxTick = ceil(abs(tickInterval * 1000 - (this.maxTickInterval))) + 1000;
-            if (DEFAULT_MAX_TICK_INTERVAL === this.maxTickInterval) {
+            const changeMaxTick = Math.ceil(Math.abs(tickInterval * 1000 - (this.maxTickInterval))) + 1000;
+            if (!this.maxTickIntervalIsDefault) {
               if (numberOfLargeTicks > 2) {
                 this.maxTickInterval += changeMaxTick;
                 numberOfLargeTicks = 0;
