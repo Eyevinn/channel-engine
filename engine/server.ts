@@ -118,7 +118,7 @@ export interface Schedule {
   start_time: number;
   end_time: number;
   uri: string;
-  duration: number;
+  duration?: number;
 }
 
 export interface IStreamSwitchManager {
