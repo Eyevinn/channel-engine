@@ -4,7 +4,7 @@
   "description": "OTT TV Channel Engine",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc --project ./",
+    "build": "tsc --project ./ && cp ./package.json dist/",
     "debug-server": "DEBUG=engine-*,vod-to-live node dist/server.js",
     "test": "$(npm bin)/jasmine",
     "postversion": "git push && git push --tags",
