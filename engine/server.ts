@@ -13,7 +13,7 @@ const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
 
 const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
-const { version } = require('../package.json');
+const { version } = require('../../package.json');
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -23,8 +23,83 @@ const sessionSwitchers = {}; // Should be a persistent store...
 const switcherStatus = {}; // Should be a persistent store...
 const eventStreams = {};
 
-class ChannelEngine {
-  constructor(assetMgr, options) {
+export interface ChannelEngineOpts {
+  defaultSlateUri?: string;
+  slateRepetitions?: number;
+  slateDuration?: number;
+  redisUrl?: string;
+  memcachedUrl?: string;
+  sharedStoreCacheTTL?: number;
+  heartbeat?: string;
+  channelManager: any;
+  streamSwitchManager?: any;
+  cacheTTL?: number;
+  playheadDiffThreshold?: number;
+  maxTickInterval?: number;
+  cloudWatchMetrics?: boolean;
+  useDemuxedAudio?: boolean;
+  alwaysNewSegments?: boolean;
+  diffCompensationRate?: number;
+  staticDirectory?: string;
+  averageSegmentDuration?: number;
+  targetDurationPadding?: boolean;
+  forceTargetDuration?: boolean;
+  adCopyMgrUri?: string; // deprecated
+  adXchangeUri?: string; // deprecated
+}
+
+interface StreamerOpts {
+  defaultAverageSegmentDuration?: number;
+  cacheTTL?: number;
+  defaultPlayheadDiffThreshold?: number;
+  defaultMaxTickInterval?: number;
+  targetDurationPadding?: boolean;
+  forceTargetDuration?: boolean;
+  diffCompensationRate?: number;
+}
+
+export interface VodRequest {
+  sessionId: string;
+  category?: string;
+  playlistId: string;
+}
+
+export interface VodResponseMetadata {
+  id: string;
+  title: string;
+}
+
+export interface VodResponse {
+  uri: string;
+  currentMetadata?: VodResponseMetadata;
+}
+
+export interface IAssetManager {
+  getNextVod: (vodRequest: VodRequest) => Promise<VodResponse>;
+}
+
+export class ChannelEngine {
+  private options?: ChannelEngineOpts;
+  private useDemuxedAudio: boolean;
+  private alwaysNewSegments: boolean;
+  private defaultSlateUri?: string;
+  private slateDuration?: number;
+  private assetMgr: IAssetManager;
+  private streamSwitchManager?: any;
+  private slateRepetitions?: number;
+  private monitorTimer: any;
+  private server: any;
+  private serverStartTime: number;
+  private instanceId: string;
+  private streamSwitchTimeIntervalMs: number;
+  private sessionStore: any;
+  private sessionLiveStore: any;
+  private streamerOpts: StreamerOpts;
+  private logCloudWatchMetrics: boolean;
+  private adCopyMgrUri?: string;
+  private adXchangeUri?: string;
+
+  constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
     if (options && options.adCopyMgrUri) {
       this.adCopyMgrUri = options.adCopyMgrUri;
@@ -412,7 +487,7 @@ class ChannelEngine {
       // Get m3u8s for all langauges for all groups
       const audioGroupsAndLangs = await session.getAudioGroupsAndLangs();
       for (const [audioGroup, languages] of Object.entries(audioGroupsAndLangs)) {
-        languages.forEach((lang) => {
+        (<Array<string>>languages).forEach((lang) => {
           promises.push(addM3U8(audioGroup, lang));
         });
       }
@@ -436,7 +511,7 @@ class ChannelEngine {
     debug(req.query);
     let session;
     let sessionLive;
-    let options = {};
+    let options: any = {};
     if (req.query['playlist']) {
       // Backward compatibility
       options.category = req.query['playlist'];
@@ -719,5 +794,3 @@ class ChannelEngine {
     return err;
   }
 }
-
-module.exports = ChannelEngine;

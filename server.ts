@@ -2,13 +2,15 @@
  * Reference implementation of Channel Engine library
  */
 
-const ChannelEngine = require("./index.js");
+import { ChannelEngine, ChannelEngineOpts, IAssetManager, VodRequest, VodResponse } from "./index";
 
 const STITCH_ENDPOINT =
   process.env.STITCH_ENDPOINT ||
   "http://lambda.eyevinn.technology/stitch/master.m3u8";
-class RefAssetManager {
-  constructor(opts) {
+class RefAssetManager implements IAssetManager {
+  private assets;
+  private pos;
+  constructor(opts?) {
     this.assets = {
       1: [
         {
@@ -37,7 +39,7 @@ class RefAssetManager {
    *      playlistId
    *   }
    */
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
       if (this.assets[channelId]) {
@@ -88,7 +90,7 @@ class RefChannelManager {
 const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
 
-const engineOptions = {
+const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
