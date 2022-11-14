@@ -132,7 +132,7 @@ export interface Schedule {
 }
 
 export interface IStreamSwitchManager {
-  getSchedule: (channelId: string) => Promise<Schedule>;
+  getSchedule: (channelId: string) => Promise<Schedule[]>;
 }
 
 export class ChannelEngine {
