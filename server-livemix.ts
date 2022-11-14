@@ -149,7 +149,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
     return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
-  getSchedule(channelId): Promise<Schedule> {
+  getSchedule(channelId): Promise<Schedule[]> {
     return new Promise((resolve, reject) => {
       if (this.schedule[channelId]) {
         const tsNow = Date.now();
