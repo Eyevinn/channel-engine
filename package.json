@@ -3,6 +3,7 @@
   "version": "3.3.11",
   "description": "OTT TV Channel Engine",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc --project ./ && cp ./package.json dist/",
     "debug-server": "DEBUG=engine-*,vod-to-live node dist/server.js",
