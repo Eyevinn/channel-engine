@@ -2,12 +2,18 @@
  * Reference implementation of Channel Engine library
  */
 
-const ChannelEngine = require("./index.js");
+import { ChannelEngine, ChannelEngineOpts, 
+  IAssetManager, IChannelManager, IStreamSwitchManager,
+  VodRequest, VodResponse, Channel, ChannelProfile,
+  AudioTracks, Schedule
+} from "./index";
 const { v4: uuidv4 } = require('uuid');
 
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
-class RefAssetManager {
-  constructor(opts) {
+class RefAssetManager implements IAssetManager {
+  private assets;
+  private pos;
+  constructor(opts?) {
     if (process.env.TEST_CHANNELS) {
       this.assets = {};
       this.pos = {};
@@ -49,7 +55,7 @@ class RefAssetManager {
    *      playlistId
    *   }
    */
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
       if (this.assets[channelId]) {
@@ -86,8 +92,9 @@ class RefAssetManager {
   }
 }
 
-class RefChannelManager {
-  constructor(opts) {
+class RefChannelManager implements IChannelManager {
+  private channels;
+  constructor(opts?) {
     this.channels = [];
     if (process.env.TEST_CHANNELS) {
       const testChannelsCount = parseInt(process.env.TEST_CHANNELS, 10);
@@ -99,11 +106,11 @@ class RefChannelManager {
     }
   }
 
-  getChannels() {
+  getChannels(): Channel[] {
     return this.channels;
   }
 
-  _getProfile() {
+  _getProfile(): ChannelProfile[] {
     return [
       { bw: 8242000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [1024, 458] },
       { bw: 1274000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [640, 286] },
@@ -116,7 +123,8 @@ const StreamType = Object.freeze({
   VOD: 2,
 });
 
-class StreamSwitchManager {
+class StreamSwitchManager implements IStreamSwitchManager {
+  private schedule;
   constructor() {
     this.schedule = {};
     if (process.env.TEST_CHANNELS) {
@@ -132,16 +140,16 @@ class StreamSwitchManager {
     }
   }
 
-  generateID() {
+  generateID(): string {
     return uuidv4();
   }
 
-  getPrerollUri(channelId) {
+  getPrerollUri(channelId): Promise<string> {
     const defaultPrerollSlateUri = "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
     return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
-  getSchedule(channelId) {
+  getSchedule(channelId): Promise<Schedule> {
     return new Promise((resolve, reject) => {
       if (this.schedule[channelId]) {
         const tsNow = Date.now();

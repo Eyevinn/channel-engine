@@ -32,7 +32,7 @@ export interface ChannelEngineOpts {
   sharedStoreCacheTTL?: number;
   heartbeat?: string;
   channelManager: IChannelManager;
-  streamSwitchManager?: any;
+  streamSwitchManager?: IStreamSwitchManager;
   cacheTTL?: number;
   playheadDiffThreshold?: number;
   maxTickInterval?: number;
@@ -69,9 +69,14 @@ export interface VodResponseMetadata {
   title: string;
 }
 
+export interface VodTimedMetadata {
+  'start-date': string;
+}
+
 export interface VodResponse {
   uri: string;
   currentMetadata?: VodResponseMetadata;
+  timedMetadata?: VodTimedMetadata;
 }
 
 export interface IAssetManager {
@@ -87,10 +92,39 @@ export interface ChannelProfile {
 export interface Channel {
   id: string;
   profile: ChannelProfile[];
+  audioTracks?: AudioTracks[];
+}
+
+export interface AudioTracks {
+  language: string;
+  name: string;
+  default?: boolean;
 }
 
 export interface IChannelManager {
   getChannels: () => Channel[];
+}
+
+export enum ScheduleStreamType {
+  LIVE = 1,
+  VOD = 2
+};
+
+export interface Schedule {
+  eventId: string;
+  assetId: string;
+  title: string;
+  type: ScheduleStreamType;
+  start_time: number;
+  end_time: number;
+  uri: string;
+  duration: number;
+}
+
+export interface IStreamSwitchManager {
+  generateID: () => string;
+  getPrerollUri: (channelId: string) => Promise<string>;
+  getSchedule: (channelId: string) => Promise<Schedule>;
 }
 
 export class ChannelEngine {

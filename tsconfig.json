@@ -5,5 +5,5 @@
     "target": "es5",
     "esModuleInterop": true
   },
-  "include": ["./server.ts", "./engine/**/*"]
+  "include": ["./server.ts", "./server-demux.ts", "./server-livemix.ts", "./engine/**/*"]
 }
