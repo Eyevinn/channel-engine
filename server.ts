@@ -2,13 +2,18 @@
  * Reference implementation of Channel Engine library
  */
 
-const ChannelEngine = require("./index.js");
+import { ChannelEngine, ChannelEngineOpts, 
+  IAssetManager, IChannelManager, 
+  VodRequest, VodResponse, Channel, ChannelProfile
+} from "./index";
 
 const STITCH_ENDPOINT =
   process.env.STITCH_ENDPOINT ||
   "http://lambda.eyevinn.technology/stitch/master.m3u8";
-class RefAssetManager {
-  constructor(opts) {
+class RefAssetManager implements IAssetManager {
+  private assets;
+  private pos;
+  constructor(opts?) {
     this.assets = {
       1: [
         {
@@ -37,7 +42,7 @@ class RefAssetManager {
    *      playlistId
    *   }
    */
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
       if (this.assets[channelId]) {
@@ -70,13 +75,13 @@ class RefAssetManager {
   }
 }
 
-class RefChannelManager {
-  getChannels() {
+class RefChannelManager implements IChannelManager {
+  getChannels(): Channel[] {
     //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
     return [{ id: "1", profile: this._getProfile() }];
   }
 
-  _getProfile() {
+  _getProfile(): ChannelProfile[] {
     return [
       { bw: 6134000, codecs: "avc1.4d001f,mp4a.40.2", resolution: [1024, 458] },
       { bw: 2323000, codecs: "avc1.4d001f,mp4a.40.2", resolution: [640, 286] },
@@ -88,7 +93,7 @@ class RefChannelManager {
 const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
 
-const engineOptions = {
+const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,

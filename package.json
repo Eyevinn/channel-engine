@@ -2,14 +2,16 @@
   "name": "eyevinn-channel-engine",
   "version": "3.3.11",
   "description": "OTT TV Channel Engine",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "debug-server": "DEBUG=engine-*,vod-to-live node server.js",
+    "build": "tsc --project ./ && cp ./package.json dist/",
+    "debug-server": "DEBUG=engine-*,vod-to-live node dist/server.js",
     "test": "$(npm bin)/jasmine",
     "postversion": "git push && git push --tags",
-    "start": "node server.js",
-    "start-demux": "node server-demux.js",
-    "start-livemix": "node server-livemix.js"
+    "start": "node dist/server.js",
+    "start-demux": "node dist/server-demux.js",
+    "start-livemix": "node dist/server-livemix.js"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "contributors": [
@@ -38,6 +40,8 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "jasmine": "^3.1.0"
+    "@types/node": "^18.11.9",
+    "jasmine": "^3.1.0",
+    "typescript": "^4.8.4"
   }
 }

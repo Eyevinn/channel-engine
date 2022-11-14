@@ -2,10 +2,16 @@
  * Reference implementation of Channel Engine library using demuxed VOD assets.
  */
 
-const ChannelEngine = require("./index.js");
+import { ChannelEngine, ChannelEngineOpts, 
+  IAssetManager, IChannelManager, 
+  VodRequest, VodResponse, Channel, ChannelProfile,
+  AudioTracks
+} from "./index";
 
-class RefAssetManager {
-  constructor(opts) {
+class RefAssetManager implements IAssetManager {
+  private assets;
+  private pos;
+  constructor(opts?) {
     this.assets = {
       1: [
         {
@@ -32,11 +38,11 @@ class RefAssetManager {
    *      playlistId
    *   }
    */
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     return new Promise((resolve, reject) => {
       const channelId = vodRequest.playlistId;
       if (this.assets[channelId]) {
-        let vod = this.assets[channelId][this.pos[channelId]++];
+        let vod: VodResponse = this.assets[channelId][this.pos[channelId]++];
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
         }
@@ -51,12 +57,12 @@ class RefAssetManager {
   }
 }
 
-class RefChannelManager {
-  getChannels() {
+class RefChannelManager implements IChannelManager {
+  getChannels(): Channel[] {
     return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), }, ];
   }
 
-  _getProfile() {
+  _getProfile(): ChannelProfile[] {
     return [
       {
         bw: 7934000,
@@ -74,7 +80,7 @@ class RefChannelManager {
       { bw: 495894, codecs: "avc1.4d001f,mp4a.40.2", resolution: [480, 214] },
     ];
   }
-  _getAudioTracks() {
+  _getAudioTracks(): AudioTracks[] {
     return [
       { language: "sp", name: "Spanish" },
       { language: "ru", name: "Russian" },
@@ -86,7 +92,7 @@ class RefChannelManager {
 const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
 
-const engineOptions = {
+const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,

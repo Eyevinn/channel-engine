@@ -1,4 +1,4 @@
-const ChannelEngine = require('../../index.js');
+const { ChannelEngine } = require('../../dist/index.js');
 
 class TestChannelManager {
   constructor() {
