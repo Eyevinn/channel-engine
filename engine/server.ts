@@ -71,16 +71,26 @@ export interface VodResponseMetadata {
 
 export interface VodTimedMetadata {
   'start-date': string;
+  'x-schedule-end'?: string;
+  'x-title'?: string;
+  'x-channelid'?: string;
+  'class': string;
 }
 
 export interface VodResponse {
+  id: string;
   uri: string;
+  offset?: number;
+  diffMs?: number;
+  desiredDuraiton?: number;
+  type?: string;
   currentMetadata?: VodResponseMetadata;
   timedMetadata?: VodTimedMetadata;
 }
 
 export interface IAssetManager {
   getNextVod: (vodRequest: VodRequest) => Promise<VodResponse>;
+  handleError?: (err: string, vodResponse: VodResponse) => void;
 }
 
 export interface ChannelProfile {
