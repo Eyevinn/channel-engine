@@ -71,9 +71,9 @@ export interface VodResponseMetadata {
 
 export interface VodTimedMetadata {
   'start-date': string;
-  'x-schedule-end': string;
-  'x-title': string;
-  'x-channelid': string;
+  'x-schedule-end'?: string;
+  'x-title'?: string;
+  'x-channelid'?: string;
   'class': string;
 }
 

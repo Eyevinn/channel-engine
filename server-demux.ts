@@ -47,7 +47,8 @@ class RefAssetManager implements IAssetManager {
           this.pos[channelId] = 0;
         }
         vod.timedMetadata = {
-          "start-date": new Date().toISOString(),
+          'start-date': new Date().toISOString(),
+          'class': 'se.eyevinn.demo'
         };
         resolve(vod);
       } else {
