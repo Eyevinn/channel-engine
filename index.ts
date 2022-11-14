@@ -1,6 +1,9 @@
 export { ChannelEngine, 
   ChannelEngineOpts, 
   IAssetManager,
+  IChannelManager,
   VodResponse,
-  VodRequest
+  VodRequest,
+  Channel,
+  ChannelProfile
 } from "./engine/server";

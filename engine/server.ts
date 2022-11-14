@@ -31,7 +31,7 @@ export interface ChannelEngineOpts {
   memcachedUrl?: string;
   sharedStoreCacheTTL?: number;
   heartbeat?: string;
-  channelManager: any;
+  channelManager: IChannelManager;
   streamSwitchManager?: any;
   cacheTTL?: number;
   playheadDiffThreshold?: number;
@@ -76,6 +76,21 @@ export interface VodResponse {
 
 export interface IAssetManager {
   getNextVod: (vodRequest: VodRequest) => Promise<VodResponse>;
+}
+
+export interface ChannelProfile {
+  bw: number;
+  codecs: string;
+  resolution: number[];
+}
+
+export interface Channel {
+  id: string;
+  profile: ChannelProfile[];
+}
+
+export interface IChannelManager {
+  getChannels: () => Channel[];
 }
 
 export class ChannelEngine {

@@ -2,7 +2,10 @@
  * Reference implementation of Channel Engine library
  */
 
-import { ChannelEngine, ChannelEngineOpts, IAssetManager, VodRequest, VodResponse } from "./index";
+import { ChannelEngine, ChannelEngineOpts, 
+  IAssetManager, IChannelManager, 
+  VodRequest, VodResponse, Channel, ChannelProfile
+} from "./index";
 
 const STITCH_ENDPOINT =
   process.env.STITCH_ENDPOINT ||
@@ -72,13 +75,13 @@ class RefAssetManager implements IAssetManager {
   }
 }
 
-class RefChannelManager {
-  getChannels() {
+class RefChannelManager implements IChannelManager {
+  getChannels(): Channel[] {
     //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
     return [{ id: "1", profile: this._getProfile() }];
   }
 
-  _getProfile() {
+  _getProfile(): ChannelProfile[] {
     return [
       { bw: 6134000, codecs: "avc1.4d001f,mp4a.40.2", resolution: [1024, 458] },
       { bw: 2323000, codecs: "avc1.4d001f,mp4a.40.2", resolution: [640, 286] },
