@@ -5,7 +5,7 @@
 import { ChannelEngine, ChannelEngineOpts, 
   IAssetManager, IChannelManager, IStreamSwitchManager,
   VodRequest, VodResponse, Channel, ChannelProfile,
-  AudioTracks, Schedule
+  Schedule
 } from "./index";
 const { v4: uuidv4 } = require('uuid');
 
@@ -193,7 +193,7 @@ const refAssetManager = new RefAssetManager();
 const refChannelManager = new RefChannelManager();
 const refStreamSwitchManager = new StreamSwitchManager();
 
-const engineOptions = {
+const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
