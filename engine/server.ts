@@ -132,8 +132,6 @@ export interface Schedule {
 }
 
 export interface IStreamSwitchManager {
-  generateID: () => string;
-  getPrerollUri: (channelId: string) => Promise<string>;
   getSchedule: (channelId: string) => Promise<Schedule>;
 }
 
