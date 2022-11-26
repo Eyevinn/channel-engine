@@ -103,6 +103,15 @@ export interface Channel {
   id: string;
   profile: ChannelProfile[];
   audioTracks?: AudioTracks[];
+  closedCaptions?: ClosedCaptions[];
+}
+
+export interface ClosedCaptions {
+  id: string;
+  lang: string;
+  name: string;
+  default?: boolean;
+  auto?: boolean;
 }
 
 export interface AudioTracks {
