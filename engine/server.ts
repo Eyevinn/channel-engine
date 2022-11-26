@@ -276,6 +276,24 @@ export class ChannelEngine {
       req.query['channel'] = req.params.channelId;
       await handleMasterRoute(req, res, next);
     });   
+    this.server.opts('/live/:file', async (req, res, next) => {
+      res.sendRaw(204, "", {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+        },
+      });
+      next();
+    });
+    this.server.opts('/channels/:channelId/:file', async (req, res, next) => {
+      res.sendRaw(204, "", {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+        },
+      });
+      next();
+    });
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
