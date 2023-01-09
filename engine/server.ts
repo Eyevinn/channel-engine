@@ -104,6 +104,7 @@ export interface Channel {
   profile: ChannelProfile[];
   audioTracks?: AudioTracks[];
   closedCaptions?: ClosedCaptions[];
+  subtitles?: Subtitles[];
 }
 
 export interface ClosedCaptions {
@@ -115,6 +116,12 @@ export interface ClosedCaptions {
 }
 
 export interface AudioTracks {
+  language: string;
+  name: string;
+  default?: boolean;
+}
+
+export interface Subtitles {
   language: string;
   name: string;
   default?: boolean;
@@ -403,6 +410,7 @@ export class ChannelEngine {
         profile: channel.profile,
         audioTracks: channel.audioTracks,
         closedCaptions: channel.closedCaptions,
+        subtitles: channel.subtitles,
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
@@ -578,6 +586,34 @@ export class ChannelEngine {
       await Promise.all(promises);
 
       return allAudioM3U8;
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      return Promise.reject(err)
+    }
+  }
+
+  async getSubtitleManifests(channelId) {
+    if (sessions[channelId]) {
+      const allSubsM3U8 = {};
+      let promises = [];
+      const session = sessions[channelId];
+      const addM3U8 = async (groupId, lang) => {
+        let subtitleM3U8 = await session.getCurrentSubtitleManifestAsync(groupId, lang);
+        if (!allSubsM3U8[groupId]) {
+          allSubsM3U8[groupId] = {};
+        }
+        allSubsM3U8[groupId][lang] = subtitleM3U8;
+      }
+      // Get m3u8s for all langauges for all groups
+      const audioGroupsAndLangs = await session.getSubtitleGroupsAndLangs();
+      for (const [audioGroup, languages] of Object.entries(audioGroupsAndLangs)) {
+        languages.forEach((lang) => {
+          promises.push(addM3U8(audioGroup, lang));
+        });
+      }
+      await Promise.all(promises);
+
+      return allSubsM3U8;
     } else {
       const err = new errs.NotFoundError('Invalid session');
       return Promise.reject(err)

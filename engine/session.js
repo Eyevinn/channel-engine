@@ -97,6 +97,9 @@ class Session {
       if (config.closedCaptions) {
         this._closedCaptions = config.closedCaptions;
       }
+      if (config.subtitles) {
+        this._subtitles = config.subtitles;
+      }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
         this.slateRepetitions = config.slateRepetitions || 10;
@@ -640,6 +643,33 @@ class Session {
     }
   }
 
+  async getCurrentSubtitleManifestAsync(subtitleGroupId, subtitleLanguage) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+
+    const sessionState = await this._sessionState.getValues(["discSeq"]);
+    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqSubtitle"]);
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      try {
+        const m3u8 = currentVod.getLiveMediaSubtitleSequences(playheadState.mediaSeq, subtitleGroupId, subtitleLanguage, playheadState.vodMediaSeqSubtitle, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
+        // # Case: current VOD does not have the selected track.
+        if (!m3u8) {
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqSubtitle}] Request Failed for current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}`);
+        }
+        debug(`[${this._sessionId}]: [${playheadState.mediaSeq + playheadState.vodMediaSeqSubtitle}] Current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage} requested`);
+        return m3u8;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed to generate subtitle manifest: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
+
   async incrementAsync() {
     await this._tickAsync();
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
@@ -868,6 +898,12 @@ class Session {
     if (hasClosedCaptions) {
       this._closedCaptions.forEach(cc => {
         m3u8 += `#EXT-X-MEDIA:TYPE=CLOSED-CAPTIONS,GROUP-ID="cc",LANGUAGE="${cc.lang}",NAME="${cc.name}",DEFAULT=${cc.default ? "YES" : "NO"},AUTOSELECT=${cc.auto ? "YES" : "NO"},INSTREAM-ID="${cc.id}"\n`;
+      });
+    }
+    let hasSubtitles = this._subtitles && this._subtitles.length > 0;
+    if (hasSubtitles) {
+      this._subtitles.forEach(sub => {
+        m3u8 += `#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="${sub.name}",DEFAULT=${sub.default ? "YES" : "NO"},URI=master-${subtitleGroupId}_${subtitle.language}.m3u8,LANGUAGE="${sub.lang}""\n`;
       });
     }
     if (this.use_demuxed_audio === true && this._audioTracks) {

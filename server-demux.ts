@@ -16,7 +16,7 @@ class RefAssetManager implements IAssetManager {
       1: [
         {
           id: 1,
-          title: "Elephants Dream",
+          title: "Elephants Dream",//has subs
           uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8", },
         {
           id: 2,
@@ -60,7 +60,7 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), }, ];
+    return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitles: this._getSubtitles}, ];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -86,6 +86,12 @@ class RefChannelManager implements IChannelManager {
       { language: "sp", name: "Spanish" },
       { language: "ru", name: "Russian" },
       { language: "en", name: "English", default: true },
+    ];
+  }
+  _getSubtitles() {
+    return [
+      { language: "zh", name: "Chinese" },
+      { language: "fr", name: "French" },
     ];
   }
 }
