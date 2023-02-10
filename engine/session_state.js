@@ -131,6 +131,8 @@ class SessionStateStore extends SharedStateStore {
     super("session", opts, {
       mediaSeq: 0,
       discSeq: 0,
+      mediaSeqAudio: 0,
+      discSeqAudio: 0,
       vodMediaSeqVideo: 0,
       vodMediaSeqAudio: 0, // assume only one audio group now
       state: SessionState.VOD_INIT,

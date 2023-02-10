@@ -17,11 +17,11 @@ class RefAssetManager implements IAssetManager {
         {
           id: 1,
           title: "Elephants Dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8", },
+          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8", },
         {
           id: 2,
           title: "Test HLS Bird noises (1m10s)",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",},
+          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8",},
       ],
     };
     this.pos = {
@@ -83,9 +83,7 @@ class RefChannelManager implements IChannelManager {
   }
   _getAudioTracks(): AudioTracks[] {
     return [
-      { language: "sp", name: "Spanish" },
-      { language: "ru", name: "Russian" },
-      { language: "en", name: "English", default: true },
+      { language: "Swedish", name: "Swedish" },
     ];
   }
 }
