@@ -212,7 +212,6 @@ class Session {
             do {
               const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000; // PUT REAL WHEN DONE
               posDiff = position - audioPosition;
-              console.log(posDiff< -thresh && direction <= 0, direction)
               if (posDiff > thresh && direction >= 0) {
                 index++;
                 incrementValue++;
@@ -221,7 +220,6 @@ class Session {
                 incrementValue = 0;
                 index--;
                 direction = -1;
-                console.log(`I MUST b-rEAK`)
                 break;
               } else if (direction > 0 && posDiff < 0) {
                 break;
@@ -229,16 +227,9 @@ class Session {
               if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx || sessionState.vodMediaSeqAudio + index < 0) { 
                 break;
               }
-              console.log(`posDiff_${posDiff};position_${position};audioPosition_${audioPosition};loop?_${!(-thresh < posDiff && posDiff < thresh)},-theshold
-              _${thresh}`)
             } while (!(-thresh < posDiff && posDiff < thresh));
             audioIncrement = incrementValue;
           }
-
-
-
-
-
 
           let timePosition = Date.now() - playheadState.playheadRef;
           // Apply time position offset if set, only after external diff compensation has concluded.
@@ -669,7 +660,6 @@ class Session {
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
       try {
-        console.log("__MSEQ OFFSET AUDIO--> ", playheadState.mediaSeqAudio);
         const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeqAudio, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeqAudio, this.targetDurationPadding, this.forceTargetDuration);
         // # Case: current VOD does not have the selected track.
         if (!m3u8) {
@@ -733,7 +723,6 @@ class Session {
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
-      console.log("videoSeq over the limit!", sessionState.vodMediaSeqVideo, currentVod.getLiveMediaSequencesCount() - 1)
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount("audio") - 1);
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);
@@ -1219,7 +1208,7 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
               newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {

@@ -17,11 +17,12 @@ class RefAssetManager implements IAssetManager {
         {
           id: 1,
           title: "Elephants Dream",
-          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8", },
+          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8",},
         {
           id: 2,
           title: "Test HLS Bird noises (1m10s)",
           uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8",},
+          //uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",},
       ],
     };
     this.pos = {
@@ -96,7 +97,7 @@ const engineOptions: ChannelEngineOpts = {
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
   defaultSlateUri:
-    "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+    "https://trailer-admin-cdn.a2d-stage.tv/hls/test_slate/main_slate.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
