@@ -199,7 +199,7 @@ class Session {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval. tick=${tickInterval}`);
           }
           const position = (await this._getCurrentPlayheadPosition()) * 1000;
-          
+
           if (this.use_demuxed_audio) {
             let currentVod = await this._sessionState.getCurrentVod();
             const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
@@ -216,7 +216,7 @@ class Session {
                 index++;
                 incrementValue++;
                 direction = 1;
-              } else if (posDiff< -thresh && direction <= 0) {
+              } else if (posDiff < -thresh && direction <= 0) {
                 incrementValue = 0;
                 index--;
                 direction = -1;
@@ -224,7 +224,7 @@ class Session {
               } else if (direction > 0 && posDiff < 0) {
                 break;
               }
-              if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx || sessionState.vodMediaSeqAudio + index < 0) { 
+              if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx || sessionState.vodMediaSeqAudio + index < 0) {
                 break;
               }
             } while (!(-thresh < posDiff && posDiff < thresh));
@@ -1069,7 +1069,7 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
               newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
@@ -1438,7 +1438,7 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
             hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
             const timestamp = Date.now();
             hlsVod.addMetadata('id', `slate-${timestamp}`);
@@ -1450,11 +1450,26 @@ class Session {
               mediaManifestStream.push(null);
               return mediaManifestStream;
             };
-            if (afterVod) {
-              return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+            if (this.use_demuxed_audio) {
+              const slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(slateVod.getAudioManifest(audioGroupId, audioLanguage));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+              if (afterVod) {
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+              } else {
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+              }
             } else {
-              return hlsVod.load(null, slateMediaManifestLoader);
+              if (afterVod) {
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+              } else {
+                return hlsVod.load(null, slateMediaManifestLoader);
+              }
             }
+
           })
           .then(() => {
             resolve(hlsVod);
@@ -1483,7 +1498,7 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments };
+            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
             hlsVod = new HLSVod(nexVodUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
             const timestamp = Date.now();
             hlsVod.addMetadata('id', `slate-${timestamp}`);
