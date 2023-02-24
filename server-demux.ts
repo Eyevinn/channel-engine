@@ -2,11 +2,19 @@
  * Reference implementation of Channel Engine library using demuxed VOD assets.
  */
 
-import { ChannelEngine, ChannelEngineOpts, 
-  IAssetManager, IChannelManager, 
-  VodRequest, VodResponse, Channel, ChannelProfile,
-  AudioTracks
+import {
+  ChannelEngine,
+  ChannelEngineOpts,
+  IAssetManager,
+  IChannelManager,
+  VodRequest,
+  VodResponse,
+  Channel,
+  ChannelProfile,
+  AudioTracks,
 } from "./index";
+
+const STITCH_ENDPOINT = "http://localhost:8000/stitch/master.m3u8";
 
 class RefAssetManager implements IAssetManager {
   private assets;
@@ -14,14 +22,33 @@ class RefAssetManager implements IAssetManager {
   constructor(opts?) {
     this.assets = {
       1: [
+        /* #TS+DEMUX HLS VODS */
+        // {
+        //   id: 1,
+        //   title: "Elephants Dream",
+        //   uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+        // },
+        // {
+        //   id: 2,
+        //   title: "Test HLS Bird noises (1m10s)",
+        //   uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+        // },
+        /* #CMAF+DEMUX HLS VODS */
         {
           id: 1,
-          title: "Elephants Dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8", },
+          title: "Nymo Bloopers",
+          uri: "https://vod.streaming.a2d.tv/a07ff4eb-6770-4805-a0ad-a4d1b127880d/4fef8b00-6d0b-11ed-89b6-2b1a288899a0_20356478.ism/.m3u8"
+        },
         {
           id: 2,
-          title: "Test HLS Bird noises (1m10s)",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",},
+          title: "Benjamin Sjunger",
+          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8"
+        },
+        {
+          id: 3,
+          title: "Idol Vinnarlåten",
+          uri: "https://vod.streaming.a2d.tv/369f8dd6-bc62-40a3-b734-4bc1cb50c00b/e9ef93d0-6d10-11ed-83d0-17c0db863fe0_20356484.ism/.m3u8"
+        },
       ],
     };
     this.pos = {
@@ -47,8 +74,32 @@ class RefAssetManager implements IAssetManager {
           this.pos[channelId] = 0;
         }
         vod.timedMetadata = {
-          'start-date': new Date().toISOString(),
-          'class': 'se.eyevinn.demo'
+          "start-date": new Date().toISOString(),
+          class: "se.eyevinn.demo",
+        };
+        const payload = {
+          uri: vod.uri,
+          breaks: [
+            /* #TS+DEMUX HLS BREAK VOD */
+            // {
+            //   pos: 0,
+            //   duration: 60 * 1000,
+            //   url: "https://lab-live.cdn.eyevinn.technology/DEMUX_002/master_demux_aac-en-fr.m3u8",
+            // },
+            /* #CMAF+DEMUX HLS BREAK VOD */
+            {
+              pos: 0,
+              duration: 20 * 1000,
+              url: "https://ovpuspvod.a2d-stage.tv/trailers/63ef9c36e3ffa90028603374/output.ism/.m3u8",
+            },
+          ],
+        };
+        const buff = Buffer.from(JSON.stringify(payload));
+        const encodedPayload = buff.toString("base64");
+        vod = {
+          id: vod.id,
+          title: vod.title,
+          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload,
         };
         resolve(vod);
       } else {
@@ -60,7 +111,7 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), }, ];
+    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -82,11 +133,7 @@ class RefChannelManager implements IChannelManager {
     ];
   }
   _getAudioTracks(): AudioTracks[] {
-    return [
-      { language: "sp", name: "Spanish" },
-      { language: "ru", name: "Russian" },
-      { language: "en", name: "English", default: true },
-    ];
+    return [{ language: "Swedish", name: "Swedish" }];
   }
 }
 
@@ -97,13 +144,16 @@ const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
-  defaultSlateUri:
-    "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  /* #TS+DEMUX SLATE VOD */
+  defaultSlateUri: "https://ovpuspvod.a2d-stage.tv/trailers/bumpers/tv4_spring/output.ism/.m3u8",
+  /* #CMAF+DEMUX SLATE VOD */
+  //defaultSlateUri: "https://ovpuspvod.a2d-stage.tv/trailers/bumpers/tv4_spring/output.ism/.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
+  alwaysNewSegments: true,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.port || 8000);
+engine.listen(process.env.PORT || 8000);
