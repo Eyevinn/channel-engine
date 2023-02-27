@@ -1510,10 +1510,24 @@ class Session {
               mediaManifestStream.push(null);
               return mediaManifestStream;
             };
-            if (afterVod) {
-              return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+            if (this.use_demuxed_audio) {
+              const slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(slateVod.getAudioManifest(audioGroupId, audioLanguage));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+              if (afterVod) {
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+              } else {
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+              }
             } else {
-              return hlsVod.load(null, slateMediaManifestLoader);
+              if (afterVod) {
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader);
+              } else {
+                return hlsVod.load(null, slateMediaManifestLoader);
+              }
             }
           })
           .then(() => {
