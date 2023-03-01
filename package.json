@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc --project ./ && cp ./package.json dist/",
     "debug-server": "DEBUG=engine-*,vod-to-live node dist/server.js",
-    "test": "$(npm bin)/jasmine",
+    "test": "jasmine",
     "postversion": "git push && git push --tags",
     "start": "node dist/server.js",
     "start-demux": "node dist/server-demux.js",
