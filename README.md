@@ -35,6 +35,11 @@ Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.
 
 ## Migration
 
+### Upgrading from 3.4.x to >= 4.0.0
+
+Support for HLS-CMAF and the handling audio and video segments of different durations was added to v4
+and this means that it is not possible to mix muxed TS with demuxed CMAF.
+
 ### Upgrading from 3.3.x to >= 3.4.x
 
 A breaking change was introduced in v3.4.0 when Typescript types were introduced. The library no longer exports a default. This means that you need to change `const ChannelEngine = require('eyevinn-channel-engine')` to `const { ChannelEngine } = require('eyevinn-channel-engine')`;
