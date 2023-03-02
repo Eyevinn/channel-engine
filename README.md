@@ -37,7 +37,7 @@ Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.
 
 ### Upgrading from 3.4.x to >= 4.0.0
 
-Support for HLS-CMAF and the handling audio and video segments of different durations was added to v4
+Support for HLS-CMAF and handling audio and video segments of different durations was added to v4
 and this means that it is not possible to mix muxed TS with demuxed CMAF.
 
 ### Upgrading from 3.3.x to >= 3.4.x
