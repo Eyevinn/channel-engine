@@ -78,6 +78,7 @@ export interface VodTimedMetadata {
 }
 
 export interface VodResponse {
+  title: any;
   id: string;
   uri: string;
   offset?: number;

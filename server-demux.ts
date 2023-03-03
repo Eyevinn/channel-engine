@@ -2,10 +2,16 @@
  * Reference implementation of Channel Engine library using demuxed VOD assets.
  */
 
-import { ChannelEngine, ChannelEngineOpts, 
-  IAssetManager, IChannelManager, 
-  VodRequest, VodResponse, Channel, ChannelProfile,
-  AudioTracks
+import {
+  ChannelEngine,
+  ChannelEngineOpts,
+  IAssetManager,
+  IChannelManager,
+  VodRequest,
+  VodResponse,
+  Channel,
+  ChannelProfile,
+  AudioTracks,
 } from "./index";
 
 class RefAssetManager implements IAssetManager {
@@ -17,11 +23,13 @@ class RefAssetManager implements IAssetManager {
         {
           id: 1,
           title: "Elephants Dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8", },
+          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+        },
         {
           id: 2,
           title: "Test HLS Bird noises (1m10s)",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",},
+          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+        },
       ],
     };
     this.pos = {
@@ -60,7 +68,7 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [ { id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), }, ];
+    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -82,11 +90,7 @@ class RefChannelManager implements IChannelManager {
     ];
   }
   _getAudioTracks(): AudioTracks[] {
-    return [
-      { language: "sp", name: "Spanish" },
-      { language: "ru", name: "Russian" },
-      { language: "en", name: "English", default: true },
-    ];
+    return [{ language: "Swedish", name: "Swedish" }];
   }
 }
 
@@ -97,13 +101,13 @@ const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
-  defaultSlateUri:
-    "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
+  alwaysNewSegments: true,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.port || 8000);
+engine.listen(process.env.PORT || 8000);
