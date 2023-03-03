@@ -1,5 +1,5 @@
 # Eyevinn Channel Engine
-> *Open Source FAST Channel Engine based on VOD2Live technology*
+> *Open Source FAST Channel Engine library based on VOD2Live technology*
 
 [![Slack](http://slack.streamingtech.se/badge.svg)](http://slack.streamingtech.se)
 
