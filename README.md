@@ -42,6 +42,16 @@ Supported Node.js Versions
 
 Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.html) to get started building your own FAST channel engine.
 
+You can also use prebuilt [Eyevinn FAST Engine Docker Container](https://github.com/Eyevinn/docker-fast) based on this library. To try it out you can start an instance with 50 demo channels by running this command:
+
+```
+docker run -d -p 8000:8000 -p 8001:8001 \
+  -e DEMO_NUM_CHANNELS=50 \
+  eyevinntechnology/fast-engine
+```
+
+Open the URL http://localhost:8001/ in your browser for a multiview of all 50 channels, and to playback one of the 50 channels point your HLS video player to the URL: http://localhost:8000/channels/<N>/master.m3u8 where <N> is a number between 1 and 50.
+
 ## Migration
 
 ### Upgrading from 3.4.x to >= 4.0.0
