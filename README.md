@@ -29,6 +29,15 @@ Supported Node.js Versions
 | 16.x    | Yes       |
 | 18.x    | No        |
 
+## Supported Source Formats
+
+| HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | DRM |
+| ---------- | ----- | ------- | ----------- | --------- | --- |
+| HLS + TS   | Yes   | Yes     | Yes*        | TBD       | No  |
+| HLS + CMAF | No    | Yes     | TBD         | TBD       | TBD |
+
+*\* not supported with demuxed sources*
+
 ## Usage
 
 Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.html) to get started building your own FAST channel engine.
