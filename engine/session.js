@@ -245,12 +245,12 @@ class Session {
           if (this.alwaysNewSegments) {
             // Apply Playhead diff compensation, only after external diff compensation has concluded.
             if (this.diffCompensation <= 0) {
-              const timeToAdd = this._getPlayheadDiffCompesationValue(diff, this.playheadDiffThreshold);
+              const timeToAdd = this._getPlayheadDiffCompensationValue(diff, this.playheadDiffThreshold);
               tickInterval += timeToAdd;
             }
           } else {
             // Apply Playhead diff compensation, always.
-            const timeToAdd = this._getPlayheadDiffCompesationValue(diff, this.playheadDiffThreshold);
+            const timeToAdd = this._getPlayheadDiffCompensationValue(diff, this.playheadDiffThreshold);
             tickInterval += timeToAdd;
           }
           // Apply external diff compensation if available.
@@ -1657,7 +1657,7 @@ class Session {
     });
   }
 
-  _getPlayheadDiffCompesationValue(diffMs, thresholdMs) {
+  _getPlayheadDiffCompensationValue(diffMs, thresholdMs) {
     let compensationSec = 0;
     if (diffMs > thresholdMs) {
       compensationSec = (diffMs / 1000) - (thresholdMs / 1000);
