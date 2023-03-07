@@ -16,40 +16,53 @@ import {
 
 const STITCH_ENDPOINT = "http://localhost:8000/stitch/master.m3u8";
 
+
+const getHLSVodList = (opts) => {
+  if (opts.type === "cmaf") {
+    return [
+      {
+        id: 1,
+        title: "Nymo Bloopers",
+        uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8"
+      },
+      {
+        id: 2,
+        title: "Benjamin Sjunger",
+        uri: "https://vod.streaming.a2d.tv/a07ff4eb-6770-4805-a0ad-a4d1b127880d/4fef8b00-6d0b-11ed-89b6-2b1a288899a0_20356478.ism/.m3u8"
+      },
+      {
+        id: 3,
+        title: "Idol Vinnarlåten",
+        uri: "https://vod.streaming.a2d.tv/369f8dd6-bc62-40a3-b734-4bc1cb50c00b/e9ef93d0-6d10-11ed-83d0-17c0db863fe0_20356484.ism/.m3u8"
+      },
+    ]
+  } else {
+    return [
+      {
+        id: 1,
+        title: "OTTera Test Vod - 23min",
+        uri: "https://cdnapisec.kaltura.com/p/513551/sp/51355100/playManifest/entryId/1_fpsqsbf4/format/applehttp/protocol/https/flavorIds/1_7lbzn50a,1_9bvnxo63,1_j873iic0,1_j9w5phf3,1_nwwuphp4,1_09sf9wgp/preferredBitrate/1800/maxBitrate/2800/defaultAudioLang/en/a.m3u8",
+      },
+      {
+        id: 2,
+        title: "Elephants Dream",
+        uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+      },
+      {
+        id: 3,
+        title: "Test HLS Bird noises (1m10s)",
+        uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+      },
+    ]
+  }
+}
+
 class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
   constructor(opts?) {
     this.assets = {
-      1: [
-        /* #TS+DEMUX HLS VODS */
-        // {
-        //   id: 1,
-        //   title: "Elephants Dream",
-        //   uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
-        // },
-        // {
-        //   id: 2,
-        //   title: "Test HLS Bird noises (1m10s)",
-        //   uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
-        // },
-        /* #CMAF+DEMUX HLS VODS */
-        {
-          id: 1,
-          title: "Nymo Bloopers",
-          uri: "https://vod.streaming.a2d.tv/a07ff4eb-6770-4805-a0ad-a4d1b127880d/4fef8b00-6d0b-11ed-89b6-2b1a288899a0_20356478.ism/.m3u8"
-        },
-        {
-          id: 2,
-          title: "Benjamin Sjunger",
-          uri: "https://vod.streaming.a2d.tv/3f389c48-03e3-48a2-8e98-a02c55185a68/4c792a30-89ad-11ed-95d9-1b374c4e2f9f_20411056.ism/.m3u8"
-        },
-        {
-          id: 3,
-          title: "Idol Vinnarlåten",
-          uri: "https://vod.streaming.a2d.tv/369f8dd6-bc62-40a3-b734-4bc1cb50c00b/e9ef93d0-6d10-11ed-83d0-17c0db863fe0_20356484.ism/.m3u8"
-        },
-      ],
+      1: getHLSVodList("ts")
     };
     this.pos = {
       1: 1,
@@ -67,6 +80,7 @@ class RefAssetManager implements IAssetManager {
    */
   getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     return new Promise((resolve, reject) => {
+      const ENABLE_STITCHER = 0;
       const channelId = vodRequest.playlistId;
       if (this.assets[channelId]) {
         let vod: VodResponse = this.assets[channelId][this.pos[channelId]++];
@@ -77,30 +91,32 @@ class RefAssetManager implements IAssetManager {
           "start-date": new Date().toISOString(),
           class: "se.eyevinn.demo",
         };
-        const payload = {
-          uri: vod.uri,
-          breaks: [
-            /* #TS+DEMUX HLS BREAK VOD */
-            // {
-            //   pos: 0,
-            //   duration: 60 * 1000,
-            //   url: "https://lab-live.cdn.eyevinn.technology/DEMUX_002/master_demux_aac-en-fr.m3u8",
-            // },
-            /* #CMAF+DEMUX HLS BREAK VOD */
-            {
-              pos: 0,
-              duration: 20 * 1000,
-              url: "https://ovpuspvod.a2d-stage.tv/trailers/63ef9c36e3ffa90028603374/output.ism/.m3u8",
-            },
-          ],
-        };
-        const buff = Buffer.from(JSON.stringify(payload));
-        const encodedPayload = buff.toString("base64");
-        vod = {
-          id: vod.id,
-          title: vod.title,
-          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload,
-        };
+        if (ENABLE_STITCHER) {
+          const payload = {
+            uri: vod.uri,
+            breaks: [
+              /* #TS+DEMUX HLS BREAK VOD */
+              // {
+              //   pos: 0,
+              //   duration: 60 * 1000,
+              //   url: "https://lab-live.cdn.eyevinn.technology/DEMUX_002/master_demux_aac-en-fr.m3u8",
+              // },
+              /* #CMAF+DEMUX HLS BREAK VOD */
+              {
+                pos: 0,
+                duration: 20 * 1000,
+                url: "https://ovpuspvod.a2d-stage.tv/trailers/63ef9c36e3ffa90028603374/output.ism/.m3u8",
+              },
+            ],
+          };
+          const buff = Buffer.from(JSON.stringify(payload));
+          const encodedPayload = buff.toString("base64");
+          vod = {
+            id: vod.id,
+            title: vod.title,
+            uri: STITCH_ENDPOINT + "?payload=" + encodedPayload,
+          };
+        }
         resolve(vod);
       } else {
         reject("Invalid channelId provided");
@@ -133,7 +149,8 @@ class RefChannelManager implements IChannelManager {
     ];
   }
   _getAudioTracks(): AudioTracks[] {
-    return [{ language: "Swedish", name: "Swedish" }];
+    return [{ language: "en", name: "English", default: true },
+    { language: "fr", name: "French" }];
   }
 }
 
@@ -145,10 +162,10 @@ const engineOptions: ChannelEngineOpts = {
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
   /* #TS+DEMUX SLATE VOD */
-  defaultSlateUri: "https://ovpuspvod.a2d-stage.tv/trailers/bumpers/tv4_spring/output.ism/.m3u8",
+  defaultSlateUri: "https://lab-live.cdn.eyevinn.technology/DEMUX_002/master_demux_aac-en-fr.m3u8",
   /* #CMAF+DEMUX SLATE VOD */
   //defaultSlateUri: "https://ovpuspvod.a2d-stage.tv/trailers/bumpers/tv4_spring/output.ism/.m3u8",
-  slateRepetitions: 10,
+  slateRepetitions: 1,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
   alwaysNewSegments: true,
