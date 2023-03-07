@@ -331,12 +331,14 @@ describe("The initialize switching", () => {
       uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00002.ts",
       timelinePosition: null,
       cue: null,
+      byteRange: undefined,
     });
     expect(currVodSegments[1313000][currVodSegments[1313000].length - 1]).toEqual({
       duration: 7.5,
       uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00008.ts",
       timelinePosition: null,
       cue: null,
+      byteRange: undefined,
     });
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
@@ -421,6 +423,7 @@ describe("The initialize switching", () => {
       uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00015.ts",
       timelinePosition: null,
       cue: null,
+      byteRange: undefined,
     });
     nock.cleanAll();
   });
@@ -472,6 +475,7 @@ describe("The initialize switching", () => {
       uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/600/600-00012.ts",
       timelinePosition: null,
       cue: null,
+      byteRange: undefined,
     });
     expect(sessionCurrentSegs["1313000"][size - 1 - 4]).toEqual({
       discontinuity: true,
@@ -752,13 +756,15 @@ describe("The initialize switching", () => {
       duration: 7.2,
       timelinePosition: null,
       cue: null,
-      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00001.ts'
+      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00001.ts',
+      byteRange: undefined,
     }
     const expectedSecondVODSegItem = {
       duration: 7.5075,
       uri: "https://maitv-vod.lab.eyevinn.technology/BECKY_Trailer_2020.mp4/1000/1000-00001.ts",
       timelinePosition: null,
       cue: null,
+      byteRange: undefined,
     }
 
     expect(newVodSegments["1313000"][0]).toEqual(expectedLastVODSegItem);
@@ -766,7 +772,8 @@ describe("The initialize switching", () => {
       duration: 10.846444,
       timelinePosition: null,
       cue: null,
-      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00000.ts'
+      uri: 'https://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-00000.ts',
+      byteRange: undefined,
     });
     expect(newVodSegments["1313000"][2]).toEqual(expectedFirstV2LSegItem);
     // expect(newVodSegments["1313000"][5]).toEqual({
