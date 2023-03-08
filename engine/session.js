@@ -207,10 +207,10 @@ class Session {
             let incrementValue = 1;
             let index = 0;
             const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
-            const thresh = 0.5
+            const thresh = 0.5;
             let direction = 0;
             do {
-              const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000; // PUT REAL WHEN DONE
+              const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
               posDiff = position - audioPosition;
               if (posDiff > thresh && direction >= 0) {
                 index++;
@@ -582,14 +582,8 @@ class Session {
         await timer(500);
         playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
       } else {
-        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Return the last generated m3u8`);
-        const m3u8 = await this._playheadState.getLastM3u8();
-        if (m3u8) {
-          this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
-          return m3u8;
-        } else {
-          debug(`[${this._sessionId}]: We don't have any previously generated m3u8`);
-        }
+        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Delay media-m3u8 Response by 1000ms`);
+        await timer(1000);
       }
     }
 
@@ -654,18 +648,75 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-
-    const sessionState = await this._sessionState.getValues(["discSeqAudio"]);
+    let currentVod = null;
+    const sessionState = await this._sessionState.getValues(["discSeqAudio", "vodMediaSeqAudio"]);
     const playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
-    const currentVod = await this._sessionState.getCurrentVod();
+
+    if (
+      playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio ||
+      (playheadState.vodMediaSeqAudio < sessionState.vodMediaSeqAudio && playheadState.mediaSeqAudio === this.prevMediaSeqOffset.audio)
+    ) {
+      const state = await this._sessionState.get("state");
+      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state)) {
+        debug(
+          `[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqAudio}_${sessionState.vodMediaSeqAudio}) AUDIO. Waiting 500ms before reading from store again`
+        );
+        await timer(500);
+        playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
+      } else {
+        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Delay audio-m3u8 Response by 1000ms`);
+        await timer(1000);
+      }
+    }
+
+    // local store the prev values
+    if (this.prevVodMediaSeq.audio === null) {
+      this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
+    }
+    if (this.prevMediaSeqOffset.audio === null) {
+      this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
+    }
+    currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
+      // condition suggesting that a new vod should exist
+      if (playheadState.vodMediaSeqAudio < 2 || playheadState.mediaSeqAudio !== this.prevMediaSeqOffset.audio) {
+        const AGE_THRESH = 20 * 1000;
+        let cacheAge = null;
+        if (this._sessionState.cache && this._sessionState.cache.currentVod.ts) {
+          cacheAge = Date.now() - this._sessionState.cache.currentVod.ts;
+        }
+        if (cacheAge !== null && cacheAge > AGE_THRESH) {
+          await timer(500);
+          debug(`[${this._sessionId}]: While requesting audio manifest for ${audioGroupId}-${audioLanguage}, (mseq=${playheadState.vodMediaSeqAudio})(vod cache age=${cacheAge})`);
+          await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+          currentVod = await this._sessionState.getCurrentVod();
+        }
+      }
       try {
-        const m3u8 = currentVod.getLiveMediaAudioSequences(playheadState.mediaSeqAudio, audioGroupId, audioLanguage, playheadState.vodMediaSeqAudio, sessionState.discSeqAudio, this.targetDurationPadding, this.forceTargetDuration);
+        let manifestMseq = playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio;
+        let manifestDseq = sessionState.discSeqAudio + currentVod.discontinuitiesAudio[playheadState.vodMediaSeqAudio];
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          const mediaSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}} AUDIO`);
+          manifestMseq = playheadState.mediaSeqAudio + mediaSequenceValue;
+        }
+        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqAudio}]_[${currentVod.getLiveMediaSequencesCount("audio")}] AUDIO`);
+        const m3u8 = currentVod.getLiveMediaAudioSequences(
+          playheadState.mediaSeqAudio,
+          audioGroupId,
+          audioLanguage,
+          playheadState.vodMediaSeqAudio,
+          sessionState.discSeqAudio,
+          this.targetDurationPadding,
+          this.forceTargetDuration
+        );
         // # Case: current VOD does not have the selected track.
         if (!m3u8) {
           debug(`[${this._sessionId}]: [${playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
         }
-        debug(`[${this._sessionId}]: [${playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
+        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
+        this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
+        this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
@@ -715,7 +766,7 @@ class Session {
         }
         this.isAllowedToClearVodCache = true;
       }
-    } else { // TODO ADD BETTER INCREMENT
+    } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
       if (incOpts) {
         sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", incOpts.audio);
@@ -776,6 +827,10 @@ class Session {
     // Update Value for Previous Sequence
     this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
     this.prevMediaSeqOffset.video = playheadState.mediaSeq;
+    if (this.use_demuxed_audio) {
+      this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
+      this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
+    }
 
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     await this._playheadState.setLastM3u8(m3u8);
@@ -1136,16 +1191,25 @@ class Session {
           if (this.prevMediaSeqOffset.video === null) {
             this.prevMediaSeqOffset.video = sessionState.mediaSeq;
           }
+          if (this.use_demuxed_audio) {
+            if (this.prevVodMediaSeq.audio === null) {
+              this.prevVodMediaSeq.audio = sessionState.vodMediaSeqAudio;
+            }
+            if (this.prevMediaSeqOffset.audio === null) {
+              this.prevMediaSeqOffset.audio = sessionState.mediaSeqAudio;
+            }
+          }
           // Clear Cache if prev count is HIGHER than current...
           if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             await this._sessionState.clearCurrentVodCache();
             currentVod = await this._sessionState.getCurrentVod();
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
+            this.prevVodMediaSeq.audio = sessionState.vodMediaSeqAudio;
           }
         } else {
           // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
-          if (this.prevMediaSeqOffset.video !== null & sessionState.mediaSeq !== this.prevMediaSeqOffset.video) {
+          if ((this.prevMediaSeqOffset.video !== null) & (sessionState.mediaSeq !== this.prevMediaSeqOffset.video)) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             debug(`[${this._sessionId}]: mediaSeq offsets -> current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}]`);
             // Allow Follower to clear VodCache...
