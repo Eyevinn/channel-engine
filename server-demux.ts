@@ -22,8 +22,8 @@ class RefAssetManager implements IAssetManager {
       1: [
         {
           id: 1,
-          title: "Elephants Dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+          title: "Sintel",
+          uri: "https://cdn.bitmovin.com/content/assets/sintel/hls/playlist.m3u8",
         },
         {
           id: 2,
@@ -33,7 +33,7 @@ class RefAssetManager implements IAssetManager {
       ],
     };
     this.pos = {
-      1: 1,
+      1: 0,
     };
   }
 
@@ -90,7 +90,10 @@ class RefChannelManager implements IChannelManager {
     ];
   }
   _getAudioTracks(): AudioTracks[] {
-    return [{ language: "Swedish", name: "Swedish" }];
+    return [
+      { language: "en", name: "English" },
+      { language: "sp", name: "Spanish" }
+    ];
   }
 }
 
