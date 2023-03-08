@@ -119,6 +119,8 @@ export interface ClosedCaptions {
 export interface AudioTracks {
   language: string;
   name: string;
+  channels?: number,
+  codecs?: string,
   default?: boolean;
 }
 

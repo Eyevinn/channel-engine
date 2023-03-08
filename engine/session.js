@@ -716,7 +716,7 @@ class Session {
         );
         // # Case: current VOD does not have the selected track.
         if (!m3u8) {
-          debug(`[${this._sessionId}]: [${playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}s`);
         }
         debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
         this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
@@ -981,11 +981,12 @@ class Session {
           let audioGroupId = audioGroupIds[i];
           for (let j = 0; j < this._audioTracks.length; j++) {
             let audioTrack = this._audioTracks[j];
+            const audioChannels = audioTrack.channels ? audioTrack.channels : 2; // default stereo
             // Make default track if set property is true.
             if (audioTrack.default) {
-              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
+              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="${audioChannels}",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
             } else {
-              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=NO,CHANNELS="2",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
+              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=NO,CHANNELS="${audioChannels}",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
             }
           }
         }
@@ -996,7 +997,12 @@ class Session {
     if (this._sessionProfile) {
       const sessionProfile = filter ? applyFilter(this._sessionProfile, filter) : this._sessionProfile;
       sessionProfile.forEach(profile => {
-        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + ',CODECS="' + profile.codecs + '"' + (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
+        // Find matching AudioGroupId based on codec
+        const audioGroupId = audioGroupIds.find(id => {
+          const audioCodec = profile.codecs.split(",")[1];
+          return id.match(audioCodec);
+        });
+        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + ',CODECS="' + profile.codecs + '"' + (audioGroupId ? `,AUDIO="${audioGroupId}"` : '') + (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     } else {
@@ -1005,7 +1011,6 @@ class Session {
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     }
-
     this.produceEvent({
       type: 'NOW_PLAYING',
       data: {
