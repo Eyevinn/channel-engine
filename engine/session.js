@@ -941,16 +941,7 @@ class Session {
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     }
-    if (this.use_demuxed_audio === true && this._audioTracks) {
-      for (let i = 0; i < audioGroupIds.length; i++) {
-        let audioGroupId = audioGroupIds[i];
-        for (let j = 0; j < this._audioTracks.length; j++) {
-          let audioTrack = this._audioTracks[j];
-          m3u8 += `#EXT-X-STREAM-INF:BANDWIDTH=97000,CODECS="mp4a.40.2",AUDIO="${audioGroupId}"\n`;
-          m3u8 += `master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}\n`;
-        }
-      }
-    }
+
     this.produceEvent({
       type: 'NOW_PLAYING',
       data: {
