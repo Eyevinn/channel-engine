@@ -168,7 +168,7 @@ const engineOptions: ChannelEngineOpts = {
   slateRepetitions: 1,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
-  alwaysNewSegments: true,
+  alwaysNewSegments: false,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
