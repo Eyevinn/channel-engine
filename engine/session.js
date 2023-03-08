@@ -1002,7 +1002,18 @@ class Session {
           const audioCodec = profile.codecs.split(",")[1];
           return id.match(audioCodec);
         });
-        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + ',CODECS="' + profile.codecs + '"' + (audioGroupId ? `,AUDIO="${audioGroupId}"` : '') + (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
+        let videoRange = "SDR";
+        if (profile.videoRange) {
+          videoRange = profile.videoRange;
+        }
+
+        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw +
+          ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + 
+          ',CODECS="' + profile.codecs + '"' + 
+          ',VIDEO-RANGE="' + videoRange + '"' +
+          (profile.frameRate ? `,FRAME-RATE=${profile.frameRate.toFixed(3)}` : '') +
+          (audioGroupId ? `,AUDIO="${audioGroupId}"` : '') + 
+          (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
         m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
       });
     } else {

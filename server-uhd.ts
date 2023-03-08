@@ -70,7 +70,8 @@ class RefChannelManager implements IChannelManager {
   _getProfile(): ChannelProfile[] {
     return [
       { resolution: [1280, 720], bw: 3725519, codecs: "avc1.64001F,mp4a.40.2" },
-      { resolution: [1280, 720], bw: 5903428, codecs: "avc1.64001F,ac-3" }
+      { resolution: [1280, 720], bw: 5903428, codecs: "avc1.64001F,ac-3" },
+      { resolution: [1280, 720], bw: 6676458, videoRange: "PQ", frameRate: 24.000, codecs: "hvc1.2.4.L93.90,mp4a.40.2" },
     ];
   }
 

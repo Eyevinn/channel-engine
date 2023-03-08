@@ -99,6 +99,8 @@ export interface ChannelProfile {
   bw: number;
   codecs: string;
   resolution: number[];
+  videoRange?: string;
+  frameRate?: number;
 }
 
 export interface Channel {
