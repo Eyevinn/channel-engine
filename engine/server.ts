@@ -264,9 +264,11 @@ export class ChannelEngine {
       let m;
       if (req.params.file.match(/master.m3u8/)) {
         await this._handleMasterManifest(req, res, next);
-      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master(\d+)_(\S+)_([0-9]+)p.m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
+        req.params[2] = m[3];
+        req.params[3] = m[4];
         await this._handleMediaManifest(req, res, next);
       } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
@@ -705,21 +707,21 @@ export class ChannelEngine {
   async _handleMediaManifest(req, res, next) {
     debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
-    const session = sessions[req.params[1]];
-    const sessionLive = sessionsLive[req.params[1]];
+    const session = sessions[req.params[3]];
+    const sessionLive = sessionsLive[req.params[3]];
     if (session && sessionLive) {
       try {
-        while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
+        while (switcherStatus[req.params[3]] === null || switcherStatus[req.params[3]] === undefined) {
           debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
           await timer(500);
         }
         let body = null;
-        debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
-        if (switcherStatus[req.params[1]]) {
-          debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
+        debug(`switcherStatus[${req.params[3]}]=[${switcherStatus[req.params[3]]}]`);
+        if (switcherStatus[req.params[3]]) {
+          debug(`[${req.params[3]}]: Responding with Live-stream manifest`);
           body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
         } else {
-          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
+          debug(`[${req.params[3]}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         }
         //verbose(`[${session.sessionId}] body=`);

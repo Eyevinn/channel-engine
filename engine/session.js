@@ -1014,7 +1014,7 @@ class Session {
           (profile.frameRate ? `,FRAME-RATE=${profile.frameRate.toFixed(3)}` : '') +
           (audioGroupId ? `,AUDIO="${audioGroupId}"` : '') + 
           (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-        m3u8 += "master" + profile.bw + ".m3u8;session=" + this._sessionId + "\n";
+        m3u8 += "master" + profile.bw + "_" + videoRange + "_" + profile.resolution[1] + "p" + ".m3u8;session=" + this._sessionId + "\n";
       });
     } else {
       currentVod.getUsageProfiles().forEach(profile => {

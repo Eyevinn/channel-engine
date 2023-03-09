@@ -69,16 +69,20 @@ class RefChannelManager implements IChannelManager {
 
   _getProfile(): ChannelProfile[] {
     return [
-      { resolution: [1280, 720], bw: 3725519, codecs: "avc1.64001F,mp4a.40.2" },
-      { resolution: [1280, 720], bw: 5903428, codecs: "avc1.64001F,ac-3" },
-      { resolution: [1280, 720], bw: 6676458, videoRange: "PQ", frameRate: 24.000, codecs: "hvc1.2.4.L93.90,mp4a.40.2" },
+      { resolution: [640, 360], bw: 3663471, codecs: "avc1.64001F,mp4a.40.2" },
+      { resolution: [1280, 720], bw: 5841380, codecs: "avc1.64001F,mp4a.40.2" },
+      { resolution: [1920, 1080], bw: 8973571, codecs: "avc1.64001F,mp4a.40.2" },
+
+      { resolution: [640, 360], bw: 4301519, codecs: "avc1.64001F,ec-3" },
+      { resolution: [1280, 720], bw: 6479428, codecs: "avc1.64001F,ec-3" },
+      { resolution: [1920, 1080], bw: 9611619, codecs: "avc1.640032,ec-3" },
     ];
   }
 
   _getAudioTracks(): AudioTracks[] {
     return [
       { language: "ja", "name": "日本語", channels: 2, codecs: "mp4a.40.2", default: true },
-      { language: "ja", "name": "日本語", channels: 6, codecs: "ac-3", default: true }
+      { language: "ja", "name": "日本語", channels: 6, codecs: "ec-3", default: true }
     ];
   }
 }
