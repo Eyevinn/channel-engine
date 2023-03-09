@@ -650,7 +650,7 @@ class Session {
     }
     let currentVod = null;
     const sessionState = await this._sessionState.getValues(["discSeqAudio", "vodMediaSeqAudio"]);
-    const playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
 
     if (
       playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio ||
@@ -666,6 +666,7 @@ class Session {
       } else {
         debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Delay audio-m3u8 Response by 1000ms`);
         await timer(1000);
+        playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
       }
     }
 
