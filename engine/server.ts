@@ -46,6 +46,7 @@ export interface ChannelEngineOpts {
   forceTargetDuration?: boolean;
   adCopyMgrUri?: string; // deprecated
   adXchangeUri?: string; // deprecated
+  noSessionDataTags?: boolean;
 }
 
 interface StreamerOpts {
@@ -396,6 +397,7 @@ export class ChannelEngine {
         averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
         useDemuxedAudio: options.useDemuxedAudio,
         alwaysNewSegments: options.alwaysNewSegments,
+        noSessionDataTags: options.noSessionDataTags,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
         maxTickInterval: channel.options && channel.options.maxTickInterval ? channel.options.maxTickInterval : this.streamerOpts.defaultMaxTickInterval,
         targetDurationPadding: channel.options && channel.options.targetDurationPadding ? channel.options.targetDurationPadding : this.streamerOpts.targetDurationPadding,
