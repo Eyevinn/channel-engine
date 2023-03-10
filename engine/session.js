@@ -724,6 +724,7 @@ class Session {
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
       if (this.use_demuxed_audio) {
+        let audioIncrement;
         const position = (await this._getCurrentPlayheadPosition()) * 1000;
         let currentVod = await this._sessionState.getCurrentVod();
         const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
@@ -732,17 +733,15 @@ class Session {
         let index = 0;
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
         const thresh = 0.5;
-        let direction = 0;
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
           posDiff = position - audioPosition;
           if (posDiff < 0) {
             break;
           }
-          if (posDiff > thresh && direction >= 0) {
+          if (posDiff > thresh) {
             index++;
             incrementValue++;
-            direction = 1;
           } else {
             index = incrementValue;
             break;
@@ -752,8 +751,8 @@ class Session {
           }
         } while (!(-thresh < posDiff && posDiff < thresh));
         audioIncrement = index;
+        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
       }
-      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
