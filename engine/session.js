@@ -160,9 +160,7 @@ class Session {
     while (state !== PlayheadState.CRASHED) {
       try {
         const tsIncrementBegin = Date.now();
-        const manifest = await this.incrementAsync({
-          audio: audioIncrement
-        });
+        const manifest = await this.incrementAsync();
         if (!manifest) {
           debug(`[${this._sessionId}]: No manifest available yet, will try again after 1000ms`);
           await timer(1000);
@@ -202,38 +200,6 @@ class Session {
             debug(`[${this._sessionId}]: Delta time is != 0 need will adjust ${delta}sec to tick interval. tick=${tickInterval}`);
           }
           const position = (await this._getCurrentPlayheadPosition()) * 1000;
-
-          if (this.use_demuxed_audio) {
-            let currentVod = await this._sessionState.getCurrentVod();
-            const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
-            let posDiff;
-            let incrementValue = 1;
-            let index = 0;
-            const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
-            const thresh = 0.5;
-            let direction = 0;
-            do {
-              const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
-              posDiff = position - audioPosition;
-              if (posDiff > thresh && direction >= 0) {
-                index++;
-                incrementValue++;
-                direction = 1;
-              } else if (posDiff < -thresh && direction <= 0) {
-                incrementValue = 0;
-                index--;
-                direction = -1;
-                break;
-              } else if (direction > 0 && posDiff < 0) {
-                break;
-              }
-              if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx || sessionState.vodMediaSeqAudio + index < 0) {
-                break;
-              }
-            } while (!(-thresh < posDiff && posDiff < thresh));
-            audioIncrement = incrementValue;
-          }
-
           let timePosition = Date.now() - playheadState.playheadRef;
           // Apply time position offset if set, only after external diff compensation has concluded.
           if (this.timePositionOffset && this.diffCompensation <= 0 && this.alwaysNewSegments) {
@@ -576,18 +542,13 @@ class Session {
       this.prevMediaSeqOffset.video = playheadState.mediaSeq;
     }
 
-    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo ||
-      (playheadState.vodMediaSeqVideo < sessionState.vodMediaSeqVideo &&
-        playheadState.mediaSeq === this.prevMediaSeqOffset.video)) {
+    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo || (playheadState.vodMediaSeqVideo < sessionState.vodMediaSeqVideo && playheadState.mediaSeq === this.prevMediaSeqOffset.video)) {
       const state = await this._sessionState.get("state");
-      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state)) {
-        debug(`[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqVideo}_${sessionState.vodMediaSeqVideo}). Waiting 500ms before reading from store again`);
-        await timer(500);
-        playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-      } else {
-        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Delay media-m3u8 Response by 1000ms`);
-        await timer(1000);
-      }
+      const DELAY_TIME_MS = 1000;
+      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
+      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqVideo}_${sessionState.vodMediaSeqVideo}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
+      await timer(DELAY_TIME_MS);
+      playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
     }
 
     // Force reading up from store, but only once if the condition is right
@@ -655,24 +616,14 @@ class Session {
     const sessionState = await this._sessionState.getValues(["discSeqAudio", "vodMediaSeqAudio"]);
     let playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
 
-    if (
-      playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio ||
-      (playheadState.vodMediaSeqAudio < sessionState.vodMediaSeqAudio && playheadState.mediaSeqAudio === this.prevMediaSeqOffset.audio)
-    ) {
+    if (playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio || (playheadState.vodMediaSeqAudio < sessionState.vodMediaSeqAudio && playheadState.mediaSeqAudio === this.prevMediaSeqOffset.audio)) {
       const state = await this._sessionState.get("state");
-      if ([SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state)) {
-        debug(
-          `[${this._sessionId}]: Recently reloaded Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqAudio}_${sessionState.vodMediaSeqAudio}) AUDIO. Waiting 500ms before reading from store again`
-        );
-        await timer(500);
-        playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
-      } else {
-        debug(`[${this._sessionId}]: Recently Loaded Next Vod. PlayheadState not up-to-date. Delay audio-m3u8 Response by 1000ms`);
-        await timer(1000);
-        playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
-      }
+      const DELAY_TIME_MS = 1000;
+      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
+      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqAudio}_${sessionState.vodMediaSeqAudio}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
+      await timer(DELAY_TIME_MS);
+      playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
     }
-
     // local store the prev values
     if (this.prevVodMediaSeq.audio === null) {
       this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
@@ -684,7 +635,7 @@ class Session {
     if (currentVod) {
       // condition suggesting that a new vod should exist
       if (playheadState.vodMediaSeqAudio < 2 || playheadState.mediaSeqAudio !== this.prevMediaSeqOffset.audio) {
-        const AGE_THRESH = 20 * 1000;
+        const AGE_THRESH = this.averageSegmentDuration * 2;
         let cacheAge = null;
         if (this._sessionState.cache && this._sessionState.cache.currentVod.ts) {
           cacheAge = Date.now() - this._sessionState.cache.currentVod.ts;
@@ -732,7 +683,7 @@ class Session {
     }
   }
 
-  async incrementAsync(incOpts) {
+  async incrementAsync() {
     await this._tickAsync();
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
 
@@ -772,9 +723,37 @@ class Session {
       }
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
-      if (incOpts) {
-        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", incOpts.audio);
+      if (this.use_demuxed_audio) {
+        const position = (await this._getCurrentPlayheadPosition()) * 1000;
+        let currentVod = await this._sessionState.getCurrentVod();
+        const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
+        let posDiff;
+        let incrementValue = 1;
+        let index = 0;
+        const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
+        const thresh = 0.5;
+        let direction = 0;
+        do {
+          const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
+          posDiff = position - audioPosition;
+          if (posDiff < 0) {
+            break;
+          }
+          if (posDiff > thresh && direction >= 0) {
+            index++;
+            incrementValue++;
+            direction = 1;
+          } else {
+            index = incrementValue;
+            break;
+          }
+          if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx) {
+            break;
+          }
+        } while (!(-thresh < posDiff && posDiff < thresh));
+        audioIncrement = index;
       }
+      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
@@ -1691,6 +1670,9 @@ class Session {
   async _getAudioPlayheadPosition(seqIdx) {
     const currentVod = await this._sessionState.getCurrentVod();
     const playheadPositions = currentVod.getPlayheadPositions("audio");
+    if (seqIdx >= playheadPositions.length - 1) {
+      seqIdx = playheadPositions.length - 1
+    }
     debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${playheadPositions[seqIdx]}`);
     return playheadPositions[seqIdx];
   }
