@@ -659,7 +659,7 @@ export class ChannelEngine {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
           "Access-Control-Expose-Headers": "X-Session-Id",
-          "Cache-Control": "no-cache",
+          "Cache-Control": "max-age=300",
           "X-Session-Id": session.sessionId,
           "X-Instance-Id": this.instanceId + `<${version}>`,
         });
