@@ -97,6 +97,9 @@ class Session {
       if (config.closedCaptions) {
         this._closedCaptions = config.closedCaptions;
       }
+      if (config.noSessionDataTags) {
+        this._noSessionDataTags = config.noSessionDataTags;
+      }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
         this.slateRepetitions = config.slateRepetitions || 10;
@@ -776,8 +779,11 @@ class Session {
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", currentVod.getLiveMediaSequencesCount() - 1);
-      sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount("audio") - 1);
       sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INIT);
+    }
+
+    if (sessionState.vodMediaSeqAudio >= currentVod.getLiveMediaSequencesCount("audio") - 1) {
+      sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount("audio") - 1);
     }
 
     if (this.isSwitchingBackToV2L) {
@@ -952,8 +958,10 @@ class Session {
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:4\n";
     m3u8 += m3u8Header(this._instanceId);
-    m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
-    m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
+    if (!this._noSessionDataTags) {
+      m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.session.id",VALUE="${this._sessionId}"\n`;
+      m3u8 += `#EXT-X-SESSION-DATA:DATA-ID="eyevinn.tv.eventstream",VALUE="/eventstream/${this._sessionId}"\n`;
+    }
     const currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod) {
       throw new Error('Session not ready');
