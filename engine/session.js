@@ -723,8 +723,8 @@ class Session {
       }
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
+      let audioIncrement;
       if (this.use_demuxed_audio) {
-        let audioIncrement;
         const position = (await this._getCurrentPlayheadPosition()) * 1000;
         let currentVod = await this._sessionState.getCurrentVod();
         const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
@@ -751,8 +751,8 @@ class Session {
           }
         } while (!(-thresh < posDiff && posDiff < thresh));
         audioIncrement = index;
-        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
       }
+      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
