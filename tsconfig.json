@@ -6,5 +6,12 @@
     "esModuleInterop": true,
     "declaration": true
   },
-  "include": ["./server.ts", "./server-demux.ts", "./server-livemix.ts", "./server-multicodec.ts", "./engine/**/*"]
+  "include": [
+    "./server.ts", 
+    "./server-demux.ts", 
+    "./server-livemix.ts", 
+    "./server-multicodec.ts", 
+    "./server-drm.ts", 
+    "./engine/**/*"
+  ]
 }
