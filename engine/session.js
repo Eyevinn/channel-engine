@@ -959,11 +959,12 @@ class Session {
           let audioGroupId = audioGroupIds[i];
           for (let j = 0; j < this._audioTracks.length; j++) {
             let audioTrack = this._audioTracks[j];
+            let channels = this._audioTracks[j].channels ? this._audioTracks[j].channels : 2;
             // Make default track if set property is true.
             if (audioTrack.default) {
-              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="2",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
+              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=YES,CHANNELS="${channels}",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
             } else {
-              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=NO,CHANNELS="2",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
+              m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="${audioGroupId}",LANGUAGE="${audioTrack.language}", NAME="${audioTrack.name}",AUTOSELECT=YES,DEFAULT=NO,CHANNELS="${channels}",URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"\n`;
             }
           }
         }
