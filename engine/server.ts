@@ -99,6 +99,7 @@ export interface ChannelProfile {
   bw: number;
   codecs: string;
   resolution: number[];
+  channels?: string;
 }
 
 export interface Channel {
@@ -119,8 +120,6 @@ export interface ClosedCaptions {
 export interface AudioTracks {
   language: string;
   name: string;
-  channels?: number;
-  codecs?: string;
   default?: boolean;
 }
 
