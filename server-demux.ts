@@ -91,8 +91,8 @@ class RefChannelManager implements IChannelManager {
   }
   _getAudioTracks(): AudioTracks[] {
     return [
-      { language: "en", name: "English" },
-      { language: "sp", name: "Spanish" }
+      { language: "en", name: "English", default: true },
+      { language: "sp", name: "Spanish", default: false }
     ];
   }
 }

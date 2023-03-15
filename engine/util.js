@@ -214,6 +214,16 @@ const fetchWithRetry = async (uri, opts, maxRetries, retryDelayMs, timeoutMs, de
   }
 };
 
+const codecsFromString = (codecs) => {
+  const audioCodecs = codecs.split(",").find(c => {
+    return c.match(/^mp4a/) || c.match(/^ac-3/) || c.match(/^ec-3/);
+  });
+  const videoCodecs = codecs.split(",").find(c => {
+    return c.match(/^avc/) || c.match(/^hevc/) || c.match(/^dvh/);
+  });
+  return [videoCodecs, audioCodecs];
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -225,5 +235,6 @@ module.exports = {
   WaitTimeGenerator,
   findNearestValue,
   isValidUrl,
-  fetchWithRetry
+  fetchWithRetry,
+  codecsFromString
 };
