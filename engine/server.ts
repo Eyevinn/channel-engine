@@ -47,6 +47,7 @@ export interface ChannelEngineOpts {
   adCopyMgrUri?: string; // deprecated
   adXchangeUri?: string; // deprecated
   noSessionDataTags?: boolean;
+  volatileKeyTTL?: number;
 }
 
 interface StreamerOpts {
@@ -206,11 +207,13 @@ export class ChannelEngine {
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
+        volatileKeyTTL: options.volatileKeyTTL,
       }),
       playheadStateStore: new PlayheadStateStore({ 
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
+        volatileKeyTTL: options.volatileKeyTTL,
       }),
       instanceId: this.instanceId,
     };
@@ -220,6 +223,7 @@ export class ChannelEngine {
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
+        volatileKeyTTL: options.volatileKeyTTL,
       }),
       instanceId: this.instanceId,
     };
