@@ -733,6 +733,7 @@ class Session {
         let index = 0;
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
         const thresh = 0.5;
+        debug(`[${this._sessionId}]: About to determine audio increment`);
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
           posDiff = position - audioPosition;
@@ -752,6 +753,7 @@ class Session {
         } while (!(-thresh < posDiff && posDiff < thresh));
         audioIncrement = index;
       }
+      debug(`[${this._sessionId}]: Will increment audio with ${audioIncrement}`);
       sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
     }
 
@@ -1160,7 +1162,8 @@ class Session {
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
             debug(`[${this._sessionId}]: first VOD loaded`);
             debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
-            debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
+            debug(`[${this._sessionId}]: playhead positions [V]=${currentVod.getPlayheadPositions("video")}`);
+            debug(`[${this._sessionId}]: playhead positions [A]=${currentVod.getPlayheadPositions("audio")}`);
             //debug(newVod);
             sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
             sessionState.mediaSeqAudio = await this._sessionState.set("mediaSeqAudio", 0);
@@ -1323,7 +1326,8 @@ class Session {
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
             this.leaderIsSettingNextVod = true;
             debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
-            debug(`[${this._sessionId}]: ${newVod.getPlayheadPositions()}`);
+            debug(`[${this._sessionId}]: playhead positions [V]=${newVod.getPlayheadPositions("video")}`);
+            debug(`[${this._sessionId}]: playhead positions [A]=${newVod.getPlayheadPositions("audio")}`);
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}`);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);

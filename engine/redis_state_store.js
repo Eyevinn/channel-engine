@@ -1,7 +1,7 @@
 const redis = require("redis");
 const debug = require("debug")("redis-state-store");
 
-const VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
+const DEFAULT_VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
@@ -10,6 +10,11 @@ class RedisStateStore {
       const prependPrefix = opts.version.replace(/\./g, "X");
       this.keyPrefix = prependPrefix + this.keyPrefix;
       debug(`Prepending keyprefix with ${prependPrefix} => ${this.keyPrefix}`);
+    }
+    this.volatileKeyTTL = DEFAULT_VOLATILE_KEY_TTL;
+    if (opts.volatileKeyTTL) {
+      debug(`Overriding default, volatileKeyTTL=${opts.volatileKeyTTL}s`);
+      this.volatileKeyTTL = opts.volatileKeyTTL;  
     }
     this.client = redis.createClient(opts.redisUrl);
   }
@@ -82,9 +87,9 @@ class RedisStateStore {
     const data = await this.setAsync(id, key, value);
     const storeKey = "" + this.keyPrefix + id + key;
     const expireAsync = new Promise((resolve, reject) => {
-      this.client.expire(storeKey, VOLATILE_KEY_TTL, (err, res) => {
+      this.client.expire(storeKey, this.volatileKeyTTL, (err, res) => {
         if (!err) {
-          debug(`REDIS expire ${storeKey} ${VOLATILE_KEY_TTL}s: ${res === 1 ? "OK" : "KEY DOES NOT EXIST"}`);
+          debug(`REDIS expire ${storeKey} ${this.volatileKeyTTL}s: ${res === 1 ? "OK" : "KEY DOES NOT EXIST"}`);
           resolve();
         } else {
           reject(err);
