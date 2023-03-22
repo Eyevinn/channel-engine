@@ -771,10 +771,14 @@ class Session {
       this.isSwitchingBackToV2L = false;
     }
 
-    playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
-    playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio);
-    playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
-    playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
+    if (isLeader) {
+      debug(`[${this._sessionId}]: I am the leader, updating PlayheadState values`);
+      playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
+      playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio);
+      playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
+      playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
+    }
+
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
       const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
