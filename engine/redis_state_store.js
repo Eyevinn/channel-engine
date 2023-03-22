@@ -53,10 +53,12 @@ class RedisStateStore {
   }
 
   async getAsync(id, key) {
+    const startMs = Date.now();
     const storeKey = "" + this.keyPrefix + id + key;
     const getAsync = new Promise((resolve, reject) => {
       this.client.get(storeKey, (err, reply) => {
-        debug(`REDIS get ${storeKey}:${reply ? reply.length + " chars" : "null"}`);
+        const ioTimeMs = Date.now() - startMs;
+        debug(`REDIS get ${storeKey}:${reply ? reply.length + " chars" : "null"} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
         if (!err) {
           resolve(JSON.parse(reply));
         } else {
@@ -69,10 +71,12 @@ class RedisStateStore {
   }
 
   async setAsync(id, key, value) {
+    const startMs = Date.now();
     const storeKey = "" + this.keyPrefix + id + key;
     const setAsync = new Promise((resolve, reject) => {
       this.client.set(storeKey, JSON.stringify(value), (err, res) => {
-        debug(`REDIS set ${storeKey}: ${res}`);
+        const ioTimeMs = Date.now() - startMs;
+        debug(`REDIS set ${storeKey}: ${res} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
         if (!err) {
           resolve(value);
         } else {
@@ -101,9 +105,12 @@ class RedisStateStore {
   }
 
   async removeAsync(id, key) {
+    const startMs = Date.now();
     const storeKey = "" + this.keyPrefix + id + key;
     const delAsync = new Promise((resolve, reject) => {
       this.client.del(storeKey, (err, res) => {
+        const ioTimeMs = Date.now() - startMs;
+        debug(`REDIS remove ${storeKey}: (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
         if (!err) {
           resolve();
         } else {
