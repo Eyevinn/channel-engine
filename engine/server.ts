@@ -357,7 +357,9 @@ export class ChannelEngine {
         }
       }
     }
-    StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
+    if (this.streamSwitchManager) {
+      StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
+    }
   }
 
   async updateStreamSwitchAsync() {

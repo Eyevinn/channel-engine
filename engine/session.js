@@ -251,14 +251,18 @@ class Session {
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
-          await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin));
+          if (isLeader) {
+            await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin));
+          }
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'tickInterval', channel: this._sessionId, tickTimeMs: (tsTickEnd - tsIncrementBegin) });
           if (this.alwaysNewSegments) {
             // Use dynamic base-tickInterval. Set according to duration of latest segment.
             const lastDuration = await this._getLastDuration(manifest);
             const nextTickInterval = lastDuration < 2 ? 2 : lastDuration;
-            await this._playheadState.set("tickInterval", nextTickInterval);
+            if (isLeader) {
+              await this._playheadState.set("tickInterval", nextTickInterval);
+            }
             cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "tickIntervalUpdated", channel: this._sessionId, tickIntervalSec: nextTickInterval });
           }
         }
