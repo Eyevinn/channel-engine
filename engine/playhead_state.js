@@ -31,8 +31,8 @@ class SharedPlayheadState {
     return await this.store.getValues(this.sessionId, keys);
   }
 
-  async set(key, value) {
-    if (await this.store.isLeader(this.instanceId)) {
+  async set(key, value, isLeader) {
+    if (isLeader) {
       return await this.store.set(this.sessionId, key, value);
     } else {
       return await this.store.get(this.sessionId, key);
