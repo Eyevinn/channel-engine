@@ -1,4 +1,4 @@
-const redis = require("redis");
+const { createClient } = require("redis");
 const debug = require("debug")("redis-state-store");
 
 const DEFAULT_VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
@@ -16,7 +16,7 @@ class RedisStateStore {
       debug(`Overriding default, volatileKeyTTL=${opts.volatileKeyTTL}s`);
       this.volatileKeyTTL = opts.volatileKeyTTL;  
     }
-    this.client = redis.createClient(opts.redisUrl);
+    this.client = createClient(opts.redisUrl);
   }
 
   async initAsync(id, initData) {
