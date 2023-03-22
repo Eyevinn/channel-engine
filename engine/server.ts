@@ -712,19 +712,25 @@ export class ChannelEngine {
     const sessionLive = sessionsLive[req.params[1]];
     if (session && sessionLive) {
       try {
-        while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
-          debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
-          await timer(500);
-        }
         let body = null;
-        debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
-        if (switcherStatus[req.params[1]]) {
-          debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
-          body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
-        } else {
+        if (!this.streamSwitchManager) {
           debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+        } else {
+          while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
+            debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+            await timer(500);
+          }
+          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
+          if (switcherStatus[req.params[1]]) {
+            debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
+          } else {
+            debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+          }
         }
+
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
