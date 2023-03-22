@@ -185,7 +185,7 @@ class Session {
           debug(`[${this._sessionId}]: I am the leader and updated tick interval to ${tickInterval} sec`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'tickIntervalUpdated', channel: this._sessionId, tickIntervalSec: tickInterval });
-          this._playheadState.set("tickInterval", tickInterval);
+          this._playheadState.set("tickInterval", tickInterval, isLeader);
         } else if (state == PlayheadState.STOPPED) {
           debug(`[${this._sessionId}]: Stopping playhead`);
           return;
@@ -251,14 +251,14 @@ class Session {
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
-          await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin));
+          await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin), isLeader);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'tickInterval', channel: this._sessionId, tickTimeMs: (tsTickEnd - tsIncrementBegin) });
           if (this.alwaysNewSegments) {
             // Use dynamic base-tickInterval. Set according to duration of latest segment.
             const lastDuration = await this._getLastDuration(manifest);
             const nextTickInterval = lastDuration < 2 ? 2 : lastDuration;
-            await this._playheadState.set("tickInterval", nextTickInterval);
+            await this._playheadState.set("tickInterval", nextTickInterval, isLeader);
             cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "tickIntervalUpdated", channel: this._sessionId, tickIntervalSec: nextTickInterval });
           }
         }
@@ -280,8 +280,9 @@ class Session {
   }
 
   async stopPlayheadAsync() {
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     debug(`[${this._sessionId}]: Stopping playhead consumer`);
-    await this._playheadState.set("state", PlayheadState.STOPPED);
+    await this._playheadState.set("state", PlayheadState.STOPPED, isLeader);
   }
 
   async getStatusAsync() {
@@ -771,10 +772,13 @@ class Session {
       this.isSwitchingBackToV2L = false;
     }
 
-    playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
-    playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio);
-    playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
-    playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
+    if (isLeader) {
+      debug(`[${this._sessionId}]: I am the leader, updating PlayheadState values`);
+    }
+    playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq, isLeader);
+    playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio, isLeader);
+    playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo, isLeader);
+    playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio, isLeader);
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
       const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
@@ -1077,6 +1081,7 @@ class Session {
         lastDiscontinuity = currentVod.getLastDiscontinuity();
         lastDiscontinuityAudio = currentVod.getLastDiscontinuityAudio();
       }
+      const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
       await this._sessionState.set("vodMediaSeqVideo", 0);
       await this._sessionState.set("vodMediaSeqAudio", 0);
       await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
@@ -1086,7 +1091,7 @@ class Session {
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("discSeqAudio", sessionState.discSeqAudio + lastDiscontinuityAudio);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
-      await this._playheadState.set("playheadRef", Date.now());
+      await this._playheadState.set("playheadRef", Date.now(), isLeader);
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
 
@@ -1171,7 +1176,7 @@ class Session {
             sessionState.discSeqAudio = await this._sessionState.set("discSeqAudio", 0);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
-            await this._playheadState.set("playheadRef", Date.now());
+            await this._playheadState.set("playheadRef", Date.now(), isLeader);
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
@@ -1340,8 +1345,8 @@ class Session {
             await this._sessionState.remove("nextVod");
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             this.leaderIsSettingNextVod = false;
-            await this._playheadState.set("playheadRef", Date.now());
-            await this._playheadState.set("diffCompensation", this.diffCompensation);
+            await this._playheadState.set("playheadRef", Date.now(), isLeader);
+            await this._playheadState.set("diffCompensation", this.diffCompensation, isLeader);
             debug(`[${this._sessionId}]: sharing durrent vods diffCompensation=${this.diffCompensation}`);
             this.produceEvent({
               type: 'NOW_PLAYING',
@@ -1418,7 +1423,7 @@ class Session {
               return;
             }
             await this._sessionState.set("mediaSeq", mSeq);
-            await this._playheadState.set("mediaSeq", mSeq);
+            await this._playheadState.set("mediaSeq", mSeq, isLeader);
             await this._sessionState.set("discSeq", dSeq);
             // TODO: support demux^
             debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
@@ -1439,9 +1444,9 @@ class Session {
             await this._sessionState.set("vodReloaded", 1);
             await this._sessionState.set("vodMediaSeqVideo", 0);
             await this._sessionState.set("vodMediaSeqAudio", 0);
-            await this._playheadState.set("vodMediaSeqVideo", 0);
-            await this._playheadState.set("vodMediaSeqAudio", 0);
-            await this._playheadState.set("playheadRef", Date.now());
+            await this._playheadState.set("vodMediaSeqVideo", 0, isLeader);
+            await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
+            await this._playheadState.set("playheadRef", Date.now(), isLeader);
             // 4) Log to debug and cloudwatch
             debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
             debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
