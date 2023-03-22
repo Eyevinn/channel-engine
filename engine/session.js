@@ -251,18 +251,14 @@ class Session {
           debug(`[${this._sessionId}]: (${(new Date()).toISOString()}) ${timeSpentInIncrement}sec in increment. Next tick in ${tickInterval} seconds`)
           await timer((tickInterval * 1000) - 50);
           const tsTickEnd = Date.now();
-          if (isLeader) {
-            await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin));
-          }
+          await this._playheadState.set("tickMs", (tsTickEnd - tsIncrementBegin));
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'tickInterval', channel: this._sessionId, tickTimeMs: (tsTickEnd - tsIncrementBegin) });
           if (this.alwaysNewSegments) {
             // Use dynamic base-tickInterval. Set according to duration of latest segment.
             const lastDuration = await this._getLastDuration(manifest);
             const nextTickInterval = lastDuration < 2 ? 2 : lastDuration;
-            if (isLeader) {
-              await this._playheadState.set("tickInterval", nextTickInterval);
-            }
+            await this._playheadState.set("tickInterval", nextTickInterval);
             cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "tickIntervalUpdated", channel: this._sessionId, tickIntervalSec: nextTickInterval });
           }
         }
@@ -777,12 +773,11 @@ class Session {
 
     if (isLeader) {
       debug(`[${this._sessionId}]: I am the leader, updating PlayheadState values`);
-      playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
-      playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio);
-      playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
-      playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
     }
-
+    playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq);
+    playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio);
+    playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo);
+    playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio);
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
       const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
