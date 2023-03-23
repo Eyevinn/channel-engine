@@ -17,6 +17,7 @@ A live demo and example is available here: [https://vod2live.eyevinn.technology]
 - Produce a personalized 24/7 HLS live channel unique for each viewer
 - Mix VOD2Live channel with a "real" live HLS stream
 - Develop adapters to plugin with custom scheduling endpoints
+- High Availability with Redis Cache as shared state store
 - And much more!
 
 ## System Requirements
@@ -37,6 +38,16 @@ Supported Node.js Versions
 | HLS + CMAF | No    | Yes     | TBD         | TBD       | TBD |
 
 *\* not supported with demuxed sources*
+
+## High Availability Support
+
+[High availability support](https://vod2live.docs.eyevinn.technology/usage-guide.html#high-availability) is from v3 general available in the Channel Engine and it uses Redis as the shared storage. This allows you to run a replicaset behind a round-robin load balancer. Supported Redis Engine versions:
+
+| Version | Supported | 
+| ------- | --------- |
+| 5.x     | Yes       |
+| 6.x     | Yes       |
+| 7.x    | No        |
 
 ## Usage
 
