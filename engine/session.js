@@ -951,6 +951,7 @@ class Session {
       throw new Error('Session not ready');
     }
     let audioGroupIds = currentVod.getAudioGroups();
+    debug(`[${this._sessionId}]: currentVod.getAudioGroups()=${audioGroupIds.join(",")}`);
     let defaultAudioGroupId;
     let hasClosedCaptions = this._closedCaptions && this._closedCaptions.length > 0;
     if (hasClosedCaptions) {
@@ -987,11 +988,16 @@ class Session {
         if (this.use_demuxed_audio) {
           // find matching audio group based on codec in stream
           let audioGroupIdToUse;
-          const [_, audioCodec] = codecsFromString(profile.codecs);        
+          const [_, audioCodec] = codecsFromString(profile.codecs);
           if (audioCodec) {
             const profileChannels = profile.channels ? profile.channels : "2";
             audioGroupIdToUse = currentVod.getAudioGroupIdForCodecs(audioCodec, profileChannels);
+            if (!audioGroupIds.includes(audioGroupIdToUse)) {
+              audioGroupIdToUse = defaultAudioGroupId; 
+            }
           }
+
+          debug(`[${this._sessionId}]: audioGroupIdToUse=${audioGroupIdToUse}`);
 
           // skip stream if no corresponding audio group can be found
           if (audioGroupIdToUse) {
