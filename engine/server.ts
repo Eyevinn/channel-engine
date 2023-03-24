@@ -806,7 +806,7 @@ export class ChannelEngine {
         endpoints.push({
           health: '/health/' + sessionId,
           status: '/status/' + sessionId,
-          playback: '/live/master.m3u8?channel=' + sessionId,
+          playback: `/channels/${sessionId}/master.m3u8`,
         });
       }
     }
