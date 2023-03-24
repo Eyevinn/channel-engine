@@ -662,7 +662,7 @@ export class ChannelEngine {
       try {
         const body = await session.getMasterManifestAsync(filter);
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "application/x-mpegURL;charset=UTF-8",
+          "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
           "Access-Control-Expose-Headers": "X-Session-Id",
@@ -690,7 +690,7 @@ export class ChannelEngine {
           req.headers["x-playback-session-id"]
         );
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "application/x-mpegURL;charset=UTF-8",
+          "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
@@ -734,7 +734,7 @@ export class ChannelEngine {
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "application/x-mpegURL;charset=UTF-8",
+          "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
@@ -806,7 +806,7 @@ export class ChannelEngine {
         endpoints.push({
           health: '/health/' + sessionId,
           status: '/status/' + sessionId,
-          playback: '/live/master.m3u8?channel=' + sessionId,
+          playback: `/channels/${sessionId}/master.m3u8`,
         });
       }
     }
