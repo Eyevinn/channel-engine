@@ -968,13 +968,17 @@ class Session {
             let audioTrack = this._audioTracks[j];
             const [_, channels] = currentVod.getAudioCodecsAndChannelsForGroupId(audioGroupId);
             // Make default track if set property is true.
+            let audioGroupIdFileName = audioGroupId;
+            if (audioTrack.enforceAudioGroupId) {
+              audioGroupIdFileName = audioTrack.enforceAudioGroupId;
+            }
             m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO` +
               `,GROUP-ID="${audioGroupId}"` +
               `,LANGUAGE="${audioTrack.language}"` +
               `,NAME="${audioTrack.name}"` +
               `,AUTOSELECT=YES,DEFAULT=${audioTrack.default ? 'YES' : 'NO'}` +
               `,CHANNELS="${channels ? channels : 2}"` +
-              `,URI="master-${audioGroupId}_${audioTrack.language}.m3u8;session=${this._sessionId}"` +
+              `,URI="master-${audioGroupIdFileName}_${audioTrack.language}.m3u8;session=${this._sessionId}"` +
               "\n";
           }
         }
