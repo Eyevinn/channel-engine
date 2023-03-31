@@ -122,6 +122,7 @@ export interface AudioTracks {
   language: string;
   name: string;
   default?: boolean;
+  enforceAudioGroupId?: string;
 }
 
 export interface IChannelManager {
