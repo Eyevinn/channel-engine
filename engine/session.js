@@ -738,7 +738,7 @@ class Session {
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
           posDiff = position - audioPosition;
-          if (posDiff < 0) {
+          if (posDiff <= 0) {
             break;
           }
           if (posDiff > thresh) {
