@@ -1152,7 +1152,7 @@ class Session {
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
               const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
-              newVod = new HLSVod(vodResponse.uri, [], null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
+              newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -1301,7 +1301,7 @@ class Session {
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
               const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
-              newVod = new HLSVod(vodResponse.uri, null, null, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
+              newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
@@ -1532,8 +1532,8 @@ class Session {
         slateVod.load()
           .then(() => {
             const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
-            hlsVod = new HLSVod(this.slateUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
             const timestamp = Date.now();
+            hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
             hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
             hlsVod.addMetadata('planned-duration', ((reps || this.slateRepetitions) * this.slateDuration) / 1000);
@@ -1592,8 +1592,8 @@ class Session {
         slateVod.load()
           .then(() => {
             const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
-            hlsVod = new HLSVod(nexVodUri, null, null, null, m3u8Header(this._instanceId), hlsOpts);
             const timestamp = Date.now();
+            hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
             hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
             hlsVod.addMetadata('planned-duration', requestedDuration);
