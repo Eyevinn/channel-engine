@@ -224,6 +224,25 @@ const codecsFromString = (codecs) => {
   return [videoCodecs, audioCodecs];
 };
 
+const UNSAFE_CHARS = {
+  " ": "%20",
+  "/": "%2F"
+};
+
+const makeSafeFilename = (val) => {
+  for (const c in UNSAFE_CHARS) {
+    val = val.replace(new RegExp(c, "g"), UNSAFE_CHARS[c]);
+  }
+  return val;
+};
+
+const fromSafeFilename = (filename) => {
+  for (const c in UNSAFE_CHARS) {
+    filename = filename.replace(new RegExp(UNSAFE_CHARS[c], "g"), c);
+  }
+  return filename;
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -236,5 +255,7 @@ module.exports = {
   findNearestValue,
   isValidUrl,
   fetchWithRetry,
-  codecsFromString
+  codecsFromString,
+  makeSafeFilename,
+  fromSafeFilename
 };

@@ -9,7 +9,14 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString } = require('./util.js');
+const {
+  applyFilter,
+  cloudWatchLog,
+  m3u8Header,
+  logerror,
+  codecsFromString,
+  makeSafeFilename,
+} = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const AVERAGE_SEGMENT_DURATION = 3000;
@@ -973,9 +980,9 @@ class Session {
             let audioTrack = this._audioTracks[j];
             const [_, channels] = currentVod.getAudioCodecsAndChannelsForGroupId(audioGroupId);
             // Make default track if set property is true.
-            let audioGroupIdFileName = audioGroupId;
+            let audioGroupIdFileName = makeSafeFilename(audioGroupId);
             if (audioTrack.enforceAudioGroupId) {
-              audioGroupIdFileName = audioTrack.enforceAudioGroupId;
+              audioGroupIdFileName = makeSafeFilename(audioTrack.enforceAudioGroupId);
             }
             m3u8 += `#EXT-X-MEDIA:TYPE=AUDIO` +
               `,GROUP-ID="${audioGroupId}"` +

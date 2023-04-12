@@ -12,7 +12,7 @@ const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
 
-const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
+const { filterQueryParser, toHHMMSS, WaitTimeGenerator, fromSafeFilename } = require('./util.js');
 const { version } = require('../package.json');
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
@@ -689,7 +689,7 @@ export class ChannelEngine {
     if (session) {
       try {
         const body = await session.getCurrentAudioManifestAsync(
-          req.params[0],
+          fromSafeFilename(req.params[0]),
           req.params[1],
           req.headers["x-playback-session-id"]
         );

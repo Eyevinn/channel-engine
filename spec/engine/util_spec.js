@@ -1,4 +1,9 @@
-const { filterQueryParser, applyFilter } = require('../../engine/util.js');
+const {
+  filterQueryParser,
+  applyFilter,
+  makeSafeFilename,
+  fromSafeFilename
+} = require('../../engine/util.js');
 
 describe("Filter Query parser", () => {
   it("can handle systemBitrate low/high range", () => {
@@ -131,4 +136,18 @@ describe("Profile filter", () => {
     expect(filteredProfiles[0].bw).toEqual(2323000);
   });
 
+});
+
+describe("Filename utils", () => {
+  it("can make a safe filename from value containing space or /", () => {
+    const unsafeFileName = "my audio/mp4";
+    const safeFileName = makeSafeFilename(unsafeFileName);
+    expect(safeFileName).toEqual("my%20audio%2Fmp4");
+  });
+
+  it("can convert from a safe filename", () => {
+    const safeFileName = "my%20audio%2Fmp4";
+    const unsafeFileName = fromSafeFilename(safeFileName);
+    expect(unsafeFileName).toEqual("my audio/mp4");
+  });
 });
