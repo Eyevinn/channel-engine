@@ -45,7 +45,7 @@ Supported Node.js Versions
 | ------- | --------- |
 | 14.x    | Yes       |
 | 16.x    | Yes       |
-| 18.x    | No        |
+| 18.x    | Yes       |
 
 ## Supported Source Formats
 
