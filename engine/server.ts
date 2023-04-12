@@ -89,6 +89,9 @@ export interface VodResponse {
   type?: string;
   currentMetadata?: VodResponseMetadata;
   timedMetadata?: VodTimedMetadata;
+  // Wall-clock start time of the VOD as unix ts. If set
+  // the program-date-time will be added to each segment
+  unixTs?: number;
 }
 
 export interface IAssetManager {
