@@ -91,6 +91,68 @@ and this means that it is not possible to mix muxed TS with demuxed CMAF.
 
 A breaking change was introduced in v3.4.0 when Typescript types were introduced. The library no longer exports a default. This means that you need to change `const ChannelEngine = require('eyevinn-channel-engine')` to `const { ChannelEngine } = require('eyevinn-channel-engine')`;
 
+## Contributing
+
+Read [CONTRIBUTING](CONTRIBUTING.md) first and then follow the instructions below to get started with the devolpment environment.
+
+### Development
+
+Ensure that you are running node version 16 as version 18 is not supported yet.
+
+```
+node --version
+v16.17.0
+```
+
+Then install the dependencies:
+
+```
+npm install
+```
+
+Build the app:
+
+```
+npm run build
+```
+
+To start the reference implementation in `server.ts` run:
+
+```
+npm start
+```
+
+For full debug mode you set the environment variable `DEBUG`.
+
+```
+DEBUG=* npm start
+```
+
+or if you want be more specific for example:
+
+```
+DEBUG=engine-* npm start
+```
+
+In addition there other reference implemetations that can be used:
+- `server-demux.ts` : example with demuxed audio
+- `server-livemix.ts` : example with live mimxing
+- `server-multicodec.ts` : example with multicodec
+
+### Source linking hls-vodtolive library
+
+It is not uncommon that you need to test an local branch of the hls-vodtolive library and in order to do that you can use `npm link`.
+
+1. Go to the directory where you have the source code for the hls-vodtolive library and run `npm link`
+2. Then go to the channel engine source code directory and run `npm link @eyevinn/hls-vodtolive`
+
+To restore and use the npm published version run the following in the channel engine source code directory:
+
+```
+npm uninstall --no-save @eyevinn/hls-vodtolive
+npm install
+```
+
 ## Support
 
 Join our [community on Slack](http://slack.streamingtech.se) where you can post any questions regarding any of our open source projects. Eyevinn's consulting business can also offer you:
