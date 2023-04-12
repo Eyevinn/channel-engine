@@ -13,6 +13,9 @@
     "start-demux": "node dist/server-demux.js",
     "start-livemix": "node dist/server-livemix.js"
   },
+  "engines": {
+    "node": "<18"
+  },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "contributors": [
     "Jonas Birmé <jonas.birme@eyevinn.se> (Eyevinn Technology AB)",
