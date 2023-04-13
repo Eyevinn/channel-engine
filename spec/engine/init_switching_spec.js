@@ -751,7 +751,8 @@ describe("The initialize switching", () => {
 
     const expectedLastVODSegItem = {
       discontinuity: true,
-      daterange: null
+      daterange: null,
+      vodTransition: true
     }
     const expectedFirstV2LSegItem = {
       duration: 7.2,
