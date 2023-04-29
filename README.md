@@ -35,6 +35,7 @@ A live demo and example is available here: [https://vod2live.eyevinn.technology]
 - Mix VOD2Live channel with a "real" live HLS stream
 - Develop adapters to plugin with custom scheduling endpoints
 - High Availability with Redis Cache as shared state store
+- Support for DRM encrypted HLS VODs (in beta)
 - And much more!
 
 ## System Requirements
