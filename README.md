@@ -97,14 +97,7 @@ Read [CONTRIBUTING](CONTRIBUTING.md) first and then follow the instructions belo
 
 ### Development
 
-Ensure that you are running node version 16 as version 18 is not supported yet.
-
-```
-node --version
-v16.17.0
-```
-
-Then install the dependencies:
+Install the dependencies:
 
 ```
 npm install
@@ -138,6 +131,7 @@ In addition there other reference implemetations that can be used:
 - `server-demux.ts` : example with demuxed audio
 - `server-livemix.ts` : example with live mimxing
 - `server-multicodec.ts` : example with multicodec
+- `server-drm.ts` : example with DRM
 
 ### Source linking hls-vodtolive library
 
