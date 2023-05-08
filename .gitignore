@@ -1,3 +1,5 @@
 node_modules/
 .prettierrc
 dist/
+**/.DS_Store
+.vscode

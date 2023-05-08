@@ -446,6 +446,11 @@ class SessionLive {
     return "Not Implemented";
   }
 
+  async getCurrentSubtitleManifestAsync(subtitleGroupId, subtitleLanguage) {
+    debug(`[${this.sessionId}]: getCurrentSubtitleManifestAsync is NOT Implemented`);
+    return "Not Implemented";
+  }
+
   /**
    *
    * @param {string} masterManifestURI The master manifest URI.

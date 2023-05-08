@@ -7,6 +7,7 @@ const Session = require('./session.js');
 const SessionLive = require('./session_live.js');
 const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
+const SubtitleSlicer = require('./subtitle_slicer.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
@@ -22,6 +23,8 @@ const sessionsLive = {}; // Should be a persistent store...
 const sessionSwitchers = {}; // Should be a persistent store...
 const switcherStatus = {}; // Should be a persistent store...
 const eventStreams = {};
+const DefaultDummySubtitleEndpointPath = "dummyUrl"
+const DefaultSubtitleSpliceEndpointPath = "sliceUrl"
 
 export interface ChannelEngineOpts {
   defaultSlateUri?: string;
@@ -38,6 +41,9 @@ export interface ChannelEngineOpts {
   maxTickInterval?: number;
   cloudWatchMetrics?: boolean;
   useDemuxedAudio?: boolean;
+  dummySubtitleEndpoint?: string;
+  subtitleSliceEndpoint?: string;
+  useVTTSubtitles?: boolean;
   alwaysNewSegments?: boolean;
   diffCompensationRate?: number;
   staticDirectory?: string;
@@ -110,6 +116,7 @@ export interface Channel {
   id: string;
   profile: ChannelProfile[];
   audioTracks?: AudioTracks[];
+  subtitleTracks?: SubtitleTracks[];
   closedCaptions?: ClosedCaptions[];
 }
 
@@ -126,6 +133,11 @@ export interface AudioTracks {
   name: string;
   default?: boolean;
   enforceAudioGroupId?: string;
+}
+export interface SubtitleTracks {
+  language: string;
+  name: string;
+  default?: boolean;
 }
 
 export interface IChannelManager {
@@ -155,6 +167,9 @@ export interface IStreamSwitchManager {
 export class ChannelEngine {
   private options?: ChannelEngineOpts;
   private useDemuxedAudio: boolean;
+  private dummySubtitleEndpoint: string;
+  private subtitleSliceEndpoint: string;
+  private useVTTSubtitles: boolean;
   private alwaysNewSegments: boolean;
   private defaultSlateUri?: string;
   private slateDuration?: number;
@@ -172,7 +187,7 @@ export class ChannelEngine {
   private logCloudWatchMetrics: boolean;
   private adCopyMgrUri?: string;
   private adXchangeUri?: string;
-
+  
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
     if (options && options.adCopyMgrUri) {
@@ -185,6 +200,11 @@ export class ChannelEngine {
     if (options && options.useDemuxedAudio) {
       this.useDemuxedAudio = true;
     }
+
+    this.useVTTSubtitles = (options && options.useVTTSubtitles) ? options.useVTTSubtitles : false ;
+    this.dummySubtitleEndpoint = (options && options.dummySubtitleEndpoint) ? options.dummySubtitleEndpoint : DefaultDummySubtitleEndpointPath;
+    this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.dummySubtitleEndpoint : DefaultSubtitleSpliceEndpointPath;
+
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
       this.alwaysNewSegments = true;
@@ -278,6 +298,11 @@ export class ChannelEngine {
         req.params[1] = m[2];
         req.params[2] = m[3];
         await this._handleAudioManifest(req, res, next);
+      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+        req.params[0] = m[1];
+        req.params[1] = m[2];
+        req.params[2] = m[3];
+        await this._handleSubtitleManifest(req, res, next);
       }
     };
     this.server.get('/live/:file', async (req, res, next) => {
@@ -310,6 +335,8 @@ export class ChannelEngine {
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
+    this.server.get('/channels/:channelId/' + this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
+    this.server.get('/channels/:channelId/' + this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);
@@ -407,6 +434,9 @@ export class ChannelEngine {
         sessionId: channel.id,
         averageSegmentDuration: channel.options && channel.options.averageSegmentDuration ? channel.options.averageSegmentDuration : this.streamerOpts.defaultAverageSegmentDuration,
         useDemuxedAudio: options.useDemuxedAudio,
+        dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+        subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+        useVTTSubtitles: this.useVTTSubtitles,
         alwaysNewSegments: options.alwaysNewSegments,
         noSessionDataTags: options.noSessionDataTags,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,
@@ -416,6 +446,7 @@ export class ChannelEngine {
         diffCompensationRate: channel.options && channel.options.diffCompensationRate ? channel.options.diffCompensationRate : this.streamerOpts.diffCompensationRate,
         profile: channel.profile,
         audioTracks: channel.audioTracks,
+        subtitleTracks: channel.subtitleTracks,
         closedCaptions: channel.closedCaptions,
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
@@ -426,6 +457,9 @@ export class ChannelEngine {
       sessionsLive[channel.id] = new SessionLive({
         sessionId: channel.id,
         useDemuxedAudio: options.useDemuxedAudio,
+        dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+        subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+        useVTTSubtitles: this.useVTTSubtitles,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         profile: channel.profile,
       }, this.sessionLiveStore);
@@ -475,7 +509,7 @@ export class ChannelEngine {
       const session = sessions[channelId];
       const sessionLive = sessionsLive[channelId];
       if (!this.monitorTimer[channelId]) {
-        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session, sessionLive) }, 5000);
+        this.monitorTimer[channelId] = setInterval(async () => { await this._monitorAsync(session, sessionLive) }, 5000);
       }
       session.startPlayheadAsync();
       await sessionLive.startPlayheadAsync();
@@ -598,6 +632,34 @@ export class ChannelEngine {
     }
   }
 
+  async getSubtitleManifests(channelId) {
+    if (sessions[channelId]) {
+      const allSubtitleM3U8 = {};
+      let promises = [];
+      const session = sessions[channelId];
+      const addM3U8 = async (groupId, lang) => {
+        let subtitleM3U8 = await session.getCurrentSubtitleManifestAsync(groupId, lang);
+        if (!allSubtitleM3U8[groupId]) {
+          allSubtitleM3U8[groupId] = {};
+        }
+        allSubtitleM3U8[groupId][lang] = subtitleM3U8;
+      }
+      // Get m3u8s for all langauges for all groups
+      const subtitleGroupsAndLangs = await session.getSubtitleGroupsAndLangs();
+      for (const [subtitleGroup, languages] of Object.entries(subtitleGroupsAndLangs)) {
+        (<Array<string>>languages).forEach((lang) => {
+          promises.push(addM3U8(subtitleGroup, lang));
+        });
+      }
+      await Promise.all(promises);
+
+      return allSubtitleM3U8;
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      return Promise.reject(err)
+    }
+  }
+
   _handleHeartbeat(req, res, next) {
     debug('req.url=' + req.url);
     res.send(200);
@@ -626,6 +688,9 @@ export class ChannelEngine {
       options.adXchangeUri = this.adXchangeUri;
       options.averageSegmentDuration = this.streamerOpts.defaultAverageSegmentDuration;
       options.useDemuxedAudio = this.useDemuxedAudio;
+      options.dummySubtitleEndpoint = this.dummySubtitleEndpoint;
+      options.subtitleSliceEndpoint = this.subtitleSliceEndpoint;
+      options.useVTTSubtitles = this.useVTTSubtitles;
       options.alwaysNewSegments = this.alwaysNewSegments;
       options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
       options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
@@ -707,6 +772,71 @@ export class ChannelEngine {
       const err = new errs.NotFoundError('Invalid session');
       next(err);
     }
+  }
+
+  async _handleSubtitleManifest(req, res, next) {
+    debug(`req.url=${req.url}`);
+    const session = sessions[req.params[2]];
+    if (session) {
+      try {
+        const body = await session.getCurrentSubtitleManifestAsync(
+          req.params[0],
+          req.params[1],
+          req.headers["x-playback-session-id"]
+        );
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
+        });
+        next();
+      } catch (err) {
+        next(this._gracefulErrorHandler(err));
+      }
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      next(err);
+    }
+  }
+
+  async _handleDummySubtitleEndpoint(req,res,next) {
+    debug(`req.url=${req.url}`);
+    const session = sessions[req.params.channelId];
+    if (session) {
+      try {
+        const body = `WEBVTT`;
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
+        });
+        next();
+      } catch (err) {
+        next(this._gracefulErrorHandler(err));
+      }
+    } else {
+      const err = new errs.NotFoundError('Invalid session');
+      next(err);
+    }
+  }
+
+  async _handleSubtitleSliceEndpoint(req,res,next) {
+    debug(`req.url=${req.url}`);
+      try {
+        const slicer = new SubtitleSlicer();
+        const body = await slicer.generateVtt(req.query);
+        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
+        });
+        next();
+      } catch (err) {
+        next(this._gracefulErrorHandler(err));
+      }
   }
 
   async _handleMediaManifest(req, res, next) {

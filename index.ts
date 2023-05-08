@@ -8,5 +8,6 @@ export { ChannelEngine,
   Channel,
   ChannelProfile,
   AudioTracks,
-  Schedule
+  SubtitleTracks,
+  Schedule,
 } from "./engine/server";
