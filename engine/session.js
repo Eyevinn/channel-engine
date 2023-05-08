@@ -787,7 +787,12 @@ class Session {
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
       const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
-      debug(`[${this._sessionId}]: Session can now serve mseq={${playheadState.mediaSeq + mediaSequenceValue}}`);
+      let audioInfo = "";
+      if (this.use_demuxed_audio) {
+        const mediaSequenceValueAudio = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+        audioInfo = ` mseq[A]={${playheadState.mediaSeqAudio + mediaSequenceValueAudio}}`
+      }
+      debug(`[${this._sessionId}]: Session can now serve mseq[V]={${playheadState.mediaSeq + mediaSequenceValue}}` + audioInfo);
     }
 
     debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")})`);
