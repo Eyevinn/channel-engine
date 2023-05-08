@@ -1,6 +1,7 @@
 const HLSVod = require('@eyevinn/hls-vodtolive');
 const SharedStateStore = require('./shared_state_store.js');
 const debug = require("debug")("session-state-store");
+const { timeLeft } = require('./util.js');
 
 const SessionState = Object.freeze({
   VOD_INIT: 1,
@@ -43,7 +44,12 @@ class SharedSessionState {
     }
 
     if (this.cache.currentVod.value && Date.now() < this.cache.currentVod.ts + this.cache.currentVod.ttl) {
-      debug(`[${this.sessionId}]: reading 'currentVod' from cache`);
+      debug(
+        `[${this.sessionId}]: reading 'currentVod' from cache. Expires in ${timeLeft(
+          this.cache.currentVod.ts + this.cache.currentVod.ttl,
+          Date.now()
+        )}`
+      );
       return this.cache.currentVod.value;
     }
 

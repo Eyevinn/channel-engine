@@ -6,7 +6,7 @@ const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
   let filter = {};
-  
+
   if (!conditions) {
     return filter;
   }
@@ -157,7 +157,7 @@ const findNearestValue = (val, array) => {
   return sorted.reduce((a, b) => {
     return Math.abs(b - val) < Math.abs(a - val) ? b : a;
   });
-}
+};
 
 const isValidUrl = (url) => {
   try {
@@ -166,8 +166,7 @@ const isValidUrl = (url) => {
   } catch (err) {
     return false;
   }
-}
-
+};
 
 const fetchWithRetry = async (uri, opts, maxRetries, retryDelayMs, timeoutMs, debug) => {
   if (!debug) {
@@ -224,6 +223,25 @@ const codecsFromString = (codecs) => {
   return [videoCodecs, audioCodecs];
 };
 
+const timeLeft = (endTimestamp, currentTimestamp) => {
+  const secondsLeft = Math.floor((endTimestamp - currentTimestamp) / 1000);
+  if (secondsLeft < 0) {
+    return "Time has already passed.";
+  }
+  const hours = Math.floor(secondsLeft / 3600);
+  const minutes = Math.floor((secondsLeft % 3600) / 60);
+  const seconds = secondsLeft % 60;
+  let msg = "";
+  if (hours) {
+    msg = `${hours}h${minutes}m${seconds}s`;
+  } else if (minutes) {
+    msg = `${minutes}m${seconds}s`;
+  } else {
+    msg = `${seconds}s`;
+  }
+  return msg;
+};
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -236,5 +254,6 @@ module.exports = {
   findNearestValue,
   isValidUrl,
   fetchWithRetry,
-  codecsFromString
+  codecsFromString,
+  timeLeft,
 };
