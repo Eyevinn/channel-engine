@@ -40,6 +40,9 @@ class Session {
     this._events = [];
     this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
     this.use_demuxed_audio = false;
+    this.use_vtt_subtitles = false;
+    this.dummySubtitleEndpoint = "";
+    this.subtitleSliceEndpoint = "";
     this.cloudWatchLogging = false;
     this.playheadDiffThreshold = DEFAULT_PLAYHEAD_DIFF_THRESHOLD;
     this.maxTickInterval = DEFAULT_MAX_TICK_INTERVAL;
@@ -49,11 +52,13 @@ class Session {
     this.timePositionOffset = 0;
     this.prevVodMediaSeq = {
       video: null,
-      audio: null
+      audio: null,
+      subtitle: null
     }
     this.prevMediaSeqOffset = {
       video: null,
-      audio: null
+      audio: null,
+      subtitle: null
     }
     this.waitingForNextVod = false;
     this.leaderIsSettingNextVod = false;
@@ -85,6 +90,15 @@ class Session {
       if (config.useDemuxedAudio) {
         this.use_demuxed_audio = true;
       }
+      if (config.dummySubtitleEndpoint) {
+        this.dummySubtitleEndpoint = config.dummySubtitleEndpoint;
+      }
+      if (config.subtitleSliceEndpoint) {
+        this.subtitleSliceEndpoint = config.subtitleSliceEndpoint;
+      }
+      if (config.useVTTSubtitles) {
+        this.use_vtt_subtitles = config.useVTTSubtitles;
+      }
       if (config.startWithId) {
         this.startWithId = config.startWithId;
       }
@@ -93,6 +107,9 @@ class Session {
       }
       if (config.audioTracks) {
         this._audioTracks = config.audioTracks;
+      }
+      if (config.subtitleTracks) {
+        this._subtitleTracks = config.subtitleTracks;
       }
       if (config.closedCaptions) {
         this._closedCaptions = config.closedCaptions;
@@ -683,18 +700,94 @@ class Session {
       throw new Error("Engine not ready");
     }
   }
+  
+  async getCurrentSubtitleManifestAsync(subtitleGroupId, subtitleLanguage) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    let currentVod = null;
+    const sessionState = await this._sessionState.getValues(["discSeqSubtitle", "vodMediaSeqSubtitle"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle"]);
+
+    if (playheadState.vodMediaSeqSubtitle > sessionState.vodMediaSeqSubtitle || (playheadState.vodMediaSeqSubtitle < sessionState.vodMediaSeqSubtitle && playheadState.mediaSeqSubtitle === this.prevMediaSeqOffset.subtitle)) {
+      const state = await this._sessionState.get("state");
+      const DELAY_TIME_MS = 1000;
+      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
+      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqSubtitle}_${sessionState.vodMediaSeqSubtitle}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
+      await timer(DELAY_TIME_MS);
+      playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle"]);
+    }
+    // local store the prev values
+    if (this.prevVodMediaSeq.subtitle === null) {
+      this.prevVodMediaSeq.subtitle = playheadState.vodMediaSeqSubtitle;
+    }
+    if (this.prevMediaSeqOffset.subtitle === null) {
+      this.prevMediaSeqOffset.subtitle = playheadState.mediaSeqSubtitle;
+    }
+    currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      // condition suggesting that a new vod should exist
+      if (playheadState.vodMediaSeqSubtitle < 2 || playheadState.mediaSeqSubtitle !== this.prevMediaSeqOffset.subtitle) {
+        const AGE_THRESH = this.averageSegmentDuration * 2;
+        let cacheAge = null;
+        if (this._sessionState.cache && this._sessionState.cache.currentVod.ts) {
+          cacheAge = Date.now() - this._sessionState.cache.currentVod.ts;
+        }
+        if (cacheAge !== null && cacheAge > AGE_THRESH) {
+          await timer(500);
+          debug(`[${this._sessionId}]: While requesting subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}, (mseq=${playheadState.vodMediaSeqSubtitle})(vod cache age=${cacheAge})`);
+          await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+          currentVod = await this._sessionState.getCurrentVod();
+        }
+      }
+      try {
+        let manifestMseq = playheadState.mediaSeqSubtitle + playheadState.vodMediaSeqSubtitle;
+        let manifestDseq = sessionState.discSeqSubtitle + currentVod.discontinuitiesSubtitle[playheadState.vodMediaSeqSubtitle];
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          const mediaSequenceValue = currentVod.mediaSequenceValuesSubtitle[playheadState.vodMediaSeqSubtitle];
+          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueSubtitle()}} SUBTITLES`);
+          manifestMseq = playheadState.mediaSeqSubtitle + mediaSequenceValue;
+        }
+        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqSubtitle}]_[${currentVod.getLiveMediaSequencesCount("subtitle")}] SUBTITLES (${subtitleGroupId})`);
+        const m3u8 = currentVod.getLiveMediaSubtitleSequences(
+          playheadState.mediaSeqSubtitle,
+          subtitleGroupId,
+          subtitleLanguage,
+          playheadState.vodMediaSeqSubtitle,
+          sessionState.discSeqSubtitle,
+          this.targetDurationPadding,
+          this.forceTargetDuration
+        );
+        // # Case: current VOD does not have the selected track.
+        if (!m3u8) {
+          debug(`[${this._sessionId}]: [${playheadState.mediaSeqSubtitle + playheadState.vodMediaSeqSubtitle}] Request Failed for current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}`);
+        }
+        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}] Current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage} requested`);
+        this.prevVodMediaSeq.subtitle = playheadState.vodMediaSeqSubtitle;
+        this.prevMediaSeqOffset.subtitle = playheadState.mediaSeqSubtitle;
+        return m3u8;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed to generate subtitle manifest: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
 
   async incrementAsync() {
     await this._tickAsync();
     const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
 
     let sessionState = await this._sessionState.getValues(
-      ["state", "mediaSeq", "mediaSeqAudio", "discSeq", "discSeqAudio", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeq", "mediaSeqAudio", "vodMediaSeqVideo", "vodMediaSeqAudio"]);
+      ["state", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSubtitle"]);
     let currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod ||
       sessionState.vodMediaSeqVideo === null ||
       sessionState.vodMediaSeqAudio === null ||
+      sessionState.vodMediaSeqSubtitle === null ||
       sessionState.state === null ||
       sessionState.mediaSeq === null ||
       sessionState.discSeq === null) {
@@ -723,7 +816,7 @@ class Session {
         this.isAllowedToClearVodCache = true;
       }
     } else {
-      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo");
+      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo", 1);
       let audioIncrement;
       if (this.use_demuxed_audio) {
         let positionV = 0;
@@ -761,6 +854,11 @@ class Session {
       }
       debug(`[${this._sessionId}]: Will increment audio with ${audioIncrement}`);
       sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
+
+      if (this.use_vtt_subtitles) {
+        debug(`[${this._sessionId}]: Will increment subtitle with 1`);
+        sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", 1);
+      }
     }
 
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
@@ -770,6 +868,10 @@ class Session {
 
     if (sessionState.vodMediaSeqAudio >= currentVod.getLiveMediaSequencesCount("audio") - 1) {
       sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", currentVod.getLiveMediaSequencesCount("audio") - 1);
+    }
+
+    if (sessionState.vodMediaSeqSubtitle >= currentVod.getLiveMediaSequencesCount("subtitle") - 1) {
+      sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", currentVod.getLiveMediaSequencesCount("subtitle") - 1);
     }
 
     if (this.isSwitchingBackToV2L) {
@@ -782,8 +884,10 @@ class Session {
     }
     playheadState.mediaSeq = await this._playheadState.set("mediaSeq", sessionState.mediaSeq, isLeader);
     playheadState.mediaSeqAudio = await this._playheadState.set("mediaSeqAudio", sessionState.mediaSeqAudio, isLeader);
+    playheadState.mediaSeqSubtitle = await this._playheadState.set("mediaSeqSubtitle", sessionState.mediaSeqSubtitle, isLeader);
     playheadState.vodMediaSeqVideo = await this._playheadState.set("vodMediaSeqVideo", sessionState.vodMediaSeqVideo, isLeader);
     playheadState.vodMediaSeqAudio = await this._playheadState.set("vodMediaSeqAudio", sessionState.vodMediaSeqAudio, isLeader);
+    playheadState.vodMediaSeqSubtitle = await this._playheadState.set("vodMediaSeqSubtitle", sessionState.vodMediaSeqSubtitle, isLeader);
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
       const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
@@ -833,12 +937,17 @@ class Session {
       this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
     }
 
+    if (this.use_vtt_subtitles) {
+      this.prevVodMediaSeq.subtitle = playheadState.vodMediaSeqSubtitle;
+      this.prevMediaSeqOffset.subtitle = playheadState.mediaSeqSubtitle;
+    }
+
     let m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, 180000, playheadState.vodMediaSeqVideo, sessionState.discSeq);
     await this._playheadState.setLastM3u8(m3u8);
     return m3u8;
   }
 
-  async getMediaManifestAsync(bw, opts) {
+  async getMediaManifestAsync(bw, opts) { // this function is no longer used and should be removed comment added 5/5-2023
     await this._tickAsync();
     const tsLastRequestVideo = await this._sessionState.get("tsLastRequestVideo");
     let timeSinceLastRequest = (tsLastRequestVideo === null) ? 0 : Date.now() - tsLastRequestVideo;
@@ -910,7 +1019,7 @@ class Session {
     }
   }
 
-  async getAudioManifestAsync(audioGroupId, audioLanguage, opts) {
+  async getAudioManifestAsync(audioGroupId, audioLanguage, opts) { // this function is no longer used and should be removed comment added 5/5-2023
     const tsLastRequestAudio = await this._sessionState.get("tsLastRequestAudio");
     let timeSinceLastRequest = (tsLastRequestAudio === null) ? 0 : Date.now() - tsLastRequestAudio;
 
@@ -963,6 +1072,7 @@ class Session {
     let audioGroupIds = currentVod.getAudioGroups();
     debug(`[${this._sessionId}]: currentVod.getAudioGroups()=${audioGroupIds.join(",")}`);
     let defaultAudioGroupId;
+    let defaultSubtitleGroupId;
     let hasClosedCaptions = this._closedCaptions && this._closedCaptions.length > 0;
     if (hasClosedCaptions) {
       this._closedCaptions.forEach(cc => {
@@ -996,6 +1106,28 @@ class Session {
         defaultAudioGroupId = audioGroupIds[0];
       }
     }
+    if (this.use_vtt_subtitles) {
+      let subtitleGroupIds = currentVod.getSubtitleGroups();
+      if (subtitleGroupIds.length > 0) {
+        m3u8 += "# Subtitle groups\n";
+        for (let i = 0; i < subtitleGroupIds.length; i++) {
+          let subtitleGroupId = subtitleGroupIds[i];
+          for (let j = 0; j < this._subtitleTracks.length; j++) {
+            let subtitleTrack = this._subtitleTracks[j];
+            // Make default track if set property is true.  TODO add enforce
+            m3u8 += `#EXT-X-MEDIA:TYPE=SUBTITLES` +
+              `,GROUP-ID="${subtitleGroupId}"` +
+              `,LANGUAGE="${subtitleTrack.language}"` +
+              `,NAME="${subtitleTrack.name}"` +
+              `,AUTOSELECT=YES,DEFAULT=${subtitleTrack.default ? 'YES' : 'NO'}` +
+              `,URI="subtitles-${subtitleGroupId}_${subtitleTrack.language}.m3u8%3Bsession=${this._sessionId}"` +
+              "\n";
+          }
+        }
+        // As of now, by default set StreamItem's SUBTITLES attribute to <first subtitle group-id>
+        defaultSubtitleGroupId = subtitleGroupIds[0];
+      }
+    }
     if (this._sessionProfile) {
       const sessionProfile = filter ? applyFilter(this._sessionProfile, filter) : this._sessionProfile;
       sessionProfile.forEach(profile => {
@@ -1019,6 +1151,7 @@ class Session {
               ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + 
               ',CODECS="' + profile.codecs + '"' + 
               `,AUDIO="${audioGroupIdToUse}"` + 
+              (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') + 
               (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
             m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
           }
@@ -1027,6 +1160,7 @@ class Session {
             ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + 
             ',CODECS="' + profile.codecs + '"' + 
             (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + 
+            (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') + 
             (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
           m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
         }
@@ -1037,6 +1171,7 @@ class Session {
           ',RESOLUTION=' + profile.resolution + 
           ',CODECS="' + profile.codecs + '"' + 
           (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + 
+          (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
           (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
         m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
       });
@@ -1068,6 +1203,21 @@ class Session {
     return allAudioGroupsAndTheirLanguages;
   }
 
+  async getSubtitleGroupsAndLangs() {
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (!currentVod) {
+      throw new Error('Session not ready');
+    }
+    const subtitleGroupIds = currentVod.getSubtitleGroups();
+    let allSubtitleGroupsAndTheirLanguages = {};
+    subtitleGroupIds.forEach((groupId) => {
+      allSubtitleGroupsAndTheirLanguages[groupId] =
+        currentVod.getSubtitleLangsForSubtitleGroup(groupId);
+    });
+
+    return allSubtitleGroupsAndTheirLanguages;
+  }
+
   consumeEvent() {
     return this._events.shift();
   }
@@ -1080,7 +1230,7 @@ class Session {
     return !this.disabledPlayhead;
   }
 
-  async _insertSlate(currentVod) {
+  async _insertSlate(currentVod) { // no support for subs
     if (this.slateUri) {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
@@ -1125,7 +1275,7 @@ class Session {
     let newVod;
 
     let sessionState = await this._sessionState.getValues(
-      ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "mediaSeq", "mediaSeqAudio", "discSeq", "discSeqAudio", "nextVod"]);
+      ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "nextVod"]);
 
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
 
@@ -1161,7 +1311,13 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
+                forcedDemuxMode: this.use_demuxed_audio, 
+                dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+                subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+                shouldContainSubtitles: this.use_vtt_subtitles,
+                expectedSubtitleTracks: this._subtitleTracks
+              };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
@@ -1192,10 +1348,13 @@ class Session {
             //debug(newVod);
             sessionState.mediaSeq = await this._sessionState.set("mediaSeq", 0);
             sessionState.mediaSeqAudio = await this._sessionState.set("mediaSeqAudio", 0);
+            sessionState.mediaSeqSubtitle = await this._sessionState.set("mediaSeqSubtitle", 0);
             sessionState.discSeq = await this._sessionState.set("discSeq", 0);
             sessionState.discSeqAudio = await this._sessionState.set("discSeqAudio", 0);
+            sessionState.discSeqSubtitle = await this._sessionState.set("discSeqSubtitle", 0);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
+            sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", 0);
             await this._playheadState.set("playheadRef", Date.now(), isLeader);
             this.produceEvent({
               type: 'NOW_PLAYING',
@@ -1246,6 +1405,14 @@ class Session {
               this.prevMediaSeqOffset.audio = sessionState.mediaSeqAudio;
             }
           }
+          if (this.use_vtt_subtitles) {
+            if (this.prevVodMediaSeq.subtitle === null) {
+              this.prevVodMediaSeq.subtitle = sessionState.vodMediaSeqSubtitle;
+            }
+            if (this.prevMediaSeqOffset.audio === null) {
+              this.prevMediaSeqOffset.subtitle = sessionState.mediaSeqSubtitle;
+            }
+          }
           // Clear Cache if prev count is HIGHER than current...
           if (sessionState.vodMediaSeqVideo < this.prevVodMediaSeq.video) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
@@ -1253,6 +1420,7 @@ class Session {
             currentVod = await this._sessionState.getCurrentVod();
             this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
             this.prevVodMediaSeq.audio = sessionState.vodMediaSeqAudio;
+            this.prevVodMediaSeq.subtitle = sessionState.vodMediaSeqSubtitle;
           }
         } else {
           // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
@@ -1263,10 +1431,10 @@ class Session {
             this.isAllowedToClearVodCache = true;
           }
         }
-        debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")})`);
+        debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
         return;
       case SessionState.VOD_NEXT_INITIATING:
-        debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")})`);
+        debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
         }
@@ -1285,15 +1453,19 @@ class Session {
             const length = currentVod.getLiveMediaSequencesCount();
             let endMseqValue;
             let endMseqValueAudio;
+            let endMseqValueSubtitle;
             if (currentVod.sequenceAlwaysContainNewSegments) {
               endMseqValue = currentVod.getLastSequenceMediaSequenceValue();
               endMseqValueAudio = currentVod.getLastSequenceMediaSequenceValueAudio();
+              endMseqValueSubtitle = currentVod.getLastSequenceMediaSequenceValueSubtitle();
             } else {
               endMseqValue = currentVod.getLiveMediaSequencesCount();
               endMseqValueAudio = currentVod.getLiveMediaSequencesCount("audio");
+              endMseqValueSubtitle = currentVod.getLiveMediaSequencesCount("subtitle");
             }
             const lastDiscontinuity = currentVod.getLastDiscontinuity();
             const lastDiscontinuityAudio = currentVod.getLastDiscontinuityAudio();
+            const lastDiscontinuitySubtitle = currentVod.getLastDiscontinuitySubtitle();
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_NEXT_INITIATING);
             let vodPromise = this._getNextVod();
             if (length === 1) {
@@ -1310,7 +1482,13 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
+              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+                forcedDemuxMode: this.use_demuxed_audio, 
+                dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+                subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+                shouldContainSubtitles: this.use_vtt_subtitles,
+                expectedSubtitleTracks: this._subtitleTracks
+              };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
                 Object.keys(vodResponse.timedMetadata).map(k => {
@@ -1354,14 +1532,17 @@ class Session {
             debug(`[${this._sessionId}]: playhead positions [V]=${newVod.getPlayheadPositions("video")}`);
             debug(`[${this._sessionId}]: playhead positions [A]=${newVod.getPlayheadPositions("audio")}`);
             currentVod = newVod;
-            debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}`);
+            debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}; subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
+            sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", 0);
             sessionState.mediaSeq = await this._sessionState.set("mediaSeq", sessionState.mediaSeq + endMseqValue);
             sessionState.mediaSeqAudio = await this._sessionState.set("mediaSeqAudio", sessionState.mediaSeqAudio + endMseqValueAudio);
+            sessionState.mediaSeqSubtitle = await this._sessionState.set("mediaSeqSubtitle", sessionState.mediaSeqSubtitle + endMseqValueSubtitle);
             sessionState.discSeq = await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
             sessionState.discSeqAudio = await this._sessionState.set("discSeqAudio", sessionState.discSeqAudio + lastDiscontinuityAudio);
-            debug(`[${this._sessionId}]: new sequence data set in store [${sessionState.mediaSeq}][${sessionState.discSeq}]_[${sessionState.mediaSeqAudio}][${sessionState.discSeqAudio}]`);
+            sessionState.discSeqSubtitle = await this._sessionState.set("discSeqSubtitle", sessionState.discSeqSubtitle + lastDiscontinuitySubtitle);
+            debug(`[${this._sessionId}]: new sequence data set in store [${sessionState.mediaSeq}][${sessionState.discSeq}]_[${sessionState.mediaSeqSubtitle}][${sessionState.discSeqSubtitle}]_[${sessionState.mediaSeqSubtitle}][${sessionState.discSeqSubtitle}]`);
             await this._sessionState.remove("nextVod");
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             this.leaderIsSettingNextVod = false;
@@ -1456,7 +1637,7 @@ class Session {
             }
 
             // ---------------------------------------------------.
-            // TODO: Support reloading with audioSegments as well |
+            // TODO: Support reloading with audioSegments and SubtitleSegments as well |
             // ---------------------------------------------------'
 
             await currentVod.reload(nextMseq, segments, null, reloadBehind);
@@ -1464,8 +1645,10 @@ class Session {
             await this._sessionState.set("vodReloaded", 1);
             await this._sessionState.set("vodMediaSeqVideo", 0);
             await this._sessionState.set("vodMediaSeqAudio", 0);
+            await this._sessionState.set("vodMediaSeqSubtitle", 0);
             await this._playheadState.set("vodMediaSeqVideo", 0, isLeader);
             await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
+            await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
             await this._playheadState.set("playheadRef", Date.now(), isLeader);
             // 4) Log to debug and cloudwatch
             debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
@@ -1484,7 +1667,7 @@ class Session {
         }
         break;
       case SessionState.VOD_RELOAD_INITIATING:
-        debug(`[${this._sessionId}]: state=VOD_RELOAD_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")})`);
+        debug(`[${this._sessionId}]: state=VOD_RELOAD_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be reloaded`);
           if (sessionState.vodMediaSeqVideo === 0 || this.waitingForNextVod) {
@@ -1541,7 +1724,13 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
+            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
+              forcedDemuxMode: this.use_demuxed_audio, 
+              dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+              subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+              shouldContainSubtitles: this.use_vtt_subtitles,
+              expectedSubtitleTracks: this._subtitleTracks
+            };
             const timestamp = Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
@@ -1601,7 +1790,14 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, forcedDemuxMode: this.use_demuxed_audio };
+            const hlsOpts = { 
+              sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
+              forcedDemuxMode: this.use_demuxed_audio, 
+              dummySubtitleEndpoint: this.dummySubtitleEndpoint, 
+              subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+              shouldContainSubtitles: this.use_vtt_subtitles,
+              expectedSubtitleTracks: this._subtitleTracks
+            };
             const timestamp = Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
@@ -1734,6 +1930,16 @@ class Session {
       seqIdx = playheadPositions.length - 1
     }
     debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${playheadPositions[seqIdx]}`);
+    return playheadPositions[seqIdx];
+  }
+
+  async _getSubtitlePlayheadPosition(seqIdx) {
+    const currentVod = await this._sessionState.getCurrentVod();
+    const playheadPositions = currentVod.getPlayheadPositions("subtitle");
+    if (seqIdx >= playheadPositions.length - 1) {
+      seqIdx = playheadPositions.length - 1
+    }
+    debug(`[${this._sessionId}]: Current subtitle playhead position (${seqIdx}): ${playheadPositions[seqIdx]}`);
     return playheadPositions[seqIdx];
   }
 

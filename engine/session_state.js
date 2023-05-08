@@ -139,13 +139,17 @@ class SessionStateStore extends SharedStateStore {
       discSeq: 0,
       mediaSeqAudio: 0,
       discSeqAudio: 0,
+      mediaSeqSubtitle: 0,
+      discSeqSubtitle: 0,
       vodMediaSeqVideo: 0,
       vodMediaSeqAudio: 0, // assume only one audio group now
+      vodMediaSeqSubtitle: 0, // assume only one subtitle group now
       state: SessionState.VOD_INIT,
       lastM3u8: {},
       tsLastRequestVideo: null,
       tsLastRequestMaster: null,
       tsLastRequestAudio: null,
+      tsLastRequestSubtitle: null,
       currentVod: null,
       slateCount: 0,
       assetId: "",

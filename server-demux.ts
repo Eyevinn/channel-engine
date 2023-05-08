@@ -12,6 +12,7 @@ import {
   Channel,
   ChannelProfile,
   AudioTracks,
+  SubtitleTracks,
 } from "./index";
 
 class RefAssetManager implements IAssetManager {
@@ -22,8 +23,8 @@ class RefAssetManager implements IAssetManager {
       1: [
         {
           id: 1,
-          title: "Sintel",
-          uri: "https://cdn.bitmovin.com/content/assets/sintel/hls/playlist.m3u8",
+          title: "Elephants dream",
+          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
         },
         {
           id: 2,
@@ -54,10 +55,6 @@ class RefAssetManager implements IAssetManager {
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
         }
-        vod.timedMetadata = {
-          'start-date': new Date().toISOString(),
-          'class': 'se.eyevinn.demo'
-        };
         resolve(vod);
       } else {
         reject("Invalid channelId provided");
@@ -68,7 +65,7 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
+    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: this._getSubtitleTracks() }];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -92,7 +89,13 @@ class RefChannelManager implements IChannelManager {
   _getAudioTracks(): AudioTracks[] {
     return [
       { language: "en", name: "English", default: true },
-      { language: "sp", name: "Spanish", default: false }
+      { language: "es", name: "Spanish", default: false },
+    ];
+  }
+  _getSubtitleTracks(): SubtitleTracks[] {
+    return [
+      { language: "zh", name: "chinese", default: true },
+      { language: "fr", name: "french", default: false }
     ];
   }
 }
@@ -104,11 +107,12 @@ const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
-  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  defaultSlateUri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
-  alwaysNewSegments: true,
+  alwaysNewSegments: false,
+  useVTTSubtitles: true
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
