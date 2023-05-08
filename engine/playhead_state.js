@@ -57,7 +57,8 @@ class PlayheadStateStore extends SharedStateStore {
       tickInterval: 3, 
       mediaSeq: 0,
       vodMediaSeqVideo: 0,
-      vodMediaSeqAudio: 0, 
+      vodMediaSeqAudio: 0,
+      vodMediaSeqSubtitle: 0,
     });
   }
   
