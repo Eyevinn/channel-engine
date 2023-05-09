@@ -203,7 +203,7 @@ export class ChannelEngine {
 
     this.useVTTSubtitles = (options && options.useVTTSubtitles) ? options.useVTTSubtitles : false ;
     this.dummySubtitleEndpoint = (options && options.dummySubtitleEndpoint) ? options.dummySubtitleEndpoint : DefaultDummySubtitleEndpointPath;
-    this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.dummySubtitleEndpoint : DefaultSubtitleSpliceEndpointPath;
+    this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.subtitleSliceEndpoint : DefaultSubtitleSpliceEndpointPath;
 
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
@@ -805,9 +805,9 @@ export class ChannelEngine {
     const session = sessions[req.params.channelId];
     if (session) {
       try {
-        const body = `WEBVTT`;
+        const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`;
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "application/vnd.apple.mpegurl",
+          "Content-Type": "text/vtt",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
@@ -828,7 +828,7 @@ export class ChannelEngine {
         const slicer = new SubtitleSlicer();
         const body = await slicer.generateVtt(req.query);
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "application/vnd.apple.mpegurl",
+          "Content-Type": "text/vtt",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
