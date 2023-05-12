@@ -802,23 +802,17 @@ export class ChannelEngine {
 
   async _handleDummySubtitleEndpoint(req,res,next) {
     debug(`req.url=${req.url}`);
-    const session = sessions[req.params.channelId];
-    if (session) {
-      try {
-        const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`;
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "text/vtt",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
-          "X-Instance-Id": this.instanceId + `<${version}>`,
-        });
-        next();
-      } catch (err) {
-        next(this._gracefulErrorHandler(err));
-      }
-    } else {
-      const err = new errs.NotFoundError('Invalid session');
-      next(err);
+    try {
+      const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`;
+      res.sendRaw(200, Buffer.from(body, 'utf8'), {
+        "Content-Type": "text/vtt",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+        "X-Instance-Id": this.instanceId + `<${version}>`,
+      });
+      next();
+    } catch (err) {
+      next(this._gracefulErrorHandler(err));
     }
   }
 
