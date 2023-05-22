@@ -397,7 +397,7 @@ class StreamSwitcher {
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
-            eventSegments = this._mergeSegments(prerollSegments, eventSegments, false);
+            eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
           }
 
           await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
