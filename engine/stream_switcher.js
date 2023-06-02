@@ -238,8 +238,10 @@ class StreamSwitcher {
           // Insert preroll if available for current channel
           if (this.prerollsCache[this.sessionId]) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
+            this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             currVodSegments = this._mergeSegments(prerollSegments, currVodSegments, false);
           }
+
           // In risk that the SL-playhead might have updated some data after
           // we reset last time... we should Reset SessionLive before sending new data.
           await sessionLive.resetLiveStoreAsync(0);
@@ -397,6 +399,7 @@ class StreamSwitcher {
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
+            this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
           }
 
@@ -638,6 +641,21 @@ class StreamSwitcher {
       }
     });
     return OUTPUT_SEGMENTS;
+  }
+
+  _insertTimedMetadata(segments, timedMetadata) {
+    const bandwidths = Object.keys(segments);
+    debug(`[${this.sessionId}]: Inserting timed metadata ${Object.keys(timedMetadata).join(',')}`);
+    bandwidths.forEach((bw) => {
+      let daterangeData = segments[bw][0]["daterange"];
+      if (!daterangeData) {
+        daterangeData = {};
+        Object.keys(timedMetadata).forEach((k) => {
+          daterangeData[k] = timedMetadata[k];
+        });
+      }
+      segments[bw][0]["daterange"] = daterangeData;
+    });
   }
 }
 
