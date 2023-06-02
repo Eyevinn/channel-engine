@@ -85,6 +85,12 @@ export interface VodTimedMetadata {
   'class': string;
 }
 
+export interface LiveTimedMetadata {
+  'id': string;
+  'start-date': string;
+  'x-title'?: string;
+}
+
 export interface VodResponse {
   title: any;
   id: string;
@@ -158,6 +164,7 @@ export interface Schedule {
   end_time: number;
   uri: string;
   duration?: number;
+  timedMetadata?: LiveTimedMetadata;
 }
 
 export interface IStreamSwitchManager {
