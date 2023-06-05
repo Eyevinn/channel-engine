@@ -8,6 +8,7 @@ const SessionLive = require('./session_live.js');
 const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 const SubtitleSlicer = require('./subtitle_slicer.js');
+const { timer }= require('./util.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
@@ -16,7 +17,7 @@ const { PlayheadStateStore } = require('./playhead_state.js');
 const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
 const { version } = require('../package.json');
 
-const timer = ms => new Promise(res => setTimeout(res, ms));
+const AUTO_CREATE_CHANNEL_TIMEOUT = 1000;
 
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
@@ -54,6 +55,7 @@ export interface ChannelEngineOpts {
   adXchangeUri?: string; // deprecated
   noSessionDataTags?: boolean;
   volatileKeyTTL?: number;
+  autoCreateSession?: boolean;
 }
 
 interface StreamerOpts {
@@ -148,6 +150,7 @@ export interface SubtitleTracks {
 
 export interface IChannelManager {
   getChannels: () => Channel[];
+  autoCreateChannel?: (channelId: string) => void;
 }
 
 export enum ScheduleStreamType {
@@ -194,6 +197,7 @@ export class ChannelEngine {
   private logCloudWatchMetrics: boolean;
   private adCopyMgrUri?: string;
   private adXchangeUri?: string;
+  private autoCreateSession: boolean = false;
   
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
@@ -223,6 +227,9 @@ export class ChannelEngine {
     }
     if (options && options.streamSwitchManager) {
       this.streamSwitchManager = options.streamSwitchManager;
+    }
+    if (options && options.autoCreateSession !== undefined) {
+      this.autoCreateSession = options.autoCreateSession;
     }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
@@ -435,6 +442,7 @@ export class ChannelEngine {
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
+    debug(newChannels);
     const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
@@ -479,14 +487,14 @@ export class ChannelEngine {
       await sessions[channel.id].initAsync();
       await sessionsLive[channel.id].initAsync();
       if (!this.monitorTimer[channel.id]) {
-        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id], sessionsLive[channel.id]) }, 5000);
+        this.monitorTimer[channel.id] = setInterval(async () => { await this._monitorAsync(sessions[channel.id], sessionsLive[channel.id]) }, 5000);
       }
 
       await sessions[channel.id].startPlayheadAsync();
     };
 
     const addLiveAsync = async (channel) => {
-      debug(`Adding channel with ID ${channel.id}`);
+      debug(`Adding live channel with ID ${channel.id}`);
       await sessionsLive[channel.id].initAsync();
       await sessionsLive[channel.id].startPlayheadAsync();
     };
@@ -568,6 +576,16 @@ export class ChannelEngine {
     } else if (statusSession.playhead.state === 'idle') {
       debug(`[${statusSession.sessionId}]: Starting playhead`);
       await session.startPlayheadAsync();
+    }
+  }
+
+  async createChannel(channelId) {
+    if (!sessions[channelId]) {
+      if (this.options.channelManager.autoCreateChannel) {
+        this.options.channelManager.autoCreateChannel(channelId);
+        setTimeout(async () => { await this.updateChannelsAsync(this.options.channelManager, this.options) });
+        await timer(AUTO_CREATE_CHANNEL_TIMEOUT);
+      }  
     }
   }
 
@@ -686,45 +704,22 @@ export class ChannelEngine {
     if (req.query['category']) {
       options.category = req.query['category'];
     }
+    if (this.autoCreateSession && req.query['channel']) {
+      debug(`Attempting to create channel with id ${req.query['channel']}`);
+      await this.createChannel(req.query['channel']);
+      debug(`Automatically created channel with id ${req.query['channel']}`);
+    }
+
     if (req.query['channel'] && sessions[req.query['channel']]) {
       session = sessions[req.query['channel']];
     } else if (req.query['session'] && sessions[req.query['session']]) {
       session = sessions[req.query['session']];
-    } else {
-      options.adCopyMgrUri = this.adCopyMgrUri;
-      options.adXchangeUri = this.adXchangeUri;
-      options.averageSegmentDuration = this.streamerOpts.defaultAverageSegmentDuration;
-      options.useDemuxedAudio = this.useDemuxedAudio;
-      options.dummySubtitleEndpoint = this.dummySubtitleEndpoint;
-      options.subtitleSliceEndpoint = this.subtitleSliceEndpoint;
-      options.useVTTSubtitles = this.useVTTSubtitles;
-      options.alwaysNewSegments = this.alwaysNewSegments;
-      options.playheadDiffThreshold = this.streamerOpts.defaultPlayheadDiffThreshold;
-      options.maxTickInterval = this.streamerOpts.defaultMaxTickInterval;
-      options.targetDurationPadding = this.streamerOpts.targetDurationPadding;
-      options.forceTargetDuration = this.streamerOpts.forceTargetDuration;
-      options.diffCompensationRate = this.streamerOpts.diffCompensationRate;
-      // if we are initiating a master manifest
-      // outside of specific Channel context,
-      // if slate options are set at the ChannelEngine level, then set these here
-      if (this.defaultSlateUri) {
-        options.slateUri = this.defaultSlateUri;
-      }
-      if (this.slateRepetitions) {
-        options.slateRepetitions = this.slateRepetitions;
-      }
-      if (this.slateDuration) {
-        options.slateDuration = this.slateDuration;
-      }
-      options.disabledPlayhead = true; // disable playhead for personalized streams
-      session = new Session(this.assetMgr, options, this.sessionStore);
-      await session.initAsync();
-      sessions[session.sessionId] = session;
     }
     if (req.query['startWithId']) {
       options.startWithId = req.query['startWithId'];
       debug(`New session to start with assetId=${options.startWithId}`);
     }
+
     if (session) {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
