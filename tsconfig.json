@@ -11,7 +11,8 @@
     "./server-demux.ts", 
     "./server-livemix.ts", 
     "./server-multicodec.ts", 
-    "./server-drm.ts", 
+    "./server-drm.ts",
+    "./examples/*", 
     "./engine/**/*"
   ]
 }
