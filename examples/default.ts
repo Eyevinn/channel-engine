@@ -5,7 +5,7 @@
 import { ChannelEngine, ChannelEngineOpts, 
   IAssetManager, IChannelManager, 
   VodRequest, VodResponse, Channel, ChannelProfile
-} from "./index";
+} from "../index";
 
 const STITCH_ENDPOINT =
   process.env.STITCH_ENDPOINT ||

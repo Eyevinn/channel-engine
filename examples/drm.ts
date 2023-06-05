@@ -1,5 +1,7 @@
 /*
- * Reference implementation of Channel Engine library using demuxed VOD assets.
+ * Reference implementation of Channel Engine library using DRM (HLS+Widevine) VOD assets.
+ *
+ * Playback: https://shaka-player-demo.appspot.com/demo/#audiolang=sv-SE;textlang=sv-SE;uilang=sv-SE;asset=http://localhost:8000/channels/1/master.m3u8;license=https://cwip-shaka-proxy.appspot.com/no_auth;panel=CUSTOM%20CONTENT;build=uncompiled
  */
 
 import {
@@ -12,8 +14,7 @@ import {
   Channel,
   ChannelProfile,
   AudioTracks,
-  SubtitleTracks,
-} from "./index";
+} from "../index";
 
 class RefAssetManager implements IAssetManager {
   private assets;
@@ -23,14 +24,27 @@ class RefAssetManager implements IAssetManager {
       1: [
         {
           id: 1,
-          title: "Elephants dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+          title: "VINN DRM",
+          uri: "https://testcontent.eyevinn.technology/vinn/multidrm/index.m3u8"
+          // License server urL: https://widevine-dash.ezdrm.com/proxy?pX=1D331C
         },
         {
           id: 2,
-          title: "Test HLS Bird noises (1m10s)",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+          title: "VINN No DRM",
+          uri: "https://testcontent.eyevinn.technology/vinn/cmaf/index.m3u8"
         },
+        {
+          id: 3,
+          title: "CE Promo DRM",
+          uri: "https://testcontent.eyevinn.technology/drm/CE-promo/index.m3u8"
+          // License server urL: https://widevine-dash.ezdrm.com/proxy?pX=1D331C
+        },
+        {
+          id: 4,
+          title: "Eyevinn Reel DRM",
+          uri: "https://testcontent.eyevinn.technology/drm/Eyevinn-Reel/index.m3u8"
+          // License server urL: https://widevine-dash.ezdrm.com/proxy?pX=1D331C
+        }
       ],
     };
     this.pos = {
@@ -65,7 +79,7 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: this._getSubtitleTracks() }];
+    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -88,14 +102,7 @@ class RefChannelManager implements IChannelManager {
   }
   _getAudioTracks(): AudioTracks[] {
     return [
-      { language: "en", name: "English", default: true },
-      { language: "es", name: "Spanish", default: false },
-    ];
-  }
-  _getSubtitleTracks(): SubtitleTracks[] {
-    return [
-      { language: "zh", name: "chinese", default: true },
-      { language: "fr", name: "french", default: false }
+      { language: "en", name: "English" },
     ];
   }
 }
@@ -105,14 +112,13 @@ const refChannelManager = new RefChannelManager();
 
 const engineOptions: ChannelEngineOpts = {
   heartbeat: "/",
-  averageSegmentDuration: 2000,
+  averageSegmentDuration: 4000,
   channelManager: refChannelManager,
-  defaultSlateUri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
-  alwaysNewSegments: false,
-  useVTTSubtitles: true
+  alwaysNewSegments: true,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);

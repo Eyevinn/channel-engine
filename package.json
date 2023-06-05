@@ -10,9 +10,9 @@
     "test": "jasmine",
     "version:rc": "npm version prerelease --preid=rc",
     "postversion": "git push && git push --tags",
-    "start": "node dist/server.js",
-    "start-demux": "node dist/server-demux.js",
-    "start-livemix": "node dist/server-livemix.js"
+    "start": "node dist/examples/default.js",
+    "start-demux": "node dist/examples/demux.js",
+    "start-livemix": "node dist/examples/livemix.js"
   },
   "engines": {
     "node": ">=14 <20"
