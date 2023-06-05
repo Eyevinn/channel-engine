@@ -6,7 +6,7 @@ import { ChannelEngine, ChannelEngineOpts,
   IAssetManager, IChannelManager, 
   VodRequest, VodResponse, Channel, ChannelProfile,
   AudioTracks
-} from "./index";
+} from "../index";
 
 class RefAssetManager implements IAssetManager {
   private assets;

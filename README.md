@@ -110,7 +110,7 @@ Build the app:
 npm run build
 ```
 
-To start the reference implementation in `server.ts` run:
+To start the reference implementation in `examples/default.ts` run:
 
 ```
 npm start
@@ -129,10 +129,11 @@ DEBUG=engine-* npm start
 ```
 
 In addition there other reference implemetations that can be used:
-- `server-demux.ts` : example with demuxed audio
-- `server-livemix.ts` : example with live mimxing
-- `server-multicodec.ts` : example with multicodec
-- `server-drm.ts` : example with DRM
+- `examples/demux.ts` : example with demuxed audio
+- `examples/livemix.ts` : example with live mimxing
+- `examples/multicodec.ts` : example with multicodec
+- `examples/drm.ts` : example with DRM
+- `examples/autocreate.ts` : example to auto create channel on demand
 
 ### Source linking hls-vodtolive library
 

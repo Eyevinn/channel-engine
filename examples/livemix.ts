@@ -6,7 +6,7 @@ import { ChannelEngine, ChannelEngineOpts,
   IAssetManager, IChannelManager, IStreamSwitchManager,
   VodRequest, VodResponse, Channel, ChannelProfile,
   Schedule
-} from "./index";
+} from "../index";
 const { v4: uuidv4 } = require('uuid');
 
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
