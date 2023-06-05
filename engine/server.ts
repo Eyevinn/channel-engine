@@ -17,7 +17,7 @@ const { PlayheadStateStore } = require('./playhead_state.js');
 const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
 const { version } = require('../package.json');
 
-const AUTO_CREATE_CHANNEL_TIMEOUT = 1000;
+const AUTO_CREATE_CHANNEL_TIMEOUT = 3000;
 
 const sessions = {}; // Should be a persistent store...
 const sessionsLive = {}; // Should be a persistent store...
