@@ -1331,7 +1331,12 @@ class Session {
                 })
               }
               currentVod = newVod;
-              loadPromise = currentVod.load();
+              if (vodResponse.desiredDuration) {
+                const { mediaManifestLoader, audioManifestLoader} = await this._truncateVod(vodResponse);
+                loadPromise = currentVod.load(null, mediaManifestLoader, audioManifestLoader);
+              } else {
+                loadPromise = currentVod.load();
+              }
             } else {
               if (vodResponse.type === 'gap') {
                 loadPromise = new Promise((resolve, reject) => {
@@ -1509,7 +1514,12 @@ class Session {
                   title: this.currentMetadata.title || '',
                 }
               });
-              loadPromise = newVod.loadAfter(currentVod);
+              if (vodResponse.desiredDuration) {
+                const { mediaManifestLoader, audioManifestLoader} = await this._truncateVod(vodResponse);
+                loadPromise = newVod.loadAfter(currentVod, null, mediaManifestLoader, audioManifestLoader);
+              } else {
+                loadPromise = newVod.loadAfter(currentVod);
+              }
               if (vodResponse.diffMs) {
                 this.diffCompensation = vodResponse.diffMs;
                 if (this.diffCompensation) {
@@ -1780,6 +1790,33 @@ class Session {
         reject(err);
       }
     });
+  }
+
+  _truncateVod(vodResponse) {
+    return new Promise((resolve, reject) => {
+      const truncatedVod = new HLSTruncateVod(vodResponse.uri, vodResponse.desiredDuration / 1000);
+      truncatedVod.load()
+        .then(() => {
+          let audioManifestLoader;
+          const mediaManifestLoader = (bw) => {
+            let mediaManifestStream = new Readable();
+            mediaManifestStream.push(truncatedVod.getMediaManifest(bw));
+            mediaManifestStream.push(null);
+            return mediaManifestStream;
+          };
+          if (this.use_demuxed_audio) {
+            audioManifestLoader = (audioGroupId, audioLanguage) => {
+              let mediaManifestStream = new Readable();
+              mediaManifestStream.push(truncatedVod.getAudioManifest(audioGroupId, audioLanguage));
+              mediaManifestStream.push(null);
+              return mediaManifestStream;
+            };
+          }
+          resolve({ mediaManifestLoader, audioManifestLoader });
+        });
+    });
+
+
   }
 
   _truncateSlate(afterVod, requestedDuration, vodUri) {

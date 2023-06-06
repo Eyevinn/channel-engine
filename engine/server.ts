@@ -99,7 +99,7 @@ export interface VodResponse {
   uri: string;
   offset?: number;
   diffMs?: number;
-  desiredDuraiton?: number;
+  desiredDuration?: number;
   type?: string;
   currentMetadata?: VodResponseMetadata;
   timedMetadata?: VodTimedMetadata;
