@@ -1794,29 +1794,34 @@ class Session {
 
   _truncateVod(vodResponse) {
     return new Promise((resolve, reject) => {
-      const truncatedVod = new HLSTruncateVod(vodResponse.uri, vodResponse.desiredDuration / 1000);
-      truncatedVod.load()
-        .then(() => {
-          let audioManifestLoader;
-          const mediaManifestLoader = (bw) => {
-            let mediaManifestStream = new Readable();
-            mediaManifestStream.push(truncatedVod.getMediaManifest(bw));
-            mediaManifestStream.push(null);
-            return mediaManifestStream;
-          };
-          if (this.use_demuxed_audio) {
-            audioManifestLoader = (audioGroupId, audioLanguage) => {
+      try {
+        const truncatedVod = new HLSTruncateVod(vodResponse.uri, vodResponse.desiredDuration / 1000);
+        truncatedVod.load()
+          .then(() => {
+            let audioManifestLoader;
+            const mediaManifestLoader = (bw) => {
               let mediaManifestStream = new Readable();
-              mediaManifestStream.push(truncatedVod.getAudioManifest(audioGroupId, audioLanguage));
+              mediaManifestStream.push(truncatedVod.getMediaManifest(bw));
               mediaManifestStream.push(null);
               return mediaManifestStream;
             };
-          }
-          resolve({ mediaManifestLoader, audioManifestLoader });
-        });
+            if (this.use_demuxed_audio) {
+              audioManifestLoader = (audioGroupId, audioLanguage) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(truncatedVod.getAudioManifest(audioGroupId, audioLanguage));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+            }
+            resolve({ mediaManifestLoader, audioManifestLoader });
+          }).catch(err => {
+            debug(err);
+            reject(err);
+          });
+      } catch (err) {
+        reject(err);
+      }
     });
-
-
   }
 
   _truncateSlate(afterVod, requestedDuration, vodUri) {
