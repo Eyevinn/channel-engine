@@ -73,14 +73,16 @@ class SharedSessionState {
     if (!this.sessionId) {
       throw new Error("shared session state store has not been initialized");
     }
-
     if (this.store.isShared()) {
       await this.store.clearLeaderCache();
       const isLeader = await this.store.isLeader(this.instanceId);
       if (isLeader) {
         await this.set("currentVod", hlsVod.toJSON());
       } else {
-        debug(`[${this.sessionId}]: not a leader, will not overwrite currentVod in shared store`);
+        debug(`[${this.sessionId}]: Not a leader. Will not overwrite. Getting currentVod in shared store`);
+        const currentVod = await this.get("currentVod");
+        hlsVod = new HLSVod();
+        hlsVod.fromJSON(currentVod);
       }
     } else {
       await this.set("currentVod", hlsVod);
