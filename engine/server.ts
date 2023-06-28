@@ -452,7 +452,7 @@ export class ChannelEngine {
     try {
       await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
     } catch (err) {
-      debug('Problem occured when updating streamSwitchers');
+      debug('Problem occurred when updating streamSwitchers');
       throw new Error (err);
     }
 
@@ -497,9 +497,10 @@ export class ChannelEngine {
         useDemuxedAudio: options.useDemuxedAudio,
         dummySubtitleEndpoint: this.dummySubtitleEndpoint,
         subtitleSliceEndpoint: this.subtitleSliceEndpoint,
-        useVTTSubtitles: this.useVTTSubtitles,
+        useVTTSubtitles: false,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         profile: channel.profile,
+        audioTracks: channel.audioTracks
       }, this.sessionLiveStore);
 
       sessionSwitchers[channel.id] = new StreamSwitcher({
@@ -774,15 +775,31 @@ export class ChannelEngine {
   }
 
   async _handleAudioManifest(req, res, next) {
-    debug(`req.url=${req.url}`);
+    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
+    debug(req.params);
     const session = sessions[req.params[2]];
-    if (session) {
+    const sessionLive = sessionsLive[req.params[2]];
+    if (session && sessionLive) {
       try {
-        const body = await session.getCurrentAudioManifestAsync(
-          req.params[0],
-          req.params[1],
-          req.headers["x-playback-session-id"]
-        );
+        let body = null;
+        if (!this.streamSwitchManager) {
+          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
+          body = await session.getCurrentAudioManifestAsync(req.params[0], req.params[1], req.headers["x-playback-session-id"]);
+        } else {
+          while (switcherStatus[req.params[2]] === null || switcherStatus[req.params[2]] === undefined) {
+            debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+            await timer(500);
+          }
+          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[2]]}]`);
+          if (switcherStatus[req.params[2]]) {
+            debug(`[${req.params[2]}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentAudioManifestAsync(req.params[0], req.params[1]);
+          } else {
+            debug(`[${req.params[2]}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentAudioManifestAsync(req.params[0], req.params[1], req.headers["x-playback-session-id"]);
+          }
+        }
+
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
@@ -794,7 +811,7 @@ export class ChannelEngine {
         next(this._gracefulErrorHandler(err));
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
+      const err = new errs.NotFoundError('Invalid session(s)');
       next(err);
     }
   }

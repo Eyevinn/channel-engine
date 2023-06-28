@@ -69,6 +69,10 @@ class Session {
       discSeq: null,
       mediaSeqOffset: null,
       transitionSegments: null,
+      audioSeq: null,
+      discAudioSeq: null,
+      audioSeqOffset: null,
+      transitionAudioSegments: null,
       reloadBehind: null,
     }
     this.isAllowedToClearVodCache = null;
@@ -369,6 +373,17 @@ class Session {
       return null;
     }
   }
+  async getTruncatedVodAudioSegments(vodUri, duration) {
+    try {
+      const hlsVod = await this._truncateSlate(null, duration, vodUri);
+      let vodSegments = hlsVod.getAudioSegments();
+      Object.keys(vodSegments).forEach((bw) => vodSegments[bw].unshift({ discontinuity: true, cue: { in: true } }));
+      return vodSegments;
+    } catch (exc) {
+      debug(`[${this._sessionId}]: Failed to generate truncated VOD!`);
+      return null;
+    }
+  }
 
   async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
     if (!this._sessionState) {
@@ -488,7 +503,63 @@ class Session {
     }
   }
 
-  async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) {
+  async getCurrentAudioSequenceSegments(opts) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (isLeader) {
+      await this._sessionState.set("vodReloaded", 0);
+    }
+
+    // Only read data from store if state is VOD_PLAYING
+    let state = await this.getSessionState();
+    let tries = 12;
+    while (state !== SessionState.VOD_PLAYING && tries > 0) {
+      const waitTimeMs = 500;
+      debug(`[${this._sessionId}]: state=${state} - Waiting ${waitTimeMs}ms_${tries} until Leader has finished loading next vod.`);
+      await timer(waitTimeMs);
+      tries--;
+      state = await this.getSessionState();
+    }
+
+    const playheadState = {
+      vodMediaSeqAudio: null
+    }
+    if (opts && opts.targetMseq !== undefined) {
+      playheadState.vodMediaSeqAudio = opts.targetMseq;
+    } else {
+      playheadState.vodMediaSeqAudio = await this._playheadState.get("vodMediaSeqAudio");
+    }
+
+    // NOTE: Assume that VOD cache was already cleared in 'getCurrentMediaAndDiscSequenceCount()'
+    // and that we now have access to the correct vod cache
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      try {
+        const audioSegments = currentVod.getLiveAudioSequenceSegments(playheadState.vodMediaSeqAudio);
+
+        let audioSequenceValue = 0;
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          audioSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+          debug(`[${this._sessionId}]: {${audioSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}}`);
+        } else {
+          audioSequenceValue = playheadState.vodMediaSeqAudio;
+        }
+
+        debug(`[${this._sessionId}]: Requesting all audio segments from Media Sequence: ${playheadState.vodMediaSeqAudio}(${audioSequenceValue})_${currentVod.getLiveMediaSequencesCount("audio")}`);
+        return audioSegments;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed to get all current audio segments: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
+
+  async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq, _audioSeq, _discAudioSeq) {
     if (!this._sessionState) {
       throw new Error("Session not ready");
     }
@@ -497,6 +568,8 @@ class Session {
 
     this.switchDataForSession.mediaSeq = _mediaSeq;
     this.switchDataForSession.discSeq = _discSeq;
+    this.switchDataForSession.audioSeq = _audioSeq;
+    this.switchDataForSession.discAudioSeq = _discAudioSeq;
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
@@ -515,9 +588,10 @@ class Session {
       state = await this.getSessionState();
     }
 
-    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "mediaSeqAudio","vodMediaSeqAudio"]);
     const discSeqOffset = await this._sessionState.get("discSeq");
-    // TODO: support Audio too ^
+    const discAudioSeqOffset = await this._sessionState.get("discSeqAudio");
+    
 
     // Clear Vod Cache here when Switching to Live just to be safe...
     if (playheadState.vodMediaSeqVideo === 0) {
@@ -538,12 +612,26 @@ class Session {
           mediaSequenceValue = playheadState.vodMediaSeqVideo;
         }
         const discSeqCount = discSeqOffset + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
-
+        let discSeqCountAudio;
+        let audioSequenceValue;
+        if (this.use_demuxed_audio) {
+          discSeqCountAudio = discAudioSeqOffset + currentVod.discontinuitiesAudio[playheadState.vodMediaSeqAudio];
+          if (currentVod.sequenceAlwaysContainNewSegments) {
+            audioSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+            debug(`[${this._sessionId}]: seqIndex=${playheadState.vodMediaSeqAudio}_seqValue=${audioSequenceValue}`)
+          } else {
+            audioSequenceValue = playheadState.vodMediaSeqAudio;
+          }
+        }
         debug(`[${this._sessionId}]: MediaSeq: (${playheadState.mediaSeq}+${mediaSequenceValue}=${(playheadState.mediaSeq + mediaSequenceValue)}) and DiscSeq: (${discSeqCount}) requested `);
+        debug(`[${this._sessionId}]: AudioSeq: (${playheadState.mediaSeqAudio}+${audioSequenceValue}=${(playheadState.mediaSeqAudio + audioSequenceValue)}) and DiscSeq: (${discSeqCountAudio}) requested `);
         return {
           'mediaSeq': (playheadState.mediaSeq + mediaSequenceValue),
           'discSeq': discSeqCount,
           'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
+          'vodMediaSeqAudio': playheadState.vodMediaSeqAudio,
+          'audioSeq': playheadState.mediaSeqAudio + audioSequenceValue,
+          'discSeqAudio': discSeqCountAudio,
         };
       } catch (err) {
         logerror(this._sessionId, err);

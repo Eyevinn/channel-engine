@@ -26,11 +26,7 @@ class RefAssetManager implements IAssetManager {
           title: "Elephants dream",
           uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
         },
-        {
-          id: 2,
-          title: "Test HLS Bird noises (1m10s)",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
-        },
+        
       ],
     };
     this.pos = {
@@ -118,4 +114,4 @@ const engineOptions: ChannelEngineOpts = {
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.PORT || 8000);
+engine.listen(process.env.PORT || 8001);
