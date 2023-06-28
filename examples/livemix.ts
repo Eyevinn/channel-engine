@@ -5,7 +5,7 @@
 import { ChannelEngine, ChannelEngineOpts, 
   IAssetManager, IChannelManager, IStreamSwitchManager,
   VodRequest, VodResponse, Channel, ChannelProfile,
-  Schedule
+  Schedule, AudioTracks
 } from "../index";
 const { v4: uuidv4 } = require('uuid');
 
@@ -14,38 +14,14 @@ class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
   constructor(opts?) {
-    if (process.env.TEST_CHANNELS) {
-      this.assets = {};
-      this.pos = {};
-
-      const testChannelsCount = parseInt(process.env.TEST_CHANNELS, 10);
-      for (let i = 0; i < testChannelsCount; i++) {
-        const channelId = `${i + 1}`;
-        this.assets[channelId] = [
-          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
-          { id: 4, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
-          { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 6, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
-        ];
-        this.pos[channelId] = 2;
-      }
-    } else {
       this.assets = {
         '1': [
-          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
-          { id: 2, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
-          { id: 3, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
-          { id: 4, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
-          { id: 5, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
-          { id: 6, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
+          { id: 1, title: "Tears of Steel", uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8" },
         ]
       };
       this.pos = {
-        '1': 1
+        '1': 0
       };
-    }
   }
 
   /* @param {Object} vodRequest
@@ -69,7 +45,7 @@ class RefAssetManager implements IAssetManager {
             {
               pos: 0,
               duration: 15 * 1000,
-              url: "https://maitv-vod.lab.eyevinn.technology/ads/apotea-15s.mp4/master.m3u8"
+              url: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8"
             }
           ]
         };
@@ -78,7 +54,7 @@ class RefAssetManager implements IAssetManager {
         const vodResponse = {
           id: vod.id,
           title: vod.title,
-          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload
+          uri: vod.uri
         };
         resolve(vodResponse);
       } else {
@@ -99,10 +75,10 @@ class RefChannelManager implements IChannelManager {
     if (process.env.TEST_CHANNELS) {
       const testChannelsCount = parseInt(process.env.TEST_CHANNELS, 10);
       for (let i = 0; i < testChannelsCount; i++) {
-        this.channels.push({ id: `${i + 1}`, profile: this._getProfile() });
+        this.channels.push({ id: `${i + 1}`, profile: this._getProfile(), audioTracks: this._getAudioTracks() });
       }
     } else {
-      this.channels = [{ id: "1", profile: this._getProfile() }];
+      this.channels = [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
     }
   }
 
@@ -116,6 +92,13 @@ class RefChannelManager implements IChannelManager {
       { bw: 1274000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [640, 286] },
       { bw: 742000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [480, 214] },
     ]
+  }
+
+  _getAudioTracks(): AudioTracks[] {
+    return [
+      { language: "en", name: "English", default: true },
+      { language: "es", name: "Spanish", default: false },
+    ];
   }
 }
 const StreamType = Object.freeze({
@@ -168,8 +151,8 @@ class StreamSwitchManager implements IStreamSwitchManager {
             type: StreamType.LIVE,
             start_time: startOffset,
             end_time: endTime,
-            uri: "https://d2fz24s2fts31b.cloudfront.net/out/v1/6484d7c664924b77893f9b4f63080e5d/manifest.m3u8",
-          },
+            uri: "http://localhost:8001/channels/1/master.m3u8",
+          }/*,
           {
             eventId: this.generateID(),
             assetId: this.generateID(),
@@ -179,7 +162,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
             end_time: (endTime + 100*1000) + streamDuration,
             uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
             duration: streamDuration,
-          });
+          }*/);
         }
         resolve(this.schedule[channelId]);
       } else {
@@ -199,8 +182,9 @@ const engineOptions: ChannelEngineOpts = {
   channelManager: refChannelManager,
   streamSwitchManager: refStreamSwitchManager,
   defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
-  slateRepetitions: 10,
+  slateRepetitions: 10, 
   redisUrl: process.env.REDIS_URL,
+  useDemuxedAudio: true,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);

@@ -118,6 +118,7 @@ class StreamSwitcher {
               const segments = await this._loadPreroll(prerollUri);
               const prerollItem = {
                 segments: segments,
+                audioSegments: segments,
                 maxAge: tsNow + 30 * 60 * 1000,
               };
               this.prerollsCache[this.sessionId] = prerollItem;
@@ -225,6 +226,12 @@ class StreamSwitcher {
     let currLiveCounts = 0;
     let currVodSegments = null;
     let eventSegments = null;
+
+    let liveAudioSegments = null;
+    let currVodAudioSegments = null;
+    let eventAudioSegments = null;
+
+
     let liveUri = null;
 
     switch (state) {
@@ -234,19 +241,25 @@ class StreamSwitcher {
           this.eventId = scheduleObj.eventId;
           currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
           currVodSegments = await session.getCurrentMediaSequenceSegments({ targetMseq: currVodCounts.vodMediaSeqVideo });
+          currVodAudioSegments = await session.getCurrentAudioSequenceSegments({ targetMseq: currVodCounts.vodMediaSeqAudio });
 
           // Insert preroll if available for current channel
           if (this.prerollsCache[this.sessionId]) {
-            const prerollSegments = this.prerollsCache[this.sessionId].segments;
+            const prerollSegments = this.prerollsCache[this.sessionId].segments;//audio segments????
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             currVodSegments = this._mergeSegments(prerollSegments, currVodSegments, false);
+
+            // TODO add preroll audio support 
+            // const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+            // currVodAudioSegments = this._mergeSegments(prerollAudioSegments, currVodAudioSegments, false);
           }
 
           // In risk that the SL-playhead might have updated some data after
           // we reset last time... we should Reset SessionLive before sending new data.
           await sessionLive.resetLiveStoreAsync(0);
-          await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
+          await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.discSeqAudio);
           await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
+          await sessionLive.setCurrentAudioSequenceSegments(currVodAudioSegments);
           liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
           if (!liveUri) {
@@ -275,8 +288,10 @@ class StreamSwitcher {
           this.eventId = scheduleObj.eventId;
           currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
+          eventAudioSegments = await session.getTruncatedVodAudioSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
-          if (!eventSegments) {
+
+          if (!eventSegments || (this.useDemuxedAudio && !eventAudioSegments)) {
             debug(`[${this.sessionId}]: [ ERROR Switching from V2L->VOD ]`);
             this.working = false;
             this.eventId = null;
@@ -289,8 +304,9 @@ class StreamSwitcher {
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
+          await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq);
           await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+          await session.setCurrentAudioSequenceSegments(eventAudioSegments, 0, true);
 
           this.working = false;
           debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
@@ -307,13 +323,14 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
           this.eventId = null;
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments()
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
 
-          if (this._isEmpty(liveSegments.currMseqSegs)) {
+          if (this._isEmpty(liveSegments.currMseqSegs) || (this.useDemuxedAudio && this._isEmpty(liveAudioSegments.currMseqSegs))) {
             this.working = false;
             this.streamTypeLive = false;
             debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
@@ -325,10 +342,15 @@ class StreamSwitcher {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             liveSegments.currMseqSegs = this._mergeSegments(prerollSegments, liveSegments.currMseqSegs, false);
             liveSegments.segCount += prerollSegments.length;
+            // AUDIO NOT YET IMPLEMENTED
+            /*const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+            liveAudioSegments.currMseqSegs = this._mergeSegments(prerollAudioSegments, liveSegments.currMseqSegs, false);
+            liveAudioSegments.segCount += prerollAudioSegments.length;*/
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
+          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq, liveCounts.audioSeq, liveCounts.audioDiscSeq);
           await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          await session.setCurrentAudioSequenceSegments(liveAudioSegments.currMseqSegs, liveAudioSegments.segCount)
 
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
@@ -341,7 +363,7 @@ class StreamSwitcher {
           this.streamTypeLive = false;
           this.working = false;
           this.eventId = null;
-          debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ]`);
+          debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ] ${err}`);
           throw new Error(err);
         }
       case SwitcherState.LIVE_TO_VOD:
@@ -350,9 +372,11 @@ class StreamSwitcher {
           // TODO: Not yet fully tested/supported
           this.eventId = scheduleObj.eventId;
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
+
           if (!eventSegments) {
             debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->VOD ]`);
             this.streamTypeLive = false;
@@ -361,8 +385,9 @@ class StreamSwitcher {
             return false;
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
+          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1, liveCounts.audioSeq - 1, liveCounts.audioDiscSeq - 1);
           await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          await session.setCurrentAudioSequenceSegments(liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
 
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
@@ -373,7 +398,7 @@ class StreamSwitcher {
 
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
-          
+
           this.working = false;
           this.streamTypeLive = false;
           debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
@@ -391,6 +416,7 @@ class StreamSwitcher {
           // TODO: Not yet fully tested/supported
           this.eventId = scheduleObj.eventId;
           eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          eventAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
           await sessionLive.resetSession();
@@ -403,8 +429,12 @@ class StreamSwitcher {
             eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
           }
 
-          await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
+          const faild = await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq, currLiveCounts.audioSeq, currLiveCounts.audioDiscSeq);
+          if (!faild) {
+            console.error("cound not set switch live-> live", currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq)
+          }
           await sessionLive.setCurrentMediaSequenceSegments(eventSegments.currMseqSegs);
+          await sessionLive.setCurrentAudioSequenceSegments(eventAudioSegments.currMseqSegs);
           liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
           if (!liveUri) {
@@ -472,6 +502,7 @@ class StreamSwitcher {
     const prerollSegments = {};
     const mediaM3UPlaylists = {};
     const mediaURIs = {};
+    const audioURIs = {};
     try {
       const m3u = await this._fetchParseM3u8(uri);
       debug(`[${this.sessionId}]: ...Fetched a New Preroll Slate Master Manifest from:\n${uri}`);
@@ -481,17 +512,44 @@ class StreamSwitcher {
         for (let i = 0; i < m3u.items.StreamItem.length; i++) {
           const streamItem = m3u.items.StreamItem[i];
           const bw = streamItem.get("bandwidth");
+          
+
           const mediaUri = streamItem.get("uri");
           if (mediaUri.match("^http")) {
             mediaURIs[bw] = mediaUri;
           } else {
             mediaURIs[bw] = new URL(mediaUri, uri).href;
           }
+          const audioGroupId = streamItem.get("audio")
+          if (audioGroupId) {
+            audioURIs[audioGroupId] = {};
+            let audioGroupItems = m3u.items.MediaItem.filter((item) => {
+              return item.get("type") === "AUDIO" && item.get("group-id") === audioGroupId;
+            });
+            let audioLanguages = audioGroupItems.map((item) => {
+              let itemLang;
+              if (!item.get("language")) {
+                itemLang = item.get("name");
+              } else {
+                itemLang = item.get("language");
+              }
+              audioURIs[audioGroupId][itemLang] = [];
+            });
+            for(let j = 0; j < audioLanguages.length; j++) {
+              const mediaUri = streamItem.get("uri");
+              if (mediaUri.match("^http")) {
+                audioURIs[audioGroupId][audioLanguages[j]] = mediaUri;
+              } else {
+                audioURIs[audioGroupId][audioLanguages[j]] = new URL(mediaUri, uri).href;
+              }
+            }
+          }
         }
 
         // Fetch and parse Media URIs
         const bandwidths = Object.keys(mediaURIs);
         const loadMediaPromises = [];
+        const loadAudioPromises = [];// TODO rest of preroll
         // Queue up...
         bandwidths.forEach((bw) => loadMediaPromises.push(this._fetchParseM3u8(mediaURIs[bw])));
         // Execute...
