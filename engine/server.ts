@@ -301,32 +301,34 @@ export class ChannelEngine {
     const handleMasterRoute = async (req, res, next) => {
       debug(req.params);
       let m;
-      if (req.params.file.match(/master.m3u8/)) {
+      if (req.params['*'] === this.dummySubtitleEndpoint) {
+        this._handleDummySubtitleEndpoint(req, res, next);
+      } else if (req.params['*'].match(/master.m3u8/)) {
         await this._handleMasterManifest(req, res, next);
-      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params['*'].match(/master(\d+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
         await this._handleMediaManifest(req, res, next);
-      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params['*'].match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
         req.params[2] = m[3];
         await this._handleAudioManifest(req, res, next);
-      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params['*'].match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
         req.params[2] = m[3];
         await this._handleSubtitleManifest(req, res, next);
       }
     };
-    this.server.get('/live/:file', async (req, res, next) => {
+    this.server.get('/live/*', async (req, res, next) => {
       await handleMasterRoute(req, res, next);
     });
-    this.server.get('/channels/:channelId/:file', async (req, res, next) => {
+    this.server.get('/channels/:channelId/*', async (req, res, next) => {
       req.query['channel'] = req.params.channelId;
       await handleMasterRoute(req, res, next);
     });   
-    this.server.opts('/live/:file', async (req, res, next) => {
+    this.server.opts('/live/*', async (req, res, next) => {
       res.sendRaw(204, "", {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -335,7 +337,7 @@ export class ChannelEngine {
       });
       next();
     });
-    this.server.opts('/channels/:channelId/:file', async (req, res, next) => {
+    this.server.opts('/channels/:channelId/*', async (req, res, next) => {
       res.sendRaw(204, "", {
         headers: {
           "Access-Control-Allow-Origin": "*",
@@ -344,13 +346,19 @@ export class ChannelEngine {
       });
       next();
     });
+    const endpointify = (path) => {
+      if (path[0] !== "/") {
+        return `/${path}`;
+      } 
+      return path;
+    }
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
-    this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
+    this.server.get(endpointify(this.dummySubtitleEndpoint), this._handleDummySubtitleEndpoint.bind(this));
+    this.server.get(endpointify(this.subtitleSliceEndpoint), this._handleSubtitleSliceEndpoint.bind(this));
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);
