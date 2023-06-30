@@ -346,19 +346,15 @@ export class ChannelEngine {
       });
       next();
     });
-    const endpointify = (path) => {
-      if (path[0] !== "/") {
-        return `/${path}`;
-      } 
-      return path;
-    }
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    this.server.get(endpointify(this.dummySubtitleEndpoint), this._handleDummySubtitleEndpoint.bind(this));
-    this.server.get(endpointify(this.subtitleSliceEndpoint), this._handleSubtitleSliceEndpoint.bind(this));
+    if (this.dummySubtitleEndpoint[0] == "/") {
+      this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
+    }
+    this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);
