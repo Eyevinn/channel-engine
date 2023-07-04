@@ -349,10 +349,10 @@ export class ChannelEngine {
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    if (!isValidUrl(this.dummySubtitleEndpoint) && this.dummySubtitleEndpoint[0] !== "/") {
+    if (!isValidUrl(this.dummySubtitleEndpoint) && this.dummySubtitleEndpoint[0] === "/") {
           this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
     }
-    if (!isValidUrl(this.subtitleSliceEndpoint) && this.subtitleSliceEndpoint[0] !== "/") {
+    if (!isValidUrl(this.subtitleSliceEndpoint) && this.subtitleSliceEndpoint[0] === "/") {
       this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
     }
 
