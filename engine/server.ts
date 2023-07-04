@@ -349,8 +349,8 @@ export class ChannelEngine {
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
-    this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
+    this.server.get(DefaultDummySubtitleEndpointPath, this._handleDummySubtitleEndpoint.bind(this));
+    this.server.get(DefaultSubtitleSpliceEndpointPath, this._handleSubtitleSliceEndpoint.bind(this));
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);
