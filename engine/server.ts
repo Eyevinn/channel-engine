@@ -8,7 +8,7 @@ const SessionLive = require('./session_live.js');
 const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 const SubtitleSlicer = require('./subtitle_slicer.js');
-const { timer }= require('./util.js');
+const { timer, isValidUrl }= require('./util.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
@@ -349,8 +349,12 @@ export class ChannelEngine {
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
-    this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
+    if (!isValidUrl(this.dummySubtitleEndpoint) && this.dummySubtitleEndpoint[0] !== "/") {
+          this.server.get(this.dummySubtitleEndpoint, this._handleDummySubtitleEndpoint.bind(this));
+    }
+    if (!isValidUrl(this.subtitleSliceEndpoint) && this.subtitleSliceEndpoint[0] !== "/") {
+      this.server.get(this.subtitleSliceEndpoint, this._handleSubtitleSliceEndpoint.bind(this));
+    }
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);
