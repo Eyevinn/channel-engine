@@ -840,7 +840,7 @@ class Session {
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
           positionA = audioPosition / 1000;
-          posDiff = position - audioPosition;
+          posDiff = (positionV-positionA).toFixed(3);
           if (posDiff <= 0.001) {
             break;
           }
@@ -856,7 +856,7 @@ class Session {
           }
         } while (!(-thresh < posDiff && posDiff < thresh));
         audioIncrement = index;
-        debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be: [${positionV.toFixed(3)}][${positionA.toFixed(3)}] (${(positionA-positionV).toFixed(3)})`);
+        debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be: [${positionV.toFixed(3)}][${positionA.toFixed(3)}] (${posDiff})`);
       }
       debug(`[${this._sessionId}]: Will increment audio with ${audioIncrement}`);
       sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
