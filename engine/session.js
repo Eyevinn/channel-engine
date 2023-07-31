@@ -836,19 +836,23 @@ class Session {
         let index = 0;
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
         const thresh = 0.5;
+        const maxAcceptableDiff = 0.001;
         debug(`[${this._sessionId}]: About to determine audio increment`);
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
           positionA = audioPosition / 1000;
           posDiff = (positionV-positionA).toFixed(3);
-          if (posDiff <= 0.001) {
+          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff};(posDiff <= 0.001)=${posDiff <= 0.001}`);
+          if (posDiff <= maxAcceptableDiff) {
+            debug(`[${this._sessionId}]: posDiff value (${posDiff}) is acceptable`);
             break;
           }
           if (posDiff > thresh) {
             index++;
             incrementValue++;
-          } else {
+          } else if (posDiff > maxAcceptableDiff) {
             index = incrementValue;
+            debug(`[${this._sessionId}]: Audio Stepping index set to = ${index}`);
             break;
           }
           if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx) {
