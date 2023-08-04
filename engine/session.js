@@ -1553,6 +1553,8 @@ class Session {
             debug(`[${this._sessionId}]: playhead positions [A]=${newVod.getPlayheadPositions("audio")}`);
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}; subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
+            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+            await this._playheadState.set("playheadRef", Date.now(), isLeader);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", 0);
@@ -1564,9 +1566,7 @@ class Session {
             sessionState.discSeqSubtitle = await this._sessionState.set("discSeqSubtitle", sessionState.discSeqSubtitle + lastDiscontinuitySubtitle);
             debug(`[${this._sessionId}]: new sequence data set in store V[${sessionState.mediaSeq}][${sessionState.discSeq}]_A[${sessionState.mediaSeqAudio}][${sessionState.discSeqAudio}]_S[${sessionState.mediaSeqSubtitle}][${sessionState.discSeqSubtitle}]`);
             await this._sessionState.remove("nextVod");
-            sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             this.leaderIsSettingNextVod = false;
-            await this._playheadState.set("playheadRef", Date.now(), isLeader);
             await this._playheadState.set("diffCompensation", this.diffCompensation, isLeader);
             debug(`[${this._sessionId}]: sharing durrent vods diffCompensation=${this.diffCompensation}`);
             this.produceEvent({
@@ -2037,9 +2037,9 @@ class Session {
   }
 
   _isOldVod(refTs, vodDur) {
-    const TIME_PADDING_MS = 20 * 1000 // 20secs
     const VOD_DURATION_MS = vodDur * 1000;
-    const TIME_SINCE_VOD_STARTED_MS = (Date.now() - refTs) + TIME_PADDING_MS;
+    const TIME_PADDING_MS = VOD_DURATION_MS * 0.05; //5 percent of content duration
+    const TIME_SINCE_VOD_STARTED_MS = Date.now() - refTs + TIME_PADDING_MS;
     if (TIME_SINCE_VOD_STARTED_MS > VOD_DURATION_MS) {
       return true;
     }
