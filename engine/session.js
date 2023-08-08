@@ -828,7 +828,7 @@ class Session {
         let positionV = 0;
         let positionA = 0;
         const position = (await this._getCurrentPlayheadPosition()) * 1000;
-        positionV = position / 1000;
+        positionV = position ? position / 1000 : 0;
         let currentVod = await this._sessionState.getCurrentVod();
         const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
         let posDiff;
@@ -840,11 +840,10 @@ class Session {
         debug(`[${this._sessionId}]: About to determine audio increment`);
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
-          positionA = audioPosition / 1000;
-          posDiff = (positionV-positionA).toFixed(3);
-          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff};(posDiff <= 0.001)=${posDiff <= 0.001}`);
+          positionA = audioPosition ? audioPosition / 1000 : 0;
+          posDiff = (positionV - positionA).toFixed(3);
+          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff}`);
           if (posDiff <= maxAcceptableDiff) {
-            debug(`[${this._sessionId}]: posDiff value (${posDiff}) is acceptable`);
             break;
           }
           if (posDiff > thresh) {
@@ -858,7 +857,7 @@ class Session {
           if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx) {
             break;
           }
-        } while (!(-thresh < posDiff && posDiff < thresh));
+        } while (!(-thresh < posDiff && posDiff < thresh) && !isNaN(posDiff));
         audioIncrement = index;
         debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be: [${positionV.toFixed(3)}][${positionA.toFixed(3)}] (${posDiff})`);
       }
