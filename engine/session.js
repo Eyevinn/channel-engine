@@ -72,9 +72,14 @@ class Session {
     }
     this.isAllowedToClearVodCache = null;
     this.alwaysNewSegments = null;
+    this.alwaysMapBandwidthByNearest = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
+      }
+
+      if (config.alwaysMapBandwidthByNearest) {
+        this.alwaysMapBandwidthByNearest = config.alwaysMapBandwidthByNearest;
       }
 
       if (config.sessionId) {
@@ -1325,7 +1330,8 @@ class Session {
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
-                expectedSubtitleTracks: this._subtitleTracks
+                expectedSubtitleTracks: this._subtitleTracks,
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
               };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1501,7 +1507,8 @@ class Session {
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
-                expectedSubtitleTracks: this._subtitleTracks
+                expectedSubtitleTracks: this._subtitleTracks,
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
               };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1748,7 +1755,8 @@ class Session {
               dummySubtitleEndpoint: this.dummySubtitleEndpoint,
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
-              expectedSubtitleTracks: this._subtitleTracks
+              expectedSubtitleTracks: this._subtitleTracks,
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
@@ -1847,7 +1855,8 @@ class Session {
               dummySubtitleEndpoint: this.dummySubtitleEndpoint, 
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
-              expectedSubtitleTracks: this._subtitleTracks
+              expectedSubtitleTracks: this._subtitleTracks,
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
