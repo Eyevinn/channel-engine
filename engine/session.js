@@ -72,9 +72,14 @@ class Session {
     }
     this.isAllowedToClearVodCache = null;
     this.alwaysNewSegments = null;
+    this.alwaysMapBandwidthByNearest = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
+      }
+
+      if (config.alwaysMapBandwidthByNearest) {
+        this.alwaysMapBandwidthByNearest = config.alwaysMapBandwidthByNearest;
       }
 
       if (config.sessionId) {
@@ -828,7 +833,7 @@ class Session {
         let positionV = 0;
         let positionA = 0;
         const position = (await this._getCurrentPlayheadPosition()) * 1000;
-        positionV = position / 1000;
+        positionV = position ? position / 1000 : 0;
         let currentVod = await this._sessionState.getCurrentVod();
         const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
         let posDiff;
@@ -840,11 +845,10 @@ class Session {
         debug(`[${this._sessionId}]: About to determine audio increment`);
         do {
           const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
-          positionA = audioPosition / 1000;
-          posDiff = (positionV-positionA).toFixed(3);
-          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff};(posDiff <= 0.001)=${posDiff <= 0.001}`);
+          positionA = audioPosition ? audioPosition / 1000 : 0;
+          posDiff = (positionV - positionA).toFixed(3);
+          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff}`);
           if (posDiff <= maxAcceptableDiff) {
-            debug(`[${this._sessionId}]: posDiff value (${posDiff}) is acceptable`);
             break;
           }
           if (posDiff > thresh) {
@@ -858,7 +862,7 @@ class Session {
           if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx) {
             break;
           }
-        } while (!(-thresh < posDiff && posDiff < thresh));
+        } while (!(-thresh < posDiff && posDiff < thresh) && !isNaN(posDiff));
         audioIncrement = index;
         debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be: [${positionV.toFixed(3)}][${positionA.toFixed(3)}] (${posDiff})`);
       }
@@ -1326,7 +1330,8 @@ class Session {
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
-                expectedSubtitleTracks: this._subtitleTracks
+                expectedSubtitleTracks: this._subtitleTracks,
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
               };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1502,7 +1507,8 @@ class Session {
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
-                expectedSubtitleTracks: this._subtitleTracks
+                expectedSubtitleTracks: this._subtitleTracks,
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
               };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1749,7 +1755,8 @@ class Session {
               dummySubtitleEndpoint: this.dummySubtitleEndpoint,
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
-              expectedSubtitleTracks: this._subtitleTracks
+              expectedSubtitleTracks: this._subtitleTracks,
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
@@ -1852,7 +1859,8 @@ class Session {
               dummySubtitleEndpoint: this.dummySubtitleEndpoint, 
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
-              expectedSubtitleTracks: this._subtitleTracks
+              expectedSubtitleTracks: this._subtitleTracks,
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
