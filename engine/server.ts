@@ -101,6 +101,7 @@ export interface VodResponse {
   offset?: number;
   diffMs?: number;
   desiredDuration?: number;
+  startOffset?: number;
   type?: string;
   currentMetadata?: VodResponseMetadata;
   timedMetadata?: VodTimedMetadata;

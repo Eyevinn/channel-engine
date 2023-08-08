@@ -134,6 +134,7 @@ In addition there other reference implemetations that can be used:
 - `examples/multicodec.ts` : example with multicodec
 - `examples/drm.ts` : example with DRM
 - `examples/autocreate.ts` : example to auto create channel on demand
+- `examples/truncate.ts` : example when trimming start and end of a VOD
 
 ### Source linking hls-vodtolive library
 

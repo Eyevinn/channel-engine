@@ -57,7 +57,8 @@ class RefAssetManager implements IAssetManager {
           id: vod.id,
           title: vod.title,
           uri: vod.uri,
-          desiredDuration: 50000
+          desiredDuration: 50000,
+          startOffset: 10000,
         };
         resolve(vodResponse);
       } else {
