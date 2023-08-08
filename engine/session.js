@@ -1799,7 +1799,11 @@ class Session {
   _truncateVod(vodResponse) {
     return new Promise((resolve, reject) => {
       try {
-        const truncatedVod = new HLSTruncateVod(vodResponse.uri, vodResponse.desiredDuration / 1000);
+        const options = {};
+        if (vodResponse.startOffset) {
+          options.offset = vodResponse.startOffset / 1000;
+        }
+        const truncatedVod = new HLSTruncateVod(vodResponse.uri, vodResponse.desiredDuration / 1000, options);
         truncatedVod.load()
           .then(() => {
             let audioManifestLoader;
