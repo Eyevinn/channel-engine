@@ -158,6 +158,14 @@ const findNearestValue = (val, array) => {
     return Math.abs(b - val) < Math.abs(a - val) ? b : a;
   });
 };
+const findAudioGroupOrLang = (val, array) => {
+  for(let  i = 0; i < array.length; i++) {
+    if (array[i] === val) {
+      return val
+    }
+  }
+  return array[0];
+};
 
 const isValidUrl = (url) => {
   try {
@@ -256,4 +264,5 @@ module.exports = {
   fetchWithRetry,
   codecsFromString,
   timeLeft,
+  findAudioGroupOrLang,
 };

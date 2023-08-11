@@ -482,6 +482,7 @@ export class ChannelEngine {
 
       sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
         streamSwitchManager: this.streamSwitchManager ? this.streamSwitchManager : null
       });
 
