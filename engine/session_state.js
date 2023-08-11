@@ -57,9 +57,18 @@ class SharedSessionState {
     let hlsVod = null;
     if (currentVod) {
       if (this.store.isShared()) {
-        debug(`[${this.sessionId}]: reading ${currentVod.length} characters from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cache.currentVod.ttl})`);
+        const strToMB = (str) => {
+          const bytesPerCharacter = 2; // Assuming each character takes around 2 bytes in memory
+          const stringSizeBytes = str.length * bytesPerCharacter;
+          const sizeInMegabytes = stringSizeBytes / (1024 * 1024);
+          return sizeInMegabytes.toFixed(1);
+        }
+        debug(`[${this.sessionId}]: reading ${currentVod.length} characters or (${strToMB(currentVod)} MB) from shared store (${Date.now()} < ${this.cache.currentVod.ts + this.cache.currentVod.ttl})`);
         hlsVod = new HLSVod();
         hlsVod.fromJSON(currentVod);
+        if (hlsVod.skipSerializeMediaSequences) {
+          await hlsVod.generateMediaSequences();
+        }
       } else {
         hlsVod = currentVod;
       }
@@ -83,6 +92,9 @@ class SharedSessionState {
         const currentVod = await this.get("currentVod");
         hlsVod = new HLSVod();
         hlsVod.fromJSON(currentVod);
+        if (hlsVod.skipSerializeMediaSequences) {
+          await hlsVod.generateMediaSequences();
+        }
       }
     } else {
       await this.set("currentVod", hlsVod);
