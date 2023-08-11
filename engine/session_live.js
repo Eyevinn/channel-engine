@@ -61,9 +61,12 @@ class SessionLive {
     this.audioLiveSegsForFollowers = {};
     this.timerCompensation = null;
     this.firstTime = true;
+    this.firstTimeAudio = true;
     this.allowedToSet = false;
     this.pushAmount = 0;
     this.restAmount = 0;
+    this.pushAmountAudio = 0;
+    this.restAmountAudio = 0;
     this.waitForPlayhead = true;
     this.blockGenerateManifest = false;
 
@@ -155,7 +158,9 @@ class SessionLive {
     this.audioLiveSegsForFollowers = {};
     this.timerCompensation = null;
     this.firstTime = true;
+    this.firstTimeAudio = true;
     this.pushAmount = 0;
+    this.pushAmountAudio = 0;
     this.allowedToSet = false;
     this.waitForPlayhead = true;
     this.blockGenerateManifest = false;
@@ -266,6 +271,7 @@ class SessionLive {
       }
       // To make sure certain operations only occur once.
       this.firstTime = true;
+      this.firstTimeAudio = true;
     }
     // Return whether job was successful or not.
     if (!this.masterManifestUri) {
@@ -457,8 +463,8 @@ class SessionLive {
         debug(`[${this.sessionId}]: Setting discSeqCount to: [${this.discSeqCount}]`);
       }
       if (leadersAudioDiscSeqCount !== null) {
-        this.discAudioSeqCount = leadersAudioDiscSeqCount;
-        debug(`[${this.sessionId}]: Setting discSeqCount to: [${this.discAudioSeqCount}]`);
+        this.audioDiscSeqCount = leadersAudioDiscSeqCount;
+        debug(`[${this.sessionId}]: Setting discSeqCount to: [${this.audioDiscSeqCount}]`);
       }
     }
     return true;
@@ -532,7 +538,7 @@ class SessionLive {
     if (!isLeader) {
       const leadersAudioSeqRaw = await this.sessionLiveState.get("lastRequestedAudioSeqRaw");
       if (leadersAudioSeqRaw > this.lastRequestedAudioSeqRaw) {
-        this.lastRequestedMediaSeqRaw = leadersAudioSeqRaw;
+        this.lastRequestedAudioSeqRaw = leadersAudioSeqRaw;
         this.liveAudioSegsForFollowers = await this.sessionLiveState.get("liveAudioSegsForFollowers");
         this._updateAudioLiveSegQueue();
       }
@@ -544,18 +550,21 @@ class SessionLive {
     const groupIds = Object.keys(this.audioManifestURIs);
     for (let i = 0; i < groupIds.length; i++) {
       let groupId = groupIds[i];
+      if (!currentAudioSequenceSegments[groupId]) {
+        currentAudioSequenceSegments[groupId] = {};
+      }
       let langs = Object.keys(this.audioManifestURIs[groupIds[i]]);
       for (let j = 0; j < langs.length; j++) {
-
         const liveTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.audioManifestURIs);
         const vodTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.vodAudioSegments);
-
+        if (!vodTargetGroupLang.audioGroupId || !vodTargetGroupLang.audioLanguage) {
+          return null;
+        }
         // Remove segments and disc-tag if they are on top
         if (this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].length > 0 && this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage][0].discontinuity) {
           this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].shift();
           increment = 1;
         }
-
         segmentCount = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].length;
         currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = [];
         // In case we switch back before we've depleted all transitional segments
@@ -565,7 +574,7 @@ class SessionLive {
       }
     }
 
-    this.discSeqCount += increment;
+    this.audioDiscSeqCount += increment;
     return {
       currMseqSegs: currentAudioSequenceSegments,
       segCount: segmentCount,
@@ -656,7 +665,6 @@ class SessionLive {
     if (!m3u8) {
       throw new Error(`[${this.instanceId}][${this.sessionId}]: Failed to generate audio manifest after 10000ms`);
     }
-    console.log("return meu8", m3u8)
     return m3u8;
   }
 
@@ -791,7 +799,8 @@ class SessionLive {
 
     // Push the New Live Segments to All Variants
     for (let segIdx = 0; segIdx < size; segIdx++) {
-      for (let i = 0; i < liveGroupIds.length; i++) {x
+      for (let i = 0; i < liveGroupIds.length; i++) {
+        x
         const liveGroupId = liveGroupIds[i];
         const liveLangs = Object.keys(this.liveAudioSegsForFollowers[liveGroupId])
         for (let j = 0; j < liveLangs.length; j++) {
@@ -816,7 +825,7 @@ class SessionLive {
       }
     }
     // Remove older segments and update counts
-    const newTotalDuration = this._incrementAndShift("FOLLOWER");
+    const newTotalDuration = this._incrementAndShiftAudio("FOLLOWER");
     if (newTotalDuration) {
       debug(`[${this.sessionId}]: FOLLOWER: New Adjusted Playlist Duration=${newTotalDuration}s`);
     }
@@ -1194,7 +1203,7 @@ class SessionLive {
     //  ends here, where I only read from store.
     // -------------------------------------
     let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader && this.lastRequestedMediaSeqRaw !== null) {
+    if (!isLeader && this.lastRequestedAudioSeqRaw !== null) {
       debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
       let leadersAudioSeqRaw = await this.sessionLiveState.get("lastRequestedAudioSeqRaw");
@@ -1240,7 +1249,7 @@ class SessionLive {
           debug(`[${this.sessionId}]: We are about to switch away from LIVE. Abort fetching from Store`);
           break;
         }
-        if (leadersAudioSeqRaw <= this.lastRequestedMediaSeqRaw) {
+        if (leadersAudioSeqRaw <= this.lastRequestedAudioSeqRaw) {
           isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
           if (isLeader) {
             debug(`[${this.instanceId}][${this.sessionId}]: I'm the new leader`);
@@ -1280,7 +1289,7 @@ class SessionLive {
     let groupLangToSkipOnRetry = [];
     while (FETCH_ATTEMPTS > 0) {
       if (isLeader) {
-        console.log(`[${this.sessionId}]: LEADER: Trying to fetch manifests for all groups and language\n Attempts left=[${FETCH_ATTEMPTS}]`);
+        debug(`[${this.sessionId}]: LEADER: Trying to fetch manifests for all groups and language\n Attempts left=[${FETCH_ATTEMPTS}]`);
       } else {
         debug(`[${this.sessionId}]: NEW FOLLOWER: Trying to fetch manifests for all groups and language\n Attempts left=[${FETCH_ATTEMPTS}]`);
       }
@@ -1293,7 +1302,7 @@ class SessionLive {
       // Reset Values Each Attempt
       let livePromises = [];
       let manifestList = [];
-      this.pushAmount = 0;
+      this.pushAmountAudio = 0;
       try {
         if (groupLangToSkipOnRetry.length > 0) {
           debug(`[${this.sessionId}]: (X) Skipping loadAudio promises for bws ${JSON.stringify(groupLangToSkipOnRetry)}`);
@@ -1309,7 +1318,7 @@ class SessionLive {
               continue;
             }
             livePromises.push(this._loadAudioManifest(groupId, lang));
-            console.log(`[${this.sessionId}]: Pushed loadAudio promise for groupId,lang=[${groupId}, ${lang}]`);
+            debug(`[${this.sessionId}]: Pushed loadAudio promise for groupId,lang=[${groupId}, ${lang}]`);
           }
         }
         // Fetch From Live Source
@@ -1430,13 +1439,13 @@ class SessionLive {
 
         // Respawners never do this, only starter followers.
         // Edge Case: FOLLOWER transitioned from session with different segments from LEADER
-        if (leadersFirstSeqCounts.discSeqCount !== this.discSeqCount) {
-          this.discSeqCount = leadersFirstSeqCounts.discSeqCount;
+        if (leadersFirstSeqCounts.discSeqCount !== this.audioDiscSeqCount) {
+          this.audioDiscSeqCount = leadersFirstSeqCounts.discSeqCount;
         }
-        if (leadersFirstSeqCounts.mediaAudioSeqCount !== this.mediaAudioSeqCount) {
-          this.mediaAudioSeqCount = leadersFirstSeqCounts.mediaAudioSeqCount;
+        if (leadersFirstSeqCounts.audioSeqCount !== this.audioSeqCount) {
+          this.audioSeqCount = leadersFirstSeqCounts.audioSeqCount;
           debug(
-            `[${this.sessionId}]: FOLLOWER transitioned with wrong V2L segments, updating counts to [${this.mediaAudioSeqCount}][${this.discAudioSeqCount}], and reading 'transitSegs' from store`
+            `[${this.sessionId}]: FOLLOWER transitioned with wrong V2L segments, updating counts to [${this.audioSeqCount}][${this.audioDiscSeqCount}], and reading 'transitSegs' from store`
           );
           const transitSegs = await this.sessionLiveState.get("transitAudioSegs");
           if (!this._isEmpty(transitSegs)) {
@@ -1447,13 +1456,13 @@ class SessionLive {
         // Prepare to load segments...
         debug(`[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${currentMseqRaw} First mseq in store=${leadersFirstSeqCounts.liveAudioSourceMseqCount}`);
         if (currentMseqRaw === leadersFirstSeqCounts.liveAudioSourceMseqCount) {
-          this.pushAmount = 1; // Follower from start
+          this.pushAmountAudio = 1; // Follower from start
         } else {
           // TODO: To support and account for past discontinuity tags in the Live Source stream,
           // we will need to get the real 'current' discontinuity-sequence count from Leader somehow.
 
           // RESPAWNED NODES
-          this.pushAudioAmount = currentMseqRaw - leadersFirstSeqCounts.liveAudioSourceMseqCount + 1;
+          this.pushAmountAudio = currentMseqRaw - leadersFirstSeqCounts.liveAudioSourceMseqCount + 1;
 
           const transitSegs = await this.sessionLiveState.get("transitAudioSegs");
           //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
@@ -1461,16 +1470,16 @@ class SessionLive {
             this.vodAudioSegments = transitSegs;
           }
         }
-        console.log(`[${this.sessionId}]: ...pushAmount=${this.pushAudioAmount}`);
+        debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmountAudio}`);
       } else {
         // LEADER calculates pushAmount differently...
-        if (this.firstTime) {
-          this.pushAudioAmount = 1; // Leader from start
+        if (this.firstTimeAudio) {
+          this.pushAmountAudio = 1; // Leader from start
         } else {
-          this.pushAudioAmount = currentMseqRaw - this.lastRequestedAudioSeqRaw;
-          debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedAudioSeqRaw}=${this.pushAudioAmount}`);
+          this.pushAmountAudio = currentMseqRaw - this.lastRequestedAudioSeqRaw;
+          debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedAudioSeqRaw}=${this.pushAmountAudio}`);
         }
-        debug(`[${this.sessionId}]: ...pushAmount=${this.pushAudioAmount}`);
+        debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmountAudio}`);
         break;
       }
       // Live Source Data is in sync, and LEADER & new FOLLOWER are in sync
@@ -1496,8 +1505,8 @@ class SessionLive {
           this.liveAudioSegsForFollowers = await this.sessionLiveState.get("liveAudioSegsForFollowers");
           debug(`[${this.sessionId}]: NEW FOLLOWER: Leader is ahead or behind me! Clearing Queue and Getting latest segments from store.`);
           this._updateLiveAudioSegQueue();
-          this.firstTime = false;
-          debug(`[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`);
+          this.firstTimeAudio = false;
+          debug(`[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Audio Live Manifest: [${this.audioSeqCount}]`);
           return;
         } else if (leadersCurrentMseqRaw < this.lastRequestedAudioSeqRaw) {
           // WE ARE A RESPAWN-NODE, and we are ahead of leader.
@@ -1506,7 +1515,6 @@ class SessionLive {
       }
     }
     if (this.allowedToSet) {
-      console.log("hej", this.audioManifestURIs)
       // Collect and Push Segment-Extracting Promises
       let pushPromises = [];
       for (let i = 0; i < Object.keys(this.audioManifestURIs).length; i++) {
@@ -1525,7 +1533,7 @@ class SessionLive {
 
       // UPDATE COUNTS, & Shift Segments in vodSegments and liveSegQueue if needed.
       const leaderORFollower = isLeader ? "LEADER" : "NEW FOLLOWER";
-      const newTotalDuration = this._incrementAndShift(leaderORFollower); // might need audio
+      const newTotalDuration = this._incrementAndShiftAudio(leaderORFollower); // might need audio
       if (newTotalDuration) {
         debug(`[${this.sessionId}]: New Adjusted Playlist Duration=${newTotalDuration}s`);
       }
@@ -1548,7 +1556,7 @@ class SessionLive {
       }
 
       // [LASTLY]: LEADER does this for respawned-FOLLOWERS' sake.
-      if (this.firstTime && this.allowedToSet) {
+      if (this.firstTimeAudio && this.allowedToSet) {
         // Buy some time for followers (NOT Respawned) to fetch their own L.S m3u8.
         await timer(1000); // maybe remove
         let firstCounts = await this.sessionLiveState.get("firstCounts");
@@ -1564,8 +1572,8 @@ class SessionLive {
       debug(`[${this.sessionId}]: NEW FOLLOWER: I am using segs from Mseq=${this.lastRequestedAudioSeqRaw}`);
     }
 
-    this.firstTime = false;
-    debug(`[${this.sessionId}]: Got all needed segments from live-source (from all bandwidths).\nWe are now able to build Live Manifest: [${this.audioSeqCount}]`);
+    this.firstTimeAudio = false;
+    debug(`[${this.sessionId}]: Got all needed segments from live-source (from all bandwidths).\nWe are now able to build Audi Live Manifest: [${this.audioSeqCount}]`);
 
     return;
   }
@@ -1777,9 +1785,9 @@ class SessionLive {
       instanceName = "UNKNOWN";
     }
     const vodGroupId = Object.keys(this.vodAudioSegments)[0];
-    const vodLanguage = Object.keys(vodGroupId)[0];
+    const vodLanguage = Object.keys(this.vodAudioSegments[vodGroupId])[0];
     const liveGroupId = Object.keys(this.liveAudioSegQueue)[0];
-    const liveLanguage = Object.keys(liveGroupId)[0];
+    const liveLanguage = Object.keys(this.liveAudioSegQueue[vodGroupId])[0];
     let vodTotalDur = 0;
     let liveTotalDur = 0;
     let totalDur = 0;
@@ -1803,7 +1811,6 @@ class SessionLive {
     /** --- SHIFT then INCREMENT --- **/
 
     // Shift V2L Segments
-    console.log("shift vodx")
     const outputV2L = this._shiftSegments({
       name: instanceName,
       totalDur: totalDur,
@@ -1819,7 +1826,6 @@ class SessionLive {
     removedSegments = outputV2L.removedSegments;
     removedDiscontinuities = outputV2L.removedDiscontinuities;
     // Shift LIVE Segments
-    console.log("shift live")
     const outputLIVE = this._shiftSegments({
       name: instanceName,
       totalDur: totalDur,
@@ -1836,19 +1842,19 @@ class SessionLive {
     removedDiscontinuities = outputLIVE.removedDiscontinuities;
 
     // Update Session Live Discontinuity Sequence Count...
-    this.prevAudioDiscSeqCount = this.discAudioSeqCount;
-    this.discAudioSeqCount += removedDiscontinuities;
+    this.prevAudioDiscSeqCount = this.audioDiscSeqCount;
+    this.audioDiscSeqCount += removedDiscontinuities;
     // Update Session Live Audio Sequence Count...
     this.prevAudioSeqCount = this.audioSeqCount;
     this.audioSeqCount += removedSegments;
-    if (this.restAmount) {
-      this.audioSeqCount += this.restAmount;
-      debug(`[${this.sessionId}]: ${instanceName}: Added restAmount=[${this.restAmount}] to 'mediaSeqCount'`);
-      this.restAmount = 0;
+    if (this.restAmountAudio) {
+      this.audioSeqCount += this.restAmountAudio;
+      debug(`[${this.sessionId}]: ${instanceName}: Added restAmountAudio=[${this.restAmountAudio}] to 'audioSeqCount'`);
+      this.restAmountAudio = 0;
     }
 
-    if (this.discAudioSeqCount !== this.prevAudioDiscSeqCount) {
-      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevAudioDiscSeqCount}} -> {${this.discAudioSeqCount}}`);
+    if (this.audioDiscSeqCount !== this.prevAudioDiscSeqCount) {
+      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevAudioDiscSeqCount}} -> {${this.audioDiscSeqCount}}`);
     }
     debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from [${this.prevAudioSeqCount}] -> [${this.audioSeqCount}]`);
     debug(`[${this.sessionId}]: ${instanceName}: Finished updating all Counts and Segment Queues!`);
@@ -2008,20 +2014,19 @@ class SessionLive {
         }
 
         //debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
-        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRaw}]`);
+        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedAudioSeqRaw}]`);
 
-        if (this.pushAmount >= 0) {
-          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
+        if (this.pushAmountAudio >= 0) {
+          this.lastRequestedAudioSeqRaw = m3u.get("mediaSequence");
         }
         this.targetDuration = m3u.get("targetDuration");
-        let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
+        let startIdx = m3u.items.PlaylistItem.length - this.pushAmountAudio;
         if (startIdx < 0) {
-          this.restAmount = startIdx * -1;
+          this.restAmountAudio = startIdx * -1;
           startIdx = 0;
         }
         if (audioPlaylistUri) {
           // push segments
-          console.log("pushed segments");
           this._addLiveAudioSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetGroupId, liveTargetLanguage, isLeader);
         }
         resolve();
@@ -2124,10 +2129,8 @@ class SessionLive {
   }
 
   _addLiveAudioSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetGroupId, liveTargetLanguage, isLeader) {
-    console.log("adding kive to queue", playlistItems.length)
     const leaderOrFollower = isLeader ? "LEADER" : "NEW FOLLOWER";
     for (let i = startIdx; i < playlistItems.length; i++) {
-      console.log("hej")
       let seg = {};
       let playlistItem = playlistItems[i];
       let segmentUri;
@@ -2182,9 +2185,8 @@ class SessionLive {
           }
         });
       }
-      console.log(playlistItem)
+
       if (playlistItem.properties.uri) {
-        console.log("playlistitem hase uri")
         if (playlistItem.properties.uri.match("^http")) {
           segmentUri = playlistItem.properties.uri;
         } else {
@@ -2199,9 +2201,8 @@ class SessionLive {
         // Push new Live Segments! But do not push duplicates
         const liveSegURIs = this.liveAudioSegQueue[liveTargetGroupId][liveTargetLanguage].filter((seg) => seg.uri).map((seg) => seg.uri);
         if (seg.uri && liveSegURIs.includes(seg.uri)) {
-          console.log(`[${this.sessionId}]: ${leaderOrFollower}: Found duplicate live segment. Skip push! (${liveTargetGroupId, liveTargetLanguage})`);
+          debug(`[${this.sessionId}]: ${leaderOrFollower}: Found duplicate live segment. Skip push! (${liveTargetGroupId, liveTargetLanguage})`);
         } else {
-          console.log("pushing lice seq queue", seg)
           this.liveAudioSegQueue[liveTargetGroupId][liveTargetLanguage].push(seg);
           this.liveAudioSegsForFollowers[liveTargetGroupId][liveTargetLanguage].push(seg);
           debug(`[${this.sessionId}]: ${leaderOrFollower}: Pushed segment (${seg.uri ? seg.uri : "Disc-tag"}) to 'liveSegQueue' (${liveTargetGroupId, liveTargetLanguage})`);
@@ -2308,22 +2309,7 @@ class SessionLive {
       return null;
     }
 
-    // Uncomment below to guarantee that node always return the most current m3u8,
-    // But it will cost an extra trip to store for every client request...
-    /*
-    //  DO NOT GENERATE MANIFEST CASE: Node is NOT in sync with Leader. (Store has new segs, but node hasn't read them yet)
-    const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-    if (!isLeader) {
-      let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
-      if (leadersMediaSeqRaw !== this.lastRequestedMediaSeqRaw) {
-        debug(`[${this.sessionId}]: FOLLOWER: Cannot Audio Generate Manifest! <${this.instanceId}> New segments need to be collected first!...`);
-        return null;
-      }
-    }
-    */
-
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
-    console.log(this.liveAudioSegQueue, "live audio")
     if (Object.keys(this.liveAudioSegQueue).length === 0 ||
       (this.liveAudioSegQueue[liveTargetTrackIds.audioGroupId] &&
         this.liveAudioSegQueue[liveTargetTrackIds.audioGroupId][liveTargetTrackIds.audioLanguage] &&
@@ -2345,16 +2331,15 @@ class SessionLive {
           segAmounts.push(this.liveAudioSegQueue[groupId][lang].length);
         }
       }
-
     }
 
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
-      debug(`[${this.sessionId}]: Cannot Generate Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
+      console(`[${this.sessionId}]: Cannot Generate audio Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
       return null;
     }
 
-    if (!this._isEmpty(this.liveAudioSegQueue) && this.liveAudioSegQueue[groupIds[0]][Object.keys(this.liveAudioSegQueue[groupIds[0]][0])].length !== 0) {
-      this.targetDuration = this._getMaxDuration(this.liveAudioSegQueue[groupIds[0]][Object.keys(this.liveAudioSegQueue[groupIds[0]][0])]);
+    if (!this._isEmpty(this.liveAudioSegQueue) && this.liveAudioSegQueue[groupIds[0]][Object.keys(this.liveAudioSegQueue[groupIds[0]])[0]].length !== 0) {
+      this.targetDuration = this._getMaxDuration(this.liveAudioSegQueue[groupIds[0]][Object.keys(this.liveAudioSegQueue[groupIds[0]])[0]]);
     }
 
     // Determine if VOD segments influence targetDuration
@@ -2366,22 +2351,22 @@ class SessionLive {
       }
     }
 
-    debug(`[${this.sessionId}]: Started Generating the Manifest File:[${this.mediaSeqCount}]...`);
+    debug(`[${this.sessionId}]: Started Generating the Audio Manifest File:[${this.audioSeqCount}]...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + Math.round(this.targetDuration) + "\n";
-    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
-    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
+    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.audioSeqCount + "\n";
+    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.audioDiscSeqCount + "\n";
     if (Object.keys(this.vodAudioSegments).length !== 0) {
       // Add transitional segments if there are any left.
-      debug(`[${this.sessionId}]: Adding a Total of (${this.vodAudioSegments[vodTargetTrackIds.audioGroupId][vodTargetTrackIds.audioLanguage].length}) VOD segments to manifest`);
+      debug(`[${this.sessionId}]: Adding a Total of (${this.vodAudioSegments[vodTargetTrackIds.audioGroupId][vodTargetTrackIds.audioLanguage].length}) VOD audio segments to manifest`);
       m3u8 = this._setAudioManifestTags(this.vodAudioSegments, m3u8, vodTargetTrackIds);
       // Add live-source segments
       m3u8 = this._setAudioManifestTags(this.liveAudioSegQueue, m3u8, liveTargetTrackIds);
     }
-    debug(`[${this.sessionId}]: Manifest Generation Complete!`);
+    debug(`[${this.sessionId}]: Audio manifest Generation Complete!`);
     return m3u8;
   }
   _setMediaManifestTags(segments, m3u8, bw) {
@@ -2400,7 +2385,8 @@ class SessionLive {
     return m3u8
   }
 
-  _setTagsOnSegment(segment, m3u8) {
+  _setTagsOnSegment(segment) {
+    let m3u8 = "";
     if (segment.discontinuity) {
       m3u8 += "#EXT-X-DISCONTINUITY\n";
     }
@@ -2530,6 +2516,14 @@ class SessionLive {
     }
     if (!array[audioGroupId][audioLanguage]) {
       const fallbackLang = this._getFirstAudioLanguageWithSegments(audioGroupId, array);
+      if (!fallbackLang) {
+        if (Object.keys(array[audioGroupId]).length > 0) {
+          return {
+            "audioGroupId": audioGroupId,
+            "audioLanguage": Object.keys(array[audioGroupId])[0],
+          };
+        }
+      }
       return {
         "audioGroupId": audioGroupId,
         "audioLanguage": fallbackLang
