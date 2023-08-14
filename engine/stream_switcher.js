@@ -257,6 +257,8 @@ class StreamSwitcher {
               currVodAudioSegments = this._mergeAudioSegments(prerollAudioSegments, currVodAudioSegments, false);
             }
           }
+          console.log(currVodAudioSegments["aac"], "audio")
+          console.log(currVodSegments, "video")
 
           // In risk that the SL-playhead might have updated some data after
           // we reset last time... we should Reset SessionLive before sending new data.

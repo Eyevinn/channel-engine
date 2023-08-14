@@ -302,9 +302,12 @@ class SessionLive {
         for (let segIdx = 0; segIdx < segments[bw].length; segIdx++) {
           const v2lSegment = segments[bw][segIdx];
           if (v2lSegment.cue) {
+            console.log("cue video")
             if (v2lSegment.cue["in"]) {
+              console.log("cue in exists video")
               cueInExists = true;
             } else {
+              console.log("cue in does not exists video")
               cueInExists = false;
             }
           }
@@ -315,11 +318,13 @@ class SessionLive {
         if (!segments[bw][endIdx].discontinuity) {
           const finalSegItem = { discontinuity: true };
           if (!cueInExists) {
+            console.log(" adding cue in video")
             finalSegItem["cue"] = { in: true };
           }
           this.vodSegments[bw].push(finalSegItem);
         } else {
           if (!cueInExists) {
+            console.log(" adding cue in video")
             segments[bw][endIdx]["cue"] = { in: true };
           }
         }
@@ -365,9 +370,12 @@ class SessionLive {
           for (let segIdx = 0; segIdx < segments[groupId][lang].length; segIdx++) {
             const v2lSegment = segments[groupId][lang][segIdx];
             if (v2lSegment.cue) {
+              console.log("cue audio")
               if (v2lSegment.cue["in"]) {
+                console.log("cue in exists audio")
                 cueInExists = true;
               } else {
+                console.log("cue in does not exists audio")
                 cueInExists = false;
               }
             }
@@ -378,11 +386,13 @@ class SessionLive {
           if (!segments[groupId][lang][endIdx].discontinuity) {
             const finalSegItem = { discontinuity: true };
             if (!cueInExists) {
+              console.log(" adding cue in audio")
               finalSegItem["cue"] = { in: true };
             }
             this.vodAudioSegments[groupId][lang].push(finalSegItem);
           } else {
             if (!cueInExists) {
+              console.log(" adding cue in audio")
               segments[groupId][lang][endIdx]["cue"] = { in: true };
             }
           }
@@ -515,6 +525,7 @@ class SessionLive {
       currentMediaSequenceSegments[liveTargetBandwidth] = [];
       // In case we switch back before we've depleted all transitional segments
       currentMediaSequenceSegments[liveTargetBandwidth] = this.vodSegments[vodTargetBandwidth].concat(this.liveSegQueue[liveTargetBandwidth]);
+      console.log("adding extra video")
       currentMediaSequenceSegments[liveTargetBandwidth].push({ discontinuity: true, cue: { in: true } });
       debug(`[${this.sessionId}]: Getting current media segments for bw=${bw}`);
     }
@@ -569,6 +580,7 @@ class SessionLive {
         currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = [];
         // In case we switch back before we've depleted all transitional segments
         currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].concat(this.liveAudioSegQueue[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage]);
+        console.log("adding extra audio")
         currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage].push({ discontinuity: true, cue: { in: true } });
         debug(`[${this.sessionId}]: Getting current audio segments for ${groupId, langs[j]}`);
       }
@@ -2063,6 +2075,7 @@ class SessionLive {
         if (!cueData) {
           cueData = {};
         }
+        console.log("adding live segment to queue")
         cueData["in"] = true;
       }
       if ("cueout" in attributes) {
@@ -2142,6 +2155,7 @@ class SessionLive {
         this.liveAudioSegsForFollowers[liveTargetGroupId][liveTargetLanguage].push({ discontinuity: true });
       }
       if ("cuein" in attributes) {
+        console.log("adding live segment to queue")
         if (!cueData) {
           cueData = {};
         }
@@ -2421,6 +2435,7 @@ class SessionLive {
       m3u8 += "#EXT-X-DATERANGE:" + dateRangeAttributes + "\n";
     }
     // Mimick logic used in hls-vodtolive
+    //console.log(segment, segment.cue, 2000)
     if (segment.cue && segment.cue.in) {
       m3u8 += "#EXT-X-CUE-IN" + "\n";
     }
