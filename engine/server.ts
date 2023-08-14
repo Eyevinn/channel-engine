@@ -46,6 +46,7 @@ export interface ChannelEngineOpts {
   subtitleSliceEndpoint?: string;
   useVTTSubtitles?: boolean;
   alwaysNewSegments?: boolean;
+  partialStoreHLSVod?: boolean;
   alwaysMapBandwidthByNearest?: boolean;
   diffCompensationRate?: number;
   staticDirectory?: string;
@@ -183,6 +184,7 @@ export class ChannelEngine {
   private subtitleSliceEndpoint: string;
   private useVTTSubtitles: boolean;
   private alwaysNewSegments: boolean;
+  private partialStoreHLSVod: boolean;
   private alwaysMapBandwidthByNearest: boolean;
   private defaultSlateUri?: string;
   private slateDuration?: number;
@@ -222,6 +224,10 @@ export class ChannelEngine {
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
       this.alwaysNewSegments = true;
+    }
+    this.partialStoreHLSVod = false;
+    if (options && options.partialStoreHLSVod) {
+      this.partialStoreHLSVod = true;
     }
     this.alwaysMapBandwidthByNearest = false;
     if (options && options.alwaysMapBandwidthByNearest) {
@@ -460,6 +466,7 @@ export class ChannelEngine {
         subtitleSliceEndpoint: this.subtitleSliceEndpoint,
         useVTTSubtitles: this.useVTTSubtitles,
         alwaysNewSegments: options.alwaysNewSegments,
+        partialStoreHLSVod: options.partialStoreHLSVod,
         alwaysMapBandwidthByNearest: options.alwaysMapBandwidthByNearest,
         noSessionDataTags: options.noSessionDataTags,
         playheadDiffThreshold: channel.options && channel.options.playheadDiffThreshold ? channel.options.playheadDiffThreshold : this.streamerOpts.defaultPlayheadDiffThreshold,

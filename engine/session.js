@@ -73,9 +73,15 @@ class Session {
     this.isAllowedToClearVodCache = null;
     this.alwaysNewSegments = null;
     this.alwaysMapBandwidthByNearest = null;
+    this.partialStoreHLSVod = null;
+    this.currentPlayheadRef = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
+      }
+
+      if (config.partialStoreHLSVod) {
+        this.partialStoreHLSVod = config.partialStoreHLSVod;
       }
 
       if (config.alwaysMapBandwidthByNearest) {
@@ -637,7 +643,7 @@ class Session {
     }
     let currentVod = null;
     const sessionState = await this._sessionState.getValues(["discSeqAudio", "vodMediaSeqAudio"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio", "playheadRef"]);
 
     if (playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio || (playheadState.vodMediaSeqAudio < sessionState.vodMediaSeqAudio && playheadState.mediaSeqAudio === this.prevMediaSeqOffset.audio)) {
       const state = await this._sessionState.get("state");
@@ -658,14 +664,10 @@ class Session {
     if (currentVod) {
       // condition suggesting that a new vod should exist
       if (playheadState.vodMediaSeqAudio < 2 || playheadState.mediaSeqAudio !== this.prevMediaSeqOffset.audio) {
-        const AGE_THRESH = this.averageSegmentDuration * 2;
-        let cacheAge = null;
-        if (this._sessionState.cache && this._sessionState.cache.currentVod.ts) {
-          cacheAge = Date.now() - this._sessionState.cache.currentVod.ts;
-        }
-        if (cacheAge !== null && cacheAge > AGE_THRESH) {
+        if (playheadState.playheadRef > this.currentPlayheadRef) {
           await timer(500);
-          debug(`[${this._sessionId}]: While requesting audio manifest for ${audioGroupId}-${audioLanguage}, (mseq=${playheadState.vodMediaSeqAudio})(vod cache age=${cacheAge})`);
+          this.currentPlayheadRef = playheadState.playheadRef;
+          debug(`[${this._sessionId}]: While requesting audio manifest for ${audioGroupId}-${audioLanguage}, (mseq=${playheadState.vodMediaSeqAudio})`);
           await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
           currentVod = await this._sessionState.getCurrentVod();
         }
@@ -712,7 +714,7 @@ class Session {
     }
     let currentVod = null;
     const sessionState = await this._sessionState.getValues(["discSeqSubtitle", "vodMediaSeqSubtitle"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle"]);
+    let playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle", "playheadRef"]);
 
     if (playheadState.vodMediaSeqSubtitle > sessionState.vodMediaSeqSubtitle || (playheadState.vodMediaSeqSubtitle < sessionState.vodMediaSeqSubtitle && playheadState.mediaSeqSubtitle === this.prevMediaSeqOffset.subtitle)) {
       const state = await this._sessionState.get("state");
@@ -733,14 +735,10 @@ class Session {
     if (currentVod) {
       // condition suggesting that a new vod should exist
       if (playheadState.vodMediaSeqSubtitle < 2 || playheadState.mediaSeqSubtitle !== this.prevMediaSeqOffset.subtitle) {
-        const AGE_THRESH = this.averageSegmentDuration * 2;
-        let cacheAge = null;
-        if (this._sessionState.cache && this._sessionState.cache.currentVod.ts) {
-          cacheAge = Date.now() - this._sessionState.cache.currentVod.ts;
-        }
-        if (cacheAge !== null && cacheAge > AGE_THRESH) {
+        if (playheadState.playheadRef > this.currentPlayheadRef) {
           await timer(500);
-          debug(`[${this._sessionId}]: While requesting subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}, (mseq=${playheadState.vodMediaSeqSubtitle})(vod cache age=${cacheAge})`);
+          this.currentPlayheadRef = playheadState.playheadRef;
+          debug(`[${this._sessionId}]: While requesting subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}, (mseq=${playheadState.vodMediaSeqSubtitle})`);
           await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
           currentVod = await this._sessionState.getCurrentVod();
         }
@@ -1275,7 +1273,7 @@ class Session {
       await this._sessionState.set("discSeq", sessionState.discSeq + lastDiscontinuity);
       await this._sessionState.set("discSeqAudio", sessionState.discSeqAudio + lastDiscontinuityAudio);
       await this._sessionState.set("slateCount", sessionState.slateCount + 1);
-      await this._playheadState.set("playheadRef", Date.now(), isLeader);
+      this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
 
       cloudWatchLog(!this.cloudWatchLogging, 'engine-session', { event: 'slateInserted', channel: this._sessionId });
 
@@ -1331,7 +1329,8 @@ class Session {
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
-                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+                skipSerializeMediaSequences: this.partialStoreHLSVod
               };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1375,7 +1374,6 @@ class Session {
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", 0);
-            await this._playheadState.set("playheadRef", Date.now(), isLeader);
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
@@ -1385,6 +1383,7 @@ class Session {
             });
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_PLAYING);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
+            this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
             await this._sessionState.remove("nextVod");
             return;
           } else {
@@ -1508,7 +1507,8 @@ class Session {
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
-                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
+                alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+                skipSerializeMediaSequences: this.partialStoreHLSVod
               };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1560,7 +1560,7 @@ class Session {
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}; subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
-            await this._playheadState.set("playheadRef", Date.now(), isLeader);
+            this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
             sessionState.vodMediaSeqVideo = await this._sessionState.set("vodMediaSeqVideo", 0);
             sessionState.vodMediaSeqAudio = await this._sessionState.set("vodMediaSeqAudio", 0);
             sessionState.vodMediaSeqSubtitle = await this._sessionState.set("vodMediaSeqSubtitle", 0);
@@ -1675,7 +1675,7 @@ class Session {
             await this._playheadState.set("vodMediaSeqVideo", 0, isLeader);
             await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
             await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
-            await this._playheadState.set("playheadRef", Date.now(), isLeader);
+            this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
             // 4) Log to debug and cloudwatch
             debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
             debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
@@ -1756,7 +1756,8 @@ class Session {
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
-              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              skipSerializeMediaSequences: this.partialStoreHLSVod
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
@@ -1860,7 +1861,8 @@ class Session {
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
-              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              skipSerializeMediaSequences: this.partialStoreHLSVod
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
