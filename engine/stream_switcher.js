@@ -408,7 +408,7 @@ class StreamSwitcher {
 
             if (this.useDemuxedAudio) {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
-              eventAudioSegments = this._mergeSegments(prerollAudioSegments, eventAudioSegments, true);
+              eventAudioSegments = this._mergeAudioSegments(prerollAudioSegments, eventAudioSegments, true);
             }
           }
           await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
@@ -824,18 +824,19 @@ class StreamSwitcher {
         const fromLangs = Object.keys(fromSegments[targetGroupId]);
         const targetLang = findAudioGroupOrLang(lang, fromLangs);
         if (prepend) {
-          OUTPUT_SEGMENTS[targetGroupId][targetLang] = fromSegments[targetGroupId][targetLang].concat(toSegments[targetGroupId][targetLang]);
+          OUTPUT_SEGMENTS[targetGroupId][targetLang] = fromSegments[groupId][lang].concat(toSegments[targetGroupId][targetLang]);
           OUTPUT_SEGMENTS[targetGroupId][targetLang].unshift({ discontinuity: true });
         } else {
-          const lastSeg = toSegments[targetGroupId][targetLang][toSegments[targetGroupId][targetLang].length - 1];
+          const size = toSegments[targetGroupId][targetLang].length;
+          const lastSeg = toSegments[targetGroupId][targetLang][size -1];
           if (lastSeg.uri && !lastSeg.discontinuity) {
             toSegments[targetGroupId][targetLang].push({ discontinuity: true, cue: { in: true } });
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[targetGroupId]);
+            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
           } else if (lastSeg.discontinuity && !lastSeg.cue) {
             toSegments[targetGroupId][targetLang][toSegments[targetGroupId][targetLang].length - 1].cue = { in: true }
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[targetGroupId][fromLangs]);
+            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
           } else {
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[targetGroupId][fromLangs]);
+            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
             OUTPUT_SEGMENTS[targetGroupId][targetLang].push({ discontinuity: true });
           }
         }
