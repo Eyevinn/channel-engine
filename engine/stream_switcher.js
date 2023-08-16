@@ -330,10 +330,12 @@ class StreamSwitcher {
         try {
           debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
           this.eventId = null;
+          console.log("hej", 1)
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
           if (this.useDemuxedAudio) {
             liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           }
+          console.log("hej", 2)
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
@@ -344,7 +346,6 @@ class StreamSwitcher {
             debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
             return false;
           }
-
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
@@ -354,6 +355,7 @@ class StreamSwitcher {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               liveAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollAudioSegments, liveAudioSegments.currMseqSegs, false);
               liveAudioSegments.segCount += prerollAudioSegments.length;
+              console.log(prerollAudioSegments)
             }
           }
 

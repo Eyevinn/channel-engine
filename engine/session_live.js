@@ -2296,15 +2296,17 @@ class SessionLive {
   }
 
   _filterLiveAudioTracks() {
-    let audioTracks = this.sessionAudioTracks;
     const toKeep = new Set();
 
     let newItemsAudio = {};
-    audioTracks.forEach((audioTrack) => {
-      let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
+    const groupIds = Object.keys(this.vodAudioSegments)
+    for(let i = 0; i < groupIds.length; i++) {
+      const langs = Object.keys(this.vodAudioSegments[groupIds[j]])
+      for(let idx = 0; idx < langs.length; idx++) {
+        let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
       toKeep.add(...groupAndLangToKeep);
-    });
-
+      }
+    }
     toKeep.forEach((trackInfo) => {
       if (trackInfo) {
         if (!newItemsAudio[trackInfo.audioGroupId]) {
