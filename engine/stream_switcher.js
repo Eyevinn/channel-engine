@@ -355,7 +355,6 @@ class StreamSwitcher {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               liveAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollAudioSegments, liveAudioSegments.currMseqSegs, false);
               liveAudioSegments.segCount += prerollAudioSegments.length;
-              console.log(prerollAudioSegments)
             }
           }
 
