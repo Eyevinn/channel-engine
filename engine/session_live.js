@@ -373,7 +373,7 @@ class SessionLive {
             this.vodAudioSegments[groupId][lang].push(v2lSegment);
           }
 
-          const endIdx = segments[groupId][langs].length - 1;
+          const endIdx = segments[groupId][lang].length - 1;
           if (!segments[groupId][lang][endIdx].discontinuity) {
             const finalSegItem = { discontinuity: true };
             if (!cueInExists) {
@@ -390,7 +390,7 @@ class SessionLive {
     } else {
       debug(`[${this.sessionId}]: 'vodAudioSegments' not empty = Using 'transitSegs'`);
     }
-    debug(`[${this.sessionId}]: Setting CurrentAudioSequenceSegments. First seg is: [${this.vodAudioSegments[Object.keys(this.vodAudioSegments)[0]][Object.keys(this.vodAudioSegments[Object.keys(this.vodAudioSegments)[0]])][0].uri}]`);
+    debug(`[${this.sessionId}]: Setting CurrentAudioSequenceSegments. First seg is: [${this.vodAudioSegments[Object.keys(this.vodAudioSegments)[0]][Object.keys(this.vodAudioSegments[Object.keys(this.vodAudioSegments)[0]])[0]][0].uri}]`);
 
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (isLeader) {
@@ -546,44 +546,14 @@ class SessionLive {
     let currentAudioSequenceSegments = {};
     let segmentCount = 0;
     let increment = 0;
-    const groupIds = Object.keys(this.audioManifestURIs);
+    const groupIds = Object.keys(this.vodAudioSegments);
     for (let i = 0; i < groupIds.length; i++) {
       let groupId = groupIds[i];
       if (!currentAudioSequenceSegments[groupId]) {
         currentAudioSequenceSegments[groupId] = {};
       }
-      let langs = Object.keys(this.audioManifestURIs[groupIds[i]]);
+      let langs = Object.keys(this.vodAudioSegments[groupIds[i]]);
       for (let j = 0; j < langs.length; j++) {
-        const liveTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.audioManifestURIs);
-        const vodTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.vodAudioSegments);
-        if (!vodTargetGroupLang.audioGroupId || !vodTargetGroupLang.audioLanguage) {
-          return null;
-        }
-        // Remove segments and disc-tag if they are on top
-        if (this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].length > 0 && this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage][0].discontinuity) {
-          this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].shift();
-          increment = 1;
-        }
-        segmentCount = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].length;
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = [];
-        // In case we switch back before we've depleted all transitional segments
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].concat(this.liveAudioSegQueue[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage]);
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage].push({ discontinuity: true, cue: { in: true } });
-        debug(`[${this.sessionId}]: Getting current audio segments for ${groupId, langs[j]}`);
-      }
-    }
-
-    const groupIdsVod = Object.keys(this.vodAudioSegments);
-    for (let i = 0; i < groupIdsVod.length; i++) {
-      let groupId = groupIdsVod[i];
-      if (!currentAudioSequenceSegments[groupId]) {
-        currentAudioSequenceSegments[groupId] = {};
-      }
-      let langs = Object.keys(this.vodAudioSegments[groupIdsVod[i]]);
-      for (let j = 0; j < langs.length; j++) {
-        if (currentAudioSequenceSegments[groupId][langs[j]].length > 0) {
-          continue;
-        }
         const liveTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.audioManifestURIs);
         const vodTargetGroupLang = this._findAudioGroupAndLang(groupId, langs[j], this.vodAudioSegments);
         if (!vodTargetGroupLang.audioGroupId || !vodTargetGroupLang.audioLanguage) {
@@ -746,6 +716,7 @@ class SessionLive {
             this.mediaManifestURIs[streamItemBW] = "";
           }
           this.mediaManifestURIs[streamItemBW] = mediaManifestUri;
+
           if (streamItem.get("audio") && this.useDemuxedAudio) {
             let audioGroupId = streamItem.get("audio")
             let audioGroupItems = m3u.items.MediaItem.filter((item) => {
@@ -766,9 +737,9 @@ class SessionLive {
                 itemLang = item.get("language");
               }
               if (!this.audioManifestURIs[audioGroupId][itemLang]) {
-                this.audioManifestURIs[audioGroupId][itemLang] = "ehj"
+                this.audioManifestURIs[audioGroupId][itemLang] = ""
               }
-              const audioManifestUri = url.resolve(baseUrl, streamItem.get("uri"))
+              const audioManifestUri = url.resolve(baseUrl, item.get("uri"))
               this.audioManifestURIs[audioGroupId][itemLang] = audioManifestUri;
             });
           }
@@ -2599,17 +2570,15 @@ class SessionLive {
   }
 
   _filterLiveAudioTracks() {
+    let audioTracks = this.sessionAudioTracks;
     const toKeep = new Set();
 
     let newItemsAudio = {};
-    const groupIds = Object.keys(this.vodAudioSegments)
-    for(let i = 0; i < groupIds.length; i++) {
-      const langs = Object.keys(this.vodAudioSegments[groupIds[j]])
-      for(let idx = 0; idx < langs.length; idx++) {
-        let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
+    audioTracks.forEach((audioTrack) => {
+      let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
       toKeep.add(...groupAndLangToKeep);
-      }
-    }
+    });
+    
     toKeep.forEach((trackInfo) => {
       if (!newItemsAudio[trackInfo.audioGroupId]) {
         newItemsAudio[trackInfo.audioGroupId] = {}

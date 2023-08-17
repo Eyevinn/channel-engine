@@ -314,8 +314,7 @@ class StreamSwitcher {
           }
 
           await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq);
-          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
-          await session.setCurrentAudioSequenceSegments(eventAudioSegments, 0, true);
+          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true, eventAudioSegments, 0);
 
           this.working = false;
           debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
@@ -350,7 +349,7 @@ class StreamSwitcher {
           }
           console.log("hej", 4)
           console.log(liveAudioSegments)
-          
+
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
@@ -360,19 +359,18 @@ class StreamSwitcher {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               liveAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollAudioSegments, liveAudioSegments.currMseqSegs, false);
               liveAudioSegments.segCount += prerollAudioSegments.length;
-              console.log(prerollAudioSegments)
             }
           }
-          
+
           console.log("hej", 5)
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq, liveCounts.audioSeq, liveCounts.audioDiscSeq);
           console.log("hej", 5.2)
-          await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
-          console.log("hej", 5.5)
           if (this.useDemuxedAudio) {
-            await session.setCurrentAudioSequenceSegments(liveAudioSegments.currMseqSegs, liveAudioSegments.segCount)
-            console.log("hej", 5.7)
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
+          } else {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false);
           }
+
           console.log("hej", 6)
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
@@ -408,8 +406,11 @@ class StreamSwitcher {
           }
 
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1, liveCounts.audioSeq - 1, liveCounts.audioDiscSeq - 1);
-          await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
-          await session.setCurrentAudioSequenceSegments(liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
+          if (this.useDemuxedAudio) {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
+          } else {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          }
 
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
@@ -818,14 +819,16 @@ class StreamSwitcher {
     const OUTPUT_SEGMENTS = {};
     const fromGroups = Object.keys(fromSegments);
     const toGroups = Object.keys(toSegments);
+
     for (let i = 0; i < toGroups.length; i++) {
       const groupId = toGroups[i];
       if (!OUTPUT_SEGMENTS[groupId]) {
         OUTPUT_SEGMENTS[groupId] = {}
       }
-      const langs = Object.keys(toSegments[groupId])
-      for (let j = 0; j < langs.length; j++) {
-        const lang = langs[j];
+      const toLangs = Object.keys(toSegments[groupId])
+      
+      for (let j = 0; j < toLangs.length; j++) {
+        const lang = toLangs[j];
         if (!OUTPUT_SEGMENTS[groupId][lang]) {
           OUTPUT_SEGMENTS[groupId][lang] = [];
         }
@@ -834,20 +837,20 @@ class StreamSwitcher {
         const fromLangs = Object.keys(fromSegments[targetGroupId]);
         const targetLang = findAudioGroupOrLang(lang, fromLangs);
         if (prepend) {
-          OUTPUT_SEGMENTS[targetGroupId][targetLang] = fromSegments[groupId][lang].concat(toSegments[targetGroupId][targetLang]);
-          OUTPUT_SEGMENTS[targetGroupId][targetLang].unshift({ discontinuity: true });
+          OUTPUT_SEGMENTS[groupId][lang] = fromSegments[targetGroupId][targetLang].concat(toSegments[groupId][lang]);
+          OUTPUT_SEGMENTS[groupId][lang].unshift({ discontinuity: true });
         } else {
-          const size = toSegments[targetGroupId][targetLang].length;
-          const lastSeg = toSegments[targetGroupId][targetLang][size -1];
+          const size = toSegments[groupId][lang].length;
+          const lastSeg = toSegments[groupId][lang][size - 1];
           if (lastSeg.uri && !lastSeg.discontinuity) {
-            toSegments[targetGroupId][targetLang].push({ discontinuity: true, cue: { in: true } });
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
+            toSegments[groupId][lang].push({ discontinuity: true, cue: { in: true } });
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
           } else if (lastSeg.discontinuity && !lastSeg.cue) {
-            toSegments[targetGroupId][targetLang][toSegments[targetGroupId][targetLang].length - 1].cue = { in: true }
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
+            toSegments[targetGroupId][lang][toSegments[groupId][lang].length - 1].cue = { in: true }
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
           } else {
-            OUTPUT_SEGMENTS[targetGroupId][targetLang] = toSegments[targetGroupId][targetLang].concat(fromSegments[groupId][lang]);
-            OUTPUT_SEGMENTS[targetGroupId][targetLang].push({ discontinuity: true });
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+            OUTPUT_SEGMENTS[groupId][lang].push({ discontinuity: true });
           }
         }
       }
