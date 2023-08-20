@@ -1517,11 +1517,34 @@ class SessionLive {
     if (this.allowedToSet) {
       // Collect and Push Segment-Extracting Promises
       let pushPromises = [];
+
+      let isDifferent = 0
+      if (this.vodAudioSegments) {
+        if (Object.keys(this.vodAudioSegments).length > Object.keys(this.audioManifestURIs)) {
+          isDifferent = 1;
+        } else if (Object.keys(this.vodAudioSegments).length > Object.keys(this.audioManifestURIs)) {
+          isDifferent = -1;
+        }
+      }
+
+      for (let i = 0; i < toGroups.length; i++) {
+        const groupId = toGroups[i];
+        const toLangs = Object.keys(toSegments[groupId])
+
+        for (let j = 0; j < toLangs.length; j++) {
+          const lang2 = toLangs[j];
+          const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+          const fromLangs = Object.keys(fromSegments[targetGroupId]);
+          const targetLang = findAudioGroupOrLang(lang2, fromLangs);
+        }
+      }
+
       for (let i = 0; i < Object.keys(this.audioManifestURIs).length; i++) {
         let groupId = Object.keys(this.audioManifestURIs)[i];
         let langs = Object.keys(this.audioManifestURIs[groupId]);
         for (let j = 0; j < langs.length; j++) {
           let lang = langs[j];
+
           // will add new segments to live seg queue
           pushPromises.push(this._parseAudioManifest(this.liveAudioSourceM3Us[groupId][lang].M3U, this.audioManifestURIs[groupId][lang], groupId, lang, isLeader));
           debug(`[${this.sessionId}]: Pushed pushPromise for groupId=${groupId} & lang${lang}`);
@@ -2026,7 +2049,6 @@ class SessionLive {
           startIdx = 0;
         }
         if (audioPlaylistUri) {
-          // push segments
           this._addLiveAudioSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetGroupId, liveTargetLanguage, isLeader);
         }
         resolve();
@@ -2309,6 +2331,11 @@ class SessionLive {
       return null;
     }
 
+    const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+              const fromLangs = Object.keys(fromSegments[targetGroupId]);
+              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
+              
+
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
     if (Object.keys(this.liveAudioSegQueue).length === 0 ||
       (this.liveAudioSegQueue[liveTargetTrackIds.audioGroupId] &&
@@ -2324,14 +2351,19 @@ class SessionLive {
     let segAmounts = [];
     for (let i = 0; i < groupIds.length; i++) {
       const groupId = groupIds[i];
+      const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+              const fromLangs = Object.keys(fromSegments[targetGroupId]);
+              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
       const langs = Object.keys(this.liveAudioSegQueue[groupId]);
       for (let j = 0; j < langs.length; j++) {
         const lang = langs[j];
         if (this.liveAudioSegQueue[groupId][lang].length !== 0) {
+          
           segAmounts.push(this.liveAudioSegQueue[groupId][lang].length);
         }
       }
     }
+
 
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
       console(`[${this.sessionId}]: Cannot Generate audio Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
@@ -2578,7 +2610,7 @@ class SessionLive {
       let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
       toKeep.add(...groupAndLangToKeep);
     });
-    
+
     toKeep.forEach((trackInfo) => {
       if (!newItemsAudio[trackInfo.audioGroupId]) {
         newItemsAudio[trackInfo.audioGroupId] = {}
