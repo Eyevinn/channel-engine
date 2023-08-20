@@ -2103,6 +2103,11 @@ class SessionLive {
       return null;
     }
 
+    const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+              const fromLangs = Object.keys(fromSegments[targetGroupId]);
+              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
+              
+
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
     if (Object.keys(this.liveSegQueueAudio).length === 0 || this.liveSegQueueAudio[liveTargetTrack].length === 0) {
       debug(`[${this.sessionId}]: Cannot Generate Audio Manifest! <${this.instanceId}> Not yet collected ANY segments from Live Source...`);
@@ -2118,6 +2123,7 @@ class SessionLive {
         segAmounts.push(this.liveSegQueueAudio[track].length);
       }
     }
+
 
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
       console(`[${this.sessionId}]: Cannot Generate audio Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
@@ -2304,7 +2310,7 @@ class SessionLive {
       let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
       toKeep.add(...groupAndLangToKeep);
     });
-    
+
     toKeep.forEach((trackInfo) => {
       if (trackInfo) {
         if (!newItemsAudio[trackInfo.audioGroupId]) {
