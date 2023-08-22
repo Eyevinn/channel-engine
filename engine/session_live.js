@@ -2102,10 +2102,6 @@ class SessionLive {
       debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Audio Manifest! Waiting to sync-up with Leader...`);
       return null;
     }
-
-    const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
-              const fromLangs = Object.keys(fromSegments[targetGroupId]);
-              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
               
 
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.

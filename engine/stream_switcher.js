@@ -330,12 +330,10 @@ class StreamSwitcher {
         try {
           debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
           this.eventId = null;
-          console.log("hej", 1)
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
           if (this.useDemuxedAudio) {
             liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           }
-          console.log("hej", 2)
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
