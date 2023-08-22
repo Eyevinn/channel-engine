@@ -565,10 +565,10 @@ class SessionLive {
           increment = 1;
         }
         segmentCount = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].length;
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = [];
+        currentAudioSequenceSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage] = [];
         // In case we switch back before we've depleted all transitional segments
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage] = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].concat(this.liveAudioSegQueue[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage]);
-        currentAudioSequenceSegments[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage].push({ discontinuity: true, cue: { in: true } });
+        currentAudioSequenceSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage] = this.vodAudioSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].concat(this.liveAudioSegQueue[liveTargetGroupLang.audioGroupId][liveTargetGroupLang.audioLanguage]);
+        currentAudioSequenceSegments[vodTargetGroupLang.audioGroupId][vodTargetGroupLang.audioLanguage].push({ discontinuity: true, cue: { in: true } });
         debug(`[${this.sessionId}]: Getting current audio segments for ${groupId, langs[j]}`);
       }
     }
@@ -1518,27 +1518,6 @@ class SessionLive {
       // Collect and Push Segment-Extracting Promises
       let pushPromises = [];
 
-      let isDifferent = 0
-      if (this.vodAudioSegments) {
-        if (Object.keys(this.vodAudioSegments).length > Object.keys(this.audioManifestURIs)) {
-          isDifferent = 1;
-        } else if (Object.keys(this.vodAudioSegments).length > Object.keys(this.audioManifestURIs)) {
-          isDifferent = -1;
-        }
-      }
-
-      for (let i = 0; i < toGroups.length; i++) {
-        const groupId = toGroups[i];
-        const toLangs = Object.keys(toSegments[groupId])
-
-        for (let j = 0; j < toLangs.length; j++) {
-          const lang2 = toLangs[j];
-          const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
-          const fromLangs = Object.keys(fromSegments[targetGroupId]);
-          const targetLang = findAudioGroupOrLang(lang2, fromLangs);
-        }
-      }
-
       for (let i = 0; i < Object.keys(this.audioManifestURIs).length; i++) {
         let groupId = Object.keys(this.audioManifestURIs)[i];
         let langs = Object.keys(this.audioManifestURIs[groupId]);
@@ -2330,10 +2309,6 @@ class SessionLive {
       debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Audio Manifest! Waiting to sync-up with Leader...`);
       return null;
     }
-
-    const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
-              const fromLangs = Object.keys(fromSegments[targetGroupId]);
-              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
               
 
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
@@ -2351,9 +2326,6 @@ class SessionLive {
     let segAmounts = [];
     for (let i = 0; i < groupIds.length; i++) {
       const groupId = groupIds[i];
-      const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
-              const fromLangs = Object.keys(fromSegments[targetGroupId]);
-              const targetLang = findAudioGroupOrLang(lang2, fromLangs);
       const langs = Object.keys(this.liveAudioSegQueue[groupId]);
       for (let j = 0; j < langs.length; j++) {
         const lang = langs[j];

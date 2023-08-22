@@ -257,7 +257,6 @@ class StreamSwitcher {
               currVodAudioSegments = this._mergeAudioSegments(prerollAudioSegments, currVodAudioSegments, false);
             }
           }
-          console.log(currVodAudioSegments, 200)
 
           // In risk that the SL-playhead might have updated some data after
           // we reset last time... we should Reset SessionLive before sending new data.
@@ -330,25 +329,20 @@ class StreamSwitcher {
         try {
           debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
           this.eventId = null;
-          console.log("hej", 1)
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
           if (this.useDemuxedAudio) {
             liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           }
-          console.log("hej", 2)
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
-          console.log("hej", 3)
           if (this._isEmpty(liveSegments.currMseqSegs) || (this.useDemuxedAudio && this._isEmpty(liveAudioSegments.currMseqSegs))) {
             this.working = false;
             this.streamTypeLive = false;
             debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
             return false;
           }
-          console.log("hej", 4)
-          console.log(liveAudioSegments)
 
           // Insert preroll, if available, for current channel
           if (this.prerollsCache[this.sessionId]) {
@@ -362,16 +356,13 @@ class StreamSwitcher {
             }
           }
 
-          console.log("hej", 5)
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq, liveCounts.audioSeq, liveCounts.audioDiscSeq);
-          console.log("hej", 5.2)
           if (this.useDemuxedAudio) {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
           } else {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false);
           }
 
-          console.log("hej", 6)
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
           this.working = false;

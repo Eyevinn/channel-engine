@@ -1796,9 +1796,7 @@ class Session {
             // TODO: Support reloading with SubtitleSegments as well |
             // ---------------------------------------------------'
 
-            console.log("br")
             await currentVod.reload(nextMseq, segments, audioSegments, reloadBehind);
-            console.log("ar")
             await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             await this._sessionState.set("vodReloaded", 1);
             await this._sessionState.set("vodMediaSeqVideo", 0);

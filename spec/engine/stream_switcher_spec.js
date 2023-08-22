@@ -492,29 +492,29 @@ describe("The Stream Switcher", () => {
         en: [
           {
             id: 1,
-            uri: "1.m3u8"
+            uri: "en1.m3u8"
           },
           {
             id: 2,
-            uri: "2.m3u8"
+            uri: "en2.m3u8"
           },
           {
             id: 3,
-            uri: "3.m3u8"
+            uri: "en3.m3u8"
           },
         ],
         es: [
           {
             id: 1,
-            uri: "1.m3u8"
+            uri: "es1.m3u8"
           },
           {
             id: 2,
-            uri: "2.m3u8"
+            uri: "es2.m3u8"
           },
           {
             id: 3,
-            uri: "3.m3u8"
+            uri: "es3.m3u8"
           },
         ]
       }
@@ -525,15 +525,15 @@ describe("The Stream Switcher", () => {
         en: [
           {
             id: 4,
-            uri: "4.m3u8"
+            uri: "en4.m3u8"
           },
           {
             id: 5,
-            uri: "5.m3u8"
+            uri: "en5.m3u8"
           },
           {
             id: 6,
-            uri: "6.m3u8"
+            uri: "en6.m3u8"
           },
         ]
       }
@@ -543,21 +543,21 @@ describe("The Stream Switcher", () => {
       aac: {
         en: [
           { discontinuity: true },
-          { id: 4, uri: '4.m3u8' },
-          { id: 5, uri: '5.m3u8' },
-          { id: 6, uri: '6.m3u8' },
-          { id: 1, uri: '1.m3u8' },
-          { id: 2, uri: '2.m3u8' },
-          { id: 3, uri: '3.m3u8' }
+          { id: 4, uri: 'en4.m3u8' },
+          { id: 5, uri: 'en5.m3u8' },
+          { id: 6, uri: 'en6.m3u8' },
+          { id: 1, uri: 'en1.m3u8' },
+          { id: 2, uri: 'en2.m3u8' },
+          { id: 3, uri: 'en3.m3u8' }
         ],
         es: [
           { discontinuity: true },
-          { id: 4, uri: '4.m3u8' },
-          { id: 5, uri: '5.m3u8' },
-          { id: 6, uri: '6.m3u8' },
-          { id: 1, uri: '1.m3u8' },
-          { id: 2, uri: '2.m3u8' },
-          { id: 3, uri: '3.m3u8' }
+          { id: 4, uri: 'en4.m3u8' },
+          { id: 5, uri: 'en5.m3u8' },
+          { id: 6, uri: 'en6.m3u8' },
+          { id: 1, uri: 'es1.m3u8' },
+          { id: 2, uri: 'es2.m3u8' },
+          { id: 3, uri: 'es3.m3u8' }
         ]
       }
     }
