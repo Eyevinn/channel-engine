@@ -58,6 +58,7 @@ export interface ChannelEngineOpts {
   noSessionDataTags?: boolean;
   volatileKeyTTL?: number;
   autoCreateSession?: boolean;
+  sessionResetKey?:string;
 }
 
 interface StreamerOpts {
@@ -203,6 +204,7 @@ export class ChannelEngine {
   private adCopyMgrUri?: string;
   private adXchangeUri?: string;
   private autoCreateSession: boolean = false;
+  private sessionResetKey: string = "";
   
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
@@ -221,6 +223,10 @@ export class ChannelEngine {
     this.dummySubtitleEndpoint = (options && options.dummySubtitleEndpoint) ? options.dummySubtitleEndpoint : DefaultDummySubtitleEndpointPath;
     this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.subtitleSliceEndpoint : DefaultSubtitleSpliceEndpointPath;
 
+    this.sessionResetKey = "";
+    if (options && options.sessionResetKey) {
+      this.sessionResetKey = options.sessionResetKey;
+    }
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
       this.alwaysNewSegments = true;
@@ -361,7 +367,8 @@ export class ChannelEngine {
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
-    this.server.get('/reset', this._handleSessionReset.bind(this));
+    this.server.get('/reset', this._handleSessionsReset.bind(this));
+    this.server.get('/reset/:sessionId', this._handleSessionReset.bind(this));
     this.server.get(DefaultDummySubtitleEndpointPath, this._handleDummySubtitleEndpoint.bind(this));
     this.server.get(DefaultSubtitleSpliceEndpointPath, this._handleSubtitleSliceEndpoint.bind(this));
 
@@ -466,6 +473,7 @@ export class ChannelEngine {
         subtitleSliceEndpoint: this.subtitleSliceEndpoint,
         useVTTSubtitles: this.useVTTSubtitles,
         alwaysNewSegments: options.alwaysNewSegments,
+        sessionResetKey: options.sessionResetKey,
         partialStoreHLSVod: options.partialStoreHLSVod,
         alwaysMapBandwidthByNearest: options.alwaysMapBandwidthByNearest,
         noSessionDataTags: options.noSessionDataTags,
@@ -1005,8 +1013,18 @@ export class ChannelEngine {
     }
   }
 
-  async _handleSessionReset(req, res, next) {
+  async _handleSessionsReset(req, res, next) {
     debug(`req.url=${req.url}`);
+    if (this.sessionResetKey && req.query.key !== this.sessionResetKey) {
+      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Reset-Key" }),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
+      next();
+      return;
+    }
     let sessionResets = [];
     for (const sessionId of Object.keys(sessions)) {
       const session = sessions[sessionId];
@@ -1026,6 +1044,60 @@ export class ChannelEngine {
       "Cache-Control": "no-cache",
     });
   }
+
+  async _handleSessionReset(req, res, next) {
+    debug(`req.url=${req.url}`);
+    if (this.sessionResetKey && req.query.key !== this.sessionResetKey) {
+      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Reset-Key" }),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
+      next();
+      return;
+    }
+    try {
+      let sessionId;
+      if (req.params && req.params.sessionId) {
+        sessionId = req.params.sessionId;
+      }
+      let sessionResets = [];
+      const session = sessions[sessionId];
+      const sessionLive = sessionsLive[sessionId];
+      if (session && sessionLive) {
+        await session.resetAsync(sessionId); 
+        sessionResets.push(sessionId);
+      } else {
+        res.sendRaw(400, JSON.stringify({ "message": "Invalid Session ID" }),
+        {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-cache",
+        });
+        next();
+        return;
+      }
+      
+      res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
+      next();
+    } catch (e) {
+      res.sendRaw(500, JSON.stringify({ "error": e}),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
+      const err = new errs.NotFoundError('Session Reset Failed');
+      next(err);
+    }
+  }
+
 
   _gracefulErrorHandler(errMsg) {
     console.error(errMsg);

@@ -9,11 +9,21 @@ class MemoryStateStore {
   async initAsync(id, initData) {
     if (!this.sharedStates[id]) {
       this.sharedStates[id] = {};
-      Object.keys(initData).forEach(key => {
+      Object.keys(initData).forEach((key) => {
         this.sharedStates[id][key] = initData[key];
       });
     }
     return this.sharedStates[id];
+  }
+
+  async resetAsync(id, initData) {
+    this.sharedStates[id] = null;
+    await this.initAsync(id, initData);
+  }
+
+  async resetAllAsync() {
+      this.sharedStates = {};
+      this.globalSharedStates = {};
   }
 
   async getAsync(id, key) {
@@ -41,7 +51,7 @@ class MemoryStateStore {
 
   async removeAsync(id, key) {
     delete this.sharedStates[id][key];
-  }  
+  }
 }
 
 module.exports = MemoryStateStore;

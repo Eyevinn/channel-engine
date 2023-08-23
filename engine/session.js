@@ -341,9 +341,13 @@ class Session {
     }
   }
 
-  async resetAsync() {
-    await this._sessionStateStore.reset(this._sessionId);
-    await this._playheadStateStore.reset(this._sessionId);
+  async resetAsync(id) {
+    if (id) {
+      await this._sessionStateStore.reset(id);
+      await this._playheadStateStore.reset(id);
+    }
+    await this._sessionStateStore.resetAll();
+    await this._playheadStateStore.resetAll();
   }
 
   async getSessionState() {

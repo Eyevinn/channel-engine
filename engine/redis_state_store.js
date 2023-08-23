@@ -14,7 +14,7 @@ class RedisStateStore {
     this.volatileKeyTTL = DEFAULT_VOLATILE_KEY_TTL;
     if (opts.volatileKeyTTL) {
       debug(`Overriding default, volatileKeyTTL=${opts.volatileKeyTTL}s`);
-      this.volatileKeyTTL = opts.volatileKeyTTL;  
+      this.volatileKeyTTL = opts.volatileKeyTTL;
     }
     this.client = createClient(opts.redisUrl);
   }
@@ -23,14 +23,14 @@ class RedisStateStore {
     const isInitiated = await this.getAsync(id, "_initiated");
     let data = {};
     if (!isInitiated) {
-      for(const key of Object.keys(initData)) {
+      for (const key of Object.keys(initData)) {
         debug(`${this.keyPrefix}:${id}: Initiating key ${key} with init data`);
         data[key] = await this.setAsync(id, key, initData[key]);
       }
       await this.setAsync(id, "_initiated", true);
     } else {
       debug(`${this.keyPrefix}:${id}: Already initiated, not initiating with init data`);
-      for(const key of Object.keys(initData)) {
+      for (const key of Object.keys(initData)) {
         debug(`${this.keyPrefix}:${id}: Initiating key ${key} with data from store`);
         data[key] = await this.getAsync(id, key);
       }
@@ -39,8 +39,13 @@ class RedisStateStore {
   }
 
   async resetAsync(id, initData) {
+      await this.setAsync(id, "_initiated", false);
+      await this.initAsync(id, initData);
+  }
+
+  async resetAllAsync() {
     const resetAsync = new Promise((resolve, reject) => {
-      this.client.flushall((err, reply) => {        
+      this.client.flushall((err, reply) => {
         if (!err) {
           console.log("Flushed Redis db: ", reply);
           resolve();
@@ -64,7 +69,7 @@ class RedisStateStore {
         } else {
           reject(err);
         }
-        });
+      });
     });
     const data = await getAsync;
     return data;
@@ -76,7 +81,7 @@ class RedisStateStore {
     const setAsync = new Promise((resolve, reject) => {
       this.client.set(storeKey, JSON.stringify(value), (err, res) => {
         const ioTimeMs = Date.now() - startMs;
-        debug(`REDIS set ${storeKey}: ${res} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
+        debug(`REDIS set ${storeKey}: ${res} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? "REDISSLOW!" : ""}`);
         if (!err) {
           resolve(value);
         } else {
@@ -110,7 +115,7 @@ class RedisStateStore {
     const delAsync = new Promise((resolve, reject) => {
       this.client.del(storeKey, (err, res) => {
         const ioTimeMs = Date.now() - startMs;
-        debug(`REDIS remove ${storeKey}: (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
+        debug(`REDIS remove ${storeKey}: (${ioTimeMs}ms) ${ioTimeMs > 1000 ? "REDISSLOW!" : ""}`);
         if (!err) {
           resolve();
         } else {
