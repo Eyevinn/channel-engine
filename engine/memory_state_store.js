@@ -31,6 +31,9 @@ class MemoryStateStore {
     if (id === "" || id === null) {
       value = this.globalSharedStates[key];
     } else {
+      if (!this.sharedStates[id]) {
+        return null;
+      }
       value = this.sharedStates[id][key];
     }
     return value;
@@ -40,6 +43,9 @@ class MemoryStateStore {
     if (id === "" || id === null) {
       this.globalSharedStates[key] = value;
     } else {
+      if (!this.sharedStates[id]) {
+        this.sharedStates[id] = {};
+      }
       this.sharedStates[id][key] = value;
       return this.sharedStates[id][key];
     }
