@@ -36,6 +36,10 @@ class MemcachedStateStore {
     await this.initAsync(id, initData);
   }
 
+  async resetAllAsync() {
+    console.error("Shared Storage Reset Failed.\nMemcache-client: Flush All Command Not Implemented Yet");
+  }
+
   async getAsync(id, key) {
     const storeKey = "" + this.keyPrefix + id + key;
     const data = await this.client.get(storeKey);
