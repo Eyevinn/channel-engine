@@ -828,7 +828,7 @@ export class ChannelEngine {
   async _handleDummySubtitleEndpoint(req,res,next) {
     debug(`req.url=${req.url}`);
     try {
-      const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000`;
+      const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n\n`;
       res.sendRaw(200, Buffer.from(body, 'utf8'), {
         "Content-Type": "text/vtt",
         "Access-Control-Allow-Origin": "*",
