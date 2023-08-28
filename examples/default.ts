@@ -7,30 +7,39 @@ import { ChannelEngine, ChannelEngineOpts,
   VodRequest, VodResponse, Channel, ChannelProfile
 } from "../index";
 
-const STITCH_ENDPOINT =
-  process.env.STITCH_ENDPOINT ||
-  "http://lambda.eyevinn.technology/stitch/master.m3u8";
+let TEST_CHANNELS_COUNT = 1;
+if (process.env.TEST_CHANNELS) {
+  TEST_CHANNELS_COUNT = parseInt(process.env.TEST_CHANNELS, 10);
+}
+
 class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
   constructor(opts?) {
-    this.assets = {
-      1: [
-        {
-          id: 1,
-          title: "Tears of Steel",
-          uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8",
-        },
-        {
-          id: 2,
-          title: "VINN",
-          uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
-        },
-      ],
-    };
-    this.pos = {
-      1: 1,
-    };
+    this.assets = {};
+    this.pos = {};
+
+    for (let i = 0; i < TEST_CHANNELS_COUNT; i++) {
+      const channelId = `${i + 1}`;
+      this.assets[channelId] = [
+          {
+            id: 1,
+            title: "Streaming Tech TV+",
+            uri: "https://lab.cdn.eyevinn.technology/stswetvplus-promo-2023-5GBm231Mkz.mov/manifest.m3u8",
+          },
+          {
+            id: 2,
+            title: "Tears of Steel",
+            uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8",
+          },
+          {
+            id: 3,
+            title: "VINN",
+            uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8",
+          },
+        ];
+      this.pos[channelId] = 0;
+    }
   }
 
   /**
@@ -50,22 +59,10 @@ class RefAssetManager implements IAssetManager {
         if (this.pos[channelId] > this.assets[channelId].length - 1) {
           this.pos[channelId] = 0;
         }
-        const payload = {
-          uri: vod.uri,
-          breaks: [
-            {
-              pos: 100,
-              duration: 15 * 1000,
-              url: "https://maitv-vod.lab.eyevinn.technology/ads/6cd7d768_e214_4ebc_9f14_7ed89710115e_mp4/master.m3u8",
-            },
-          ],
-        };
-        const buff = Buffer.from(JSON.stringify(payload));
-        const encodedPayload = buff.toString("base64");
         const vodResponse = {
           id: vod.id,
           title: vod.title,
-          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload,
+          uri: vod.uri,
         };
         resolve(vodResponse);
       } else {
@@ -76,9 +73,17 @@ class RefAssetManager implements IAssetManager {
 }
 
 class RefChannelManager implements IChannelManager {
+  private channels;
+
+  constructor() {
+    this.channels = [];
+    for (let i = 0; i < TEST_CHANNELS_COUNT; i++) {
+      this.channels.push({ id: `${i + 1}`, profile: this._getProfile() });    
+    }  
+  }
+
   getChannels(): Channel[] {
-    //return [ { id: '1', profile: this._getProfile() }, { id: 'faulty', profile: this._getProfile() } ];
-    return [{ id: "1", profile: this._getProfile() }];
+    return this.channels;
   }
 
   _getProfile(): ChannelProfile[] {

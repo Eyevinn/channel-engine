@@ -12,10 +12,12 @@ class SharedStateStore {
     this.cacheTTL = opts && opts.cacheTTL ? opts.cacheTTL : 1000;
 
     this.shared = false;
+    this.hasPipeline = false;
     if (opts && opts.redisUrl) {
       debug(`Using REDIS (${opts.redisUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
       this.store = new RedisStateStore(`${type}:`, opts);
       this.shared = true;
+      this.hasPipeline = true;
     } else if (opts && opts.memcachedUrl) {
       debug(`Using MEMCACHED (${opts.memcachedUrl}) for shared state store (${type}, cacheTTL=${this.cacheTTL})`);
       this.store = new MemcachedStateStore(`${type}:`, opts);
@@ -28,6 +30,10 @@ class SharedStateStore {
 
   isShared() {
     return this.shared;
+  }
+
+  canPipeline() {
+    return this.hasPipeline;
   }
 
   async init(id) {
@@ -62,10 +68,26 @@ class SharedStateStore {
 
   async getValues(id, keys) {
     let data = {};
-    for(const key of keys) {
-      data[key] = await this.get(id, key);
+    if (this.hasPipeline) {
+      data = await this.store.getValues(id, keys);
+    } else {
+      for(const key of keys) {
+        data[key] = await this.get(id, key);
+      }
     }
     return data;
+  }
+
+  async setValues(id, data) {
+    let returnData = {};
+    if (this.hasPipeline) {
+      returnData = await this.store.setValues(id, data);
+    } else {
+      for (const key of Object.keys(data)) {
+        returnData[key] = await this.set(id, key, data[key]);
+      }
+    }
+    return returnData;
   }
 
   async remove(id, key) {

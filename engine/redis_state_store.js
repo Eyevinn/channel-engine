@@ -1,4 +1,4 @@
-const { createClient } = require("redis");
+const Redis = require("ioredis");
 const debug = require("debug")("redis-state-store");
 
 const DEFAULT_VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
@@ -16,23 +16,22 @@ class RedisStateStore {
       debug(`Overriding default, volatileKeyTTL=${opts.volatileKeyTTL}s`);
       this.volatileKeyTTL = opts.volatileKeyTTL;
     }
-    this.client = createClient(opts.redisUrl);
+    this.client = new Redis(opts.redisUrl, { enableAutoPipelining: true });
   }
 
   async initAsync(id, initData) {
     const isInitiated = await this.getAsync(id, "_initiated");
     let data = {};
     if (!isInitiated) {
-      for (const key of Object.keys(initData)) {
-        debug(`${this.keyPrefix}:${id}: Initiating key ${key} with init data`);
-        data[key] = await this.setAsync(id, key, initData[key]);
-      }
+      debug(`${this.keyPrefix}:${id}: Initiating keys ${Object.keys(initData)} with init data`);
+      await this.setValues(id, initData);
       await this.setAsync(id, "_initiated", true);
     } else {
       debug(`${this.keyPrefix}:${id}: Already initiated, not initiating with init data`);
       for (const key of Object.keys(initData)) {
         debug(`${this.keyPrefix}:${id}: Initiating key ${key} with data from store`);
         data[key] = await this.getAsync(id, key);
+        //debug(`${this.keyPrefix}:${id}: Key ${key} initiated with data from store: ${data[key]}`);
       }
     }
     return data;
@@ -57,6 +56,26 @@ class RedisStateStore {
     await resetAsync;
   }
 
+  async getValues(id, keys) {
+    const pipeline = this.client.pipeline();
+    let data = {};
+    for (const key of keys) {
+      const storeKey = "" + this.keyPrefix + id + key;
+      pipeline.get(storeKey, (err, reply) => {
+        if (!err) {
+          debug(`REDIS get(pipeline) ${storeKey}:${reply ? reply.length + " chars" : "null"}`);
+          try {
+            data[key] = JSON.parse(reply);
+          } catch (err) {
+            console.error(`REDIS get(pipeline): Failed to parse ${storeKey} data: '${reply}'`);
+          }
+        }
+      });
+    }
+    await pipeline.exec();
+    return data;
+  }
+
   async getAsync(id, key) {
     const startMs = Date.now();
     const storeKey = "" + this.keyPrefix + id + key;
@@ -65,7 +84,13 @@ class RedisStateStore {
         const ioTimeMs = Date.now() - startMs;
         debug(`REDIS get ${storeKey}:${reply ? reply.length + " chars" : "null"} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? 'REDISSLOW!' : ''}`);
         if (!err) {
-          resolve(JSON.parse(reply));
+          let data;
+          try {
+            data = JSON.parse(reply);
+          } catch (err) {
+            console.error(`REDIS get: Failed to parse ${storeKey} data: '${reply}'`);
+          }
+          resolve(data);
         } else {
           reject(err);
         }
@@ -73,6 +98,23 @@ class RedisStateStore {
     });
     const data = await getAsync;
     return data;
+  }
+
+  async setValues(id, data) {
+    const returnData = {};
+    const pipeline = this.client.pipeline();
+    for (const key of Object.keys(data)) {
+      const storeKey = "" + this.keyPrefix + id + key;
+      const value = data[key];
+      pipeline.set(storeKey, JSON.stringify(value), (err, res) => {
+        if (!err) {
+          debug(`REDIS set(pipeline) ${storeKey}: ${res}`);
+          returnData[key] = value;
+        }
+      });
+    }
+    await pipeline.exec();
+    return returnData;
   }
 
   async setAsync(id, key, value) {
