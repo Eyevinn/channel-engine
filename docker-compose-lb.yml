@@ -1,0 +1,14 @@
+version: "3.7"
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginxlb
+    image: nginx_custom:test
+    ports:
+    - 8000:8000
+  redis:
+    image: redis:6
+    ports:
+    - 6379:6379

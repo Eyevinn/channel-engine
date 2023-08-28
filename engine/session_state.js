@@ -128,6 +128,14 @@ class SharedSessionState {
       return await this.store.get(this.sessionId, key);
     }
   }
+
+  async setValues(keyValues) {
+    if (await this.store.isLeader(this.instanceId)) {
+      return await this.store.setValues(this.sessionId, keyValues);
+    } else {
+      return await this.store.getValues(this.sessionId, Object.keys(keyValues));
+    }
+  }
   
   async remove(key) {
     await this.store.remove(this.sessionId, key);
