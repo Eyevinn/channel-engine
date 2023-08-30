@@ -35,6 +35,7 @@ A live demo and example is available here: [https://vod2live.eyevinn.technology]
 - Mix VOD2Live channel with a "real" live HLS stream
 - Develop adapters to plugin with custom scheduling endpoints
 - High Availability with Redis Cache as shared state store
+- Support for WebVTT subtitles
 - Support for DRM encrypted HLS VODs (in beta)
 - And much more!
 
@@ -52,8 +53,8 @@ Supported Node.js Versions
 
 | HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | DRM |
 | ---------- | ----- | ------- | ----------- | --------- | --- |
-| HLS + TS   | Yes   | Yes     | Yes*        | TBD       | No  |
-| HLS + CMAF | No    | Yes     | TBD         | TBD       | TBD |
+| HLS + TS   | Yes   | Yes     | Yes*        | Yes       | No  |
+| HLS + CMAF | No    | Yes     | TBD         | Yes       | TBD |
 
 *\* not supported with demuxed sources*
 
