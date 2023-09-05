@@ -1,7 +1,15 @@
 const Redis = require("ioredis");
 const debug = require("debug")("redis-state-store");
+const { cloudWatchLog } = require("./util.js");
 
 const DEFAULT_VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
+
+function isTrue(s) {
+  const regex = /^\s*(true|1)\s*$/i;
+  return regex.test(s);
+}
+
+const REDIS_VERBOSE_LOG = process.env.REDIS_VERBOSE_LOG ? isTrue(process.env.REDIS_VERBOSE_LOG) : false;
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
@@ -59,6 +67,7 @@ class RedisStateStore {
   async getValues(id, keys) {
     const pipeline = this.client.pipeline();
     let data = {};
+    const startMs = Date.now();
     for (const key of keys) {
       const storeKey = "" + this.keyPrefix + id + key;
       pipeline.get(storeKey, (err, reply) => {
@@ -72,7 +81,11 @@ class RedisStateStore {
         }
       });
     }
+    const ops = pipeline.length;
     await pipeline.exec();
+    const ioTimeMs = Date.now() - startMs;
+    cloudWatchLog(!REDIS_VERBOSE_LOG, 'redis', 
+      { event: 'getValues', operations: ops, ioTimeMs: ioTimeMs });
     return data;
   }
 
@@ -90,6 +103,8 @@ class RedisStateStore {
           } catch (err) {
             console.error(`REDIS get: Failed to parse ${storeKey} data: '${reply}'`);
           }
+          cloudWatchLog(!REDIS_VERBOSE_LOG, 'redis', 
+            { event: 'get', operations: 1, ioTimeMs: ioTimeMs });
           resolve(data);
         } else {
           reject(err);
@@ -102,6 +117,7 @@ class RedisStateStore {
 
   async setValues(id, data) {
     const returnData = {};
+    const startMs = Date.now();
     const pipeline = this.client.pipeline();
     for (const key of Object.keys(data)) {
       const storeKey = "" + this.keyPrefix + id + key;
@@ -113,7 +129,11 @@ class RedisStateStore {
         }
       });
     }
+    const ops = pipeline.length;
     await pipeline.exec();
+    const ioTimeMs = Date.now() - startMs;  
+    cloudWatchLog(!REDIS_VERBOSE_LOG, 'redis', 
+      { event: 'setValues', operations: ops, ioTimeMs: ioTimeMs });
     return returnData;
   }
 
@@ -125,6 +145,8 @@ class RedisStateStore {
         const ioTimeMs = Date.now() - startMs;
         debug(`REDIS set ${storeKey}: ${res} (${ioTimeMs}ms) ${ioTimeMs > 1000 ? "REDISSLOW!" : ""}`);
         if (!err) {
+          cloudWatchLog(!REDIS_VERBOSE_LOG, 'redis', 
+            { event: 'set', operations: 1, ioTimeMs: ioTimeMs });    
           resolve(value);
         } else {
           reject(err);
@@ -159,6 +181,8 @@ class RedisStateStore {
         const ioTimeMs = Date.now() - startMs;
         debug(`REDIS remove ${storeKey}: (${ioTimeMs}ms) ${ioTimeMs > 1000 ? "REDISSLOW!" : ""}`);
         if (!err) {
+          cloudWatchLog(!REDIS_VERBOSE_LOG, 'redis', 
+            { event: 'remove', operations: 1, ioTimeMs: ioTimeMs });    
           resolve();
         } else {
           reject(err);
