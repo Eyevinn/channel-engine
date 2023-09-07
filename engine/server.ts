@@ -24,8 +24,8 @@ const sessionsLive = {}; // Should be a persistent store...
 const sessionSwitchers = {}; // Should be a persistent store...
 const switcherStatus = {}; // Should be a persistent store...
 const eventStreams = {};
-const DefaultDummySubtitleEndpointPath = "/vtt/dummyUrl"
-const DefaultSubtitleSpliceEndpointPath = "/vtt/sliceUrl"
+const DefaultDummySubtitleEndpointPath = "/dummyUrl"
+const DefaultSubtitleSpliceEndpointPath = "/sliceUrl"
 
 export interface ChannelEngineOpts {
   defaultSlateUri?: string;
@@ -45,6 +45,7 @@ export interface ChannelEngineOpts {
   dummySubtitleEndpoint?: string;
   subtitleSliceEndpoint?: string;
   useVTTSubtitles?: boolean;
+  vttBasePath?: string;
   alwaysNewSegments?: boolean;
   alwaysMapBandwidthByNearest?: boolean;
   diffCompensationRate?: number;
@@ -216,8 +217,9 @@ export class ChannelEngine {
     }
 
     this.useVTTSubtitles = (options && options.useVTTSubtitles) ? options.useVTTSubtitles : false ;
-    this.dummySubtitleEndpoint = (options && options.dummySubtitleEndpoint) ? options.dummySubtitleEndpoint : DefaultDummySubtitleEndpointPath;
-    this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.subtitleSliceEndpoint : DefaultSubtitleSpliceEndpointPath;
+    const vttBasePath = (options && options.vttBasePath) ? options.vttBasePath : '/vtt';
+    this.dummySubtitleEndpoint = (options && options.dummySubtitleEndpoint) ? options.dummySubtitleEndpoint : vttBasePath + DefaultDummySubtitleEndpointPath;
+    this.subtitleSliceEndpoint = (options && options.subtitleSliceEndpoint) ? options.subtitleSliceEndpoint : vttBasePath + DefaultSubtitleSpliceEndpointPath;
 
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
@@ -356,8 +358,8 @@ export class ChannelEngine {
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
     this.server.get('/health/:sessionId', this._handleSessionHealth.bind(this));
     this.server.get('/reset', this._handleSessionReset.bind(this));
-    this.server.get(DefaultDummySubtitleEndpointPath, this._handleDummySubtitleEndpoint.bind(this));
-    this.server.get(DefaultSubtitleSpliceEndpointPath, this._handleSubtitleSliceEndpoint.bind(this));
+    this.server.get(vttBasePath + DefaultDummySubtitleEndpointPath, this._handleDummySubtitleEndpoint.bind(this));
+    this.server.get(vttBasePath + DefaultSubtitleSpliceEndpointPath, this._handleSubtitleSliceEndpoint.bind(this));
 
     this.server.on('NotFound', (req, res, err, next) => {
       res.header("X-Instance-Id", this.instanceId + `<${version}>`);

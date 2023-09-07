@@ -112,7 +112,8 @@ const engineOptions: ChannelEngineOpts = {
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,
   alwaysNewSegments: false,
-  useVTTSubtitles: true
+  useVTTSubtitles: true,
+  vttBasePath: '/subtitles'
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
