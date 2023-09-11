@@ -59,6 +59,7 @@ export interface ChannelEngineOpts {
   volatileKeyTTL?: number;
   autoCreateSession?: boolean;
   sessionResetKey?:string;
+  sessionEventStream?: boolean;
 }
 
 interface StreamerOpts {
@@ -205,6 +206,7 @@ export class ChannelEngine {
   private adXchangeUri?: string;
   private autoCreateSession: boolean = false;
   private sessionResetKey: string = "";
+  private sessionEventStream: boolean = false;
   
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
@@ -490,6 +492,7 @@ export class ChannelEngine {
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
+        sessionEventStream: options.sessionEventStream
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
