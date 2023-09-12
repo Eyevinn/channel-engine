@@ -260,7 +260,6 @@ export class ChannelEngine {
       this.server.server.keepAliveTimeout = options.keepAliveTimeout;
       this.server.server.headersTimeout = options.keepAliveTimeout + 1000;  
     }
-    console.log(this.server);
     this.server.use(restify.plugins.queryParser());
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
