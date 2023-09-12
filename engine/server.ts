@@ -59,7 +59,8 @@ export interface ChannelEngineOpts {
   noSessionDataTags?: boolean;
   volatileKeyTTL?: number;
   autoCreateSession?: boolean;
-  sessionResetKey?:string;
+  sessionResetKey?: string;
+  keepAliveTimeout?: number;
 }
 
 interface StreamerOpts {
@@ -255,6 +256,11 @@ export class ChannelEngine {
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
     this.server = restify.createServer();
+    if (options && options.keepAliveTimeout) {
+      this.server.server.keepAliveTimeout = options.keepAliveTimeout;
+      this.server.server.headersTimeout = options.keepAliveTimeout + 1000;  
+    }
+    console.log(this.server);
     this.server.use(restify.plugins.queryParser());
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
