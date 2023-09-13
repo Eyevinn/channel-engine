@@ -1207,8 +1207,8 @@ class Session {
     this.produceEvent({
       type: 'NOW_PLAYING',
       data: {
-        id: this.currentMetadata.id || 'cc',
-        title: this.currentMetadata.title || 'cc',
+        id: this.currentMetadata.id,
+        title: this.currentMetadata.title,
       }
     });
     this._sessionState.set("tsLastRequestMaster", Date.now());
@@ -1405,8 +1405,8 @@ class Session {
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
-                id: this.currentMetadata.id || 'xx',
-                title: this.currentMetadata.title || 'xx',
+                id: this.currentMetadata.id,
+                title: this.currentMetadata.title,
               }
             });
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
@@ -1546,9 +1546,9 @@ class Session {
               this.produceEvent({
                 type: 'NEXT_VOD_SELECTED',
                 data: {
-                  id: this.currentMetadata.id|| 'xx',
-                  uri: vodResponse.uri|| 'xx',
-                  title: this.currentMetadata.title || '',
+                  id: this.currentMetadata.id,
+                  uri: vodResponse.uri,
+                  title: this.currentMetadata.title,
                 }
               });
               if (vodResponse.desiredDuration) {
@@ -1608,8 +1608,8 @@ class Session {
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
-                id: this.currentMetadata.id || 'cc',
-                title: this.currentMetadata.title || 'dc',
+                id: this.currentMetadata.id,
+                title: this.currentMetadata.title,
               }
             });
             return;
