@@ -1548,7 +1548,7 @@ class Session {
                 data: {
                   id: this.currentMetadata.id,
                   uri: vodResponse.uri,
-                  title: this.currentMetadata.title,
+                  title: this.currentMetadata.title || '',
                 }
               });
               if (vodResponse.desiredDuration) {
