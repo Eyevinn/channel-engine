@@ -12,6 +12,7 @@ const { PlayheadState } = require('./playhead_state.js');
 const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
+const EVENT_LIST_LIMIT = 100;
 const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
@@ -127,6 +128,9 @@ class Session {
       }
       if (config.noSessionDataTags) {
         this._noSessionDataTags = config.noSessionDataTags;
+      }
+      if (config.sessionEventStream) {
+        this._sessionEventStream = config.sessionEventStream;
       }
       if (config.slateUri) {
         this.slateUri = config.slateUri;
@@ -1246,7 +1250,12 @@ class Session {
   }
 
   produceEvent(event) {
-    this._events.push(event);
+  if (this._sessionEventStream) {
+      this._events.push(event);
+      if (this._events.length > EVENT_LIST_LIMIT) {
+        this.consumeEvent();
+      }
+    }
   }
 
   hasPlayhead() {
