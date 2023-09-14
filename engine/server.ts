@@ -15,6 +15,8 @@ const { SessionLiveStateStore } = require('./session_live_state.js');
 const { PlayheadStateStore } = require('./playhead_state.js');
 
 const { filterQueryParser, toHHMMSS, WaitTimeGenerator } = require('./util.js');
+const preflight = require('./preflight.js');
+
 const { version } = require('../package.json');
 
 const AUTO_CREATE_CHANNEL_TIMEOUT = 3000;
@@ -62,6 +64,7 @@ export interface ChannelEngineOpts {
   sessionResetKey?: string;
   keepAliveTimeout?: number;
   sessionEventStream?: boolean;
+  sessionHealthKey?: string;
 }
 
 interface StreamerOpts {
@@ -209,6 +212,7 @@ export class ChannelEngine {
   private autoCreateSession: boolean = false;
   private sessionResetKey: string = "";
   private sessionEventStream: boolean = false;
+  private sessionHealthKey: string = "";
   
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
@@ -231,6 +235,9 @@ export class ChannelEngine {
     this.sessionResetKey = "";
     if (options && options.sessionResetKey) {
       this.sessionResetKey = options.sessionResetKey;
+    }
+    if (options && options.sessionHealthKey) {
+      this.sessionHealthKey = options.sessionHealthKey;
     }
     this.alwaysNewSegments = false;
     if (options && options.alwaysNewSegments) {
@@ -353,25 +360,8 @@ export class ChannelEngine {
     this.server.get('/channels/:channelId/:file', async (req, res, next) => {
       req.query['channel'] = req.params.channelId;
       await handleMasterRoute(req, res, next);
-    });   
-    this.server.opts('/live/:file', async (req, res, next) => {
-      res.sendRaw(204, "", {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
-        },
-      });
-      next();
     });
-    this.server.opts('/channels/:channelId/:file', async (req, res, next) => {
-      res.sendRaw(204, "", {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
-        },
-      });
-      next();
-    });
+    this.server.pre(preflight.handler);
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
@@ -957,6 +947,16 @@ export class ChannelEngine {
 
   async _handleAggregatedSessionHealth(req, res, next) {
     debug(`req.url=${req.url}`);
+    if (this.sessionHealthKey && this.sessionHealthKey !== req.headers['x-health-key']) {
+      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Health-Key" }),
+      {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+      });
+      next();
+      return;
+    }
     let failingSessions = [];
     let endpoints = [];
     for (const sessionId of Object.keys(sessions)) {

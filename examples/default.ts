@@ -106,7 +106,8 @@ const engineOptions: ChannelEngineOpts = {
     "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
   slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
-  keepAliveTimeout: process.env.KEEP_ALIVE_TIMEOUT ? parseInt(process.env.KEEP_ALIVE_TIMEOUT) * 1000: undefined
+  keepAliveTimeout: process.env.KEEP_ALIVE_TIMEOUT ? parseInt(process.env.KEEP_ALIVE_TIMEOUT) * 1000: undefined,
+  sessionHealthKey: 'eyevinn'
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
