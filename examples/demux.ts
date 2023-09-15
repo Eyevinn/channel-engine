@@ -24,7 +24,7 @@ class RefAssetManager implements IAssetManager {
         {
           id: 1,
           title: "Elephants dream",
-          uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
         },
         
       ],

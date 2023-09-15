@@ -16,7 +16,7 @@ class RefAssetManager implements IAssetManager {
   constructor(opts?) {
       this.assets = {
         '1': [
-          { id: 1, title: "Tears of Steel", uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8" },
+          { id: 1, title: "Tears of Steel", uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8" },
         ]
       };
       this.pos = {
@@ -45,7 +45,8 @@ class RefAssetManager implements IAssetManager {
             {
               pos: 0,
               duration: 15 * 1000,
-              url: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8"
+              url: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8"
+              
             }
           ]
         };
@@ -97,7 +98,6 @@ class RefChannelManager implements IChannelManager {
   _getAudioTracks(): AudioTracks[] {
     return [
       { language: "en", name: "English", default: true },
-      { language: "es", name: "Spanish", default: false },
     ];
   }
 }
@@ -128,7 +128,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
   }
 
   getPrerollUri(channelId): Promise<string> {
-    const defaultPrerollSlateUri = "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
+    const defaultPrerollSlateUri = "http://localhost:8002/playlist.m3u8"
     return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
