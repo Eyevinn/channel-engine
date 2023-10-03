@@ -385,7 +385,7 @@ class Session {
     }
   }
 
-  async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
+  async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind, audioSegments, aSeqOffset) {
     if (!this._sessionState) {
       throw new Error("Session not ready");
     }
@@ -394,6 +394,8 @@ class Session {
     this.switchDataForSession.reloadBehind = reloadBehind;
     this.switchDataForSession.transitionSegments = segments;
     this.switchDataForSession.mediaSeqOffset = mSeqOffset;
+    this.switchDataForSession.transitionAudioSegments = audioSegments;
+    this.switchDataForSession.audioSeqOffset = aSeqOffset;
 
     let waitTimeMs = 2000;
     for (let i = segments[Object.keys(segments)[0]].length - 1; 0 < i; i--) {
@@ -403,68 +405,20 @@ class Session {
       }
     }
 
-    let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-    if (!isLeader) {
-      debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
-      await this._sessionState.clearCurrentVodCache();
-
-      let vodReloaded = await this._sessionState.get("vodReloaded");
-      let attempts = 9;
-      while (!isLeader && !vodReloaded && attempts > 0) {
-        debug(`[${this._sessionId}]: FOLLOWER: I arrived before LEADER. Waiting (1000ms) for LEADER to reload currentVod in store! (tries left=${attempts})`);
-        await timer(1000);
-        await this._sessionStateStore.clearLeaderCache();
-        isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-        vodReloaded = await this._sessionState.get("vodReloaded");
-        attempts--;
+    if (this.use_demuxed_audio && audioSegments) {
+      let waitTimeMsAudio = 2000;
+      let groupId = Object.keys(audioSegments)[0];
+      let lang = Object.keys(audioSegments[groupId])[0]
+      for (let i = audioSegments[groupId][lang].length - 1; 0 < i; i--) {
+        const segment = audioSegments[groupId][lang][i];
+        if (segment.duration) {
+          waitTimeMsAudio = parseInt(1000 * (segment.duration / 3), 10);
+          break;
+        }
       }
-
-      if (attempts === 0) {
-        debug(`[${this._sessionId}]: FOLLOWER: WARNING! Attempts=0 - Risk of using wrong currentVod`);
-      }
-      if (!isLeader || vodReloaded) {
-        debug(`[${this._sessionId}]: FOLLOWER: leader is alive, and has presumably updated currentVod. Clearing the cache now`);
-        await this._sessionState.clearCurrentVodCache();
-        return;
-      }
-      debug(`[${this._sessionId}]: NEW LEADER: Setting state=VOD_RELOAD_INIT`);
-      this.isSwitchingBackToV2L = true;
-      await this._sessionState.set("state", SessionState.VOD_RELOAD_INIT);
-
-    } else {
-      let vodReloaded = await this._sessionState.get("vodReloaded");
-      let attempts = 12;
-      while (!vodReloaded && attempts > 0) {
-        debug(`[${this._sessionId}]: LEADER: Waiting (${waitTimeMs}ms) to buy some time reloading vod and adding it to store! (tries left=${attempts})`);
-        await timer(waitTimeMs);
-        vodReloaded = await this._sessionState.get("vodReloaded");
-        attempts--;
-      }
-      if (attempts === 0) {
-        debug(`[${this._sessionId}]: LEADER: WARNING! Vod was never Reloaded!`);
-        return;
-      }
+      waitTimeMs = waitTimeMs > waitTimeMsAudio ? waitTimeMs : waitTimeMsAudio;
     }
-  }
 
-  async setCurrentAudioSequenceSegments(segments, aSeqOffset, reloadBehind) {
-    if (!this._sessionState) {
-      throw new Error("Session not ready");
-    }
-    this.isSwitchingBackToV2L = true;
-
-    this.switchDataForSession.transitionAudioSegments = segments;
-    this.switchDataForSession.audioSeqOffset = aSeqOffset;
-    let waitTimeMs = 2000;
-    let groupId = Object.keys(segments)[0];
-    let lang = Object.keys(segments[groupId])[0]
-    for (let i = segments[groupId][lang].length - 1; 0 < i; i--) {
-      const segment = segments[groupId][lang][i];
-      if (segment.duration) {
-        waitTimeMs = parseInt(1000 * (segment.duration / 3), 10);
-        break;
-      }
-    }
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     if (!isLeader) {
       debug(`[${this._sessionId}]: FOLLOWER: Invalidate cache to ensure having the correct VOD!`);
