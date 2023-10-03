@@ -1,6 +1,7 @@
 const debug = require("debug")("engine-stream-switcher");
 const crypto = require("crypto");
 const fetch = require("node-fetch");
+const url = require("url");
 const { AbortController } = require("abort-controller");
 const { SessionState } = require("./session_state");
 const { timer, findNearestValue, isValidUrl, fetchWithRetry, findAudioGroupOrLang } = require("./util");
@@ -638,7 +639,7 @@ class StreamSwitcher {
         if (!prerollSegments[bw]) {
           prerollSegments[bw] = [];
         }
-        prerollSegments[bw] = this._createCustomSimpleSegmentList(mediaM3UPlaylists[bw], bw, null, "video", mediaURIs);
+        prerollSegments[bw] = this._createCustomSimpleSegmentList(mediaM3UPlaylists[bw], mediaURIs[bw]);
       }
       if (this.useDemuxedAudio) {
         const groupIds = Object.keys(audioM3UPlaylists);
@@ -653,7 +654,7 @@ class StreamSwitcher {
             if (!prerollSegmentsAudio[groupId][lang]) {
               prerollSegmentsAudio[groupId][lang] = [];
             }
-            prerollSegmentsAudio[groupId][lang] = this._createCustomSimpleSegmentList(audioM3UPlaylists[groupId][lang], groupId, lang, "audio", audioURIs);
+            prerollSegmentsAudio[groupId][lang] = this._createCustomSimpleSegmentList(audioM3UPlaylists[groupId][lang], audioURIs[groupId][lang]);
           }
         }
       }
@@ -664,81 +665,118 @@ class StreamSwitcher {
     }
   }
 
-  _createCustomSimpleSegmentList(segmentList, keyValue1, keyValue2, type, URIs) {
+  _createCustomSimpleSegmentList(segmentList, manifestURI) {
     let segments = [];
     for (let k = 0; k < segmentList.length; k++) {
-      let seg = {};
-      let playlistItem = segmentList[k];
-      let segmentUri;
-      let cueData = null;
-      let daterangeData = null;
-      let attributes = playlistItem["attributes"].attributes;
-      if (playlistItem.properties.discontinuity) {
-        segments.push({ discontinuity: true });
-      }
-      if ("cuein" in attributes) {
-        if (!cueData) {
-          cueData = {};
-        }
-        cueData["in"] = true;
-      }
-      if ("cueout" in attributes) {
-        if (!cueData) {
-          cueData = {};
-        }
-        cueData["out"] = true;
-        cueData["duration"] = attributes["cueout"];
-      }
-      if ("cuecont" in attributes) {
-        if (!cueData) {
-          cueData = {};
-        }
-        cueData["cont"] = true;
-      }
-      if ("scteData" in attributes) {
-        if (!cueData) {
-          cueData = {};
-        }
-        cueData["scteData"] = attributes["scteData"];
-      }
-      if ("assetData" in attributes) {
-        if (!cueData) {
-          cueData = {};
-        }
-        cueData["assetData"] = attributes["assetData"];
-      }
-      if ("daterange" in attributes) {
-        if (!daterangeData) {
-          daterangeData = {};
-        }
-        let allDaterangeAttributes = Object.keys(attributes["daterange"]);
-        allDaterangeAttributes.forEach((attr) => {
-          if (attr.match(/DURATION$/)) {
-            daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
+      try {
+        let seg = {};
+        const playlistItem = segmentList[k];
+        let segmentUri;
+        let byteRange = undefined;
+        let initSegment = undefined;
+        let initSegmentByteRange = undefined;
+        let keys = undefined;
+        let daterangeData = null;
+        let attributes = playlistItem["attributes"].attributes;
+        if (playlistItem.get("map-uri")) {
+          initSegmentByteRange = playlistItem.get("map-byterange");
+          if (playlistItem.get("map-uri").match("^http")) {
+            initSegment = playlistItem.get("map-uri");
           } else {
-            daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
-          }
-        });
-      }
-      if (playlistItem.properties.uri) {
-        if (playlistItem.properties.uri.match("^http")) {
-          segmentUri = playlistItem.properties.uri;
-        } else {
-          if (type === "video") {
-            segmentUri = new URL(playlistItem.properties.uri, URIs[keyValue1]).href;
-          } else if (type === "audio") {
-            segmentUri = new URL(playlistItem.properties.uri, URIs[keyValue1][keyValue2]).href;
+            initSegment = new URL(playlistItem.get("map-uri"), manifestURI).href;
           }
         }
-        seg["duration"] = playlistItem.properties.duration;
-        seg["uri"] = segmentUri;
-        seg["cue"] = cueData;
-        if (daterangeData) {
-          seg["daterange"] = daterangeData;
+        // some items such as CUE-IN parse as a PlaylistItem
+        // but have no URI
+        if (playlistItem.get("uri")) {
+          if (playlistItem.get("uri").match("^http")) {
+            segmentUri = playlistItem.get("uri");
+          } else {
+            segmentUri = new URL(playlistItem.get("uri"), manifestURI).href;
+          }
         }
+        if (playlistItem.get("discontinuity")) {
+          segments.push({ discontinuity: true });
+        }
+        if (playlistItem.get("byteRange")) {
+          let [_, r, o] = playlistItem.get("byteRange").match(/^(\d+)@*(\d*)$/);
+          if (!o) {
+            o = byteRangeOffset;
+          }
+          byteRangeOffset = parseInt(r) + parseInt(o);
+          byteRange = `${r}@${o}`;
+        }
+        if (playlistItem.get("keys")) {
+          keys = playlistItem.get("keys");
+        }
+        let assetData = playlistItem.get("assetdata");
+        let cueOut = playlistItem.get("cueout");
+        let cueIn = playlistItem.get("cuein");
+        let cueOutCont = playlistItem.get("cont-offset");
+        let duration = 0;
+        let scteData = playlistItem.get("sctedata");
+        if (typeof cueOut !== "undefined") {
+          duration = cueOut;
+        } else if (typeof cueOutCont !== "undefined") {
+          duration = playlistItem.get("cont-dur");
+        }
+        let cue =
+          cueOut || cueIn || cueOutCont || assetData
+            ? {
+                out: typeof cueOut !== "undefined",
+                cont: typeof cueOutCont !== "undefined" ? cueOutCont : null,
+                scteData: typeof scteData !== "undefined" ? scteData : null,
+                in: cueIn ? true : false,
+                duration: duration,
+                assetData: typeof assetData !== "undefined" ? assetData : null,
+              }
+            : null;
+        seg = {
+          duration: playlistItem.get("duration"),
+          timelinePosition: this.timeOffset != null ? this.timeOffset + timelinePosition : null,
+          cue: cue,
+          byteRange: byteRange,
+        };
+        if (initSegment) {
+          seg.initSegment = initSegment;
+        }
+        if (initSegmentByteRange) {
+          seg.initSegmentByteRange = initSegmentByteRange;
+        }
+        if (segmentUri) {
+          seg.uri = segmentUri;
+        }
+        if (keys) {
+          seg.keys = keys;
+        }
+        if (segments.length === 0) {
+          // Add daterange metadata if this is the first segment
+          if (this.rangeMetadata && !this._isEmpty(this.rangeMetadata)) {
+            seg["daterange"] = this.rangeMetadata;
+          }
+        }
+        if ("daterange" in attributes) {
+          if (!daterangeData) {
+            daterangeData = {};
+          }
+          let allDaterangeAttributes = Object.keys(attributes["daterange"]);
+          allDaterangeAttributes.forEach((attr) => {
+            if (attr.match(/DURATION$/)) {
+              daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
+            } else {
+              daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
+            }
+          });
+        }
+        if (playlistItem.properties.uri) {
+          if (daterangeData && !this._isEmpty(this.daterangeData)) {
+            seg["daterange"] = daterangeData;
+          }
+        }
+        segments.push(seg);
+      } catch (e) {
+        console.error(e);
       }
-      segments.push(seg);
-
     }
     return segments
   }
@@ -860,7 +898,9 @@ class StreamSwitcher {
           daterangeData[k] = timedMetadata[k];
         });
       }
-      segments[bw][0]["daterange"] = daterangeData;
+      if (Object.keys(daterangeData).length > 0) {
+        segments[bw][0]["daterange"] = daterangeData;
+      }
     });
   }
 
@@ -879,7 +919,9 @@ class StreamSwitcher {
             daterangeData[k] = timedMetadata[k];
           });
         }
-        segments[groupId][lang][0]["daterange"] = daterangeData;
+        if (Object.keys(daterangeData).length > 0) {
+          segments[groupId][lang][0]["daterange"] = daterangeData;
+        }
       }
 
     }
