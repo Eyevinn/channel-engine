@@ -1788,7 +1788,6 @@ class SessionLive {
 
         //debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
         //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedAudioSeqRaw}]`);
-
         /* 
         WARN: We are assuming here that the MSEQ and Segment lengths are the same on Audio and Video
         and therefor need to push an equal amount of segments
