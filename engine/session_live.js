@@ -1788,7 +1788,6 @@ class SessionLive {
 
         //debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
         //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedAudioSeqRaw}]`);
-
         /* 
         WARN: We are assuming here that the MSEQ and Segment lengths are the same on Audio and Video
         and therefor need to push an equal amount of segments
@@ -2102,7 +2101,6 @@ class SessionLive {
       debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Audio Manifest! Waiting to sync-up with Leader...`);
       return null;
     }
-              
 
     //  DO NOT GENERATE MANIFEST CASE: Node has not found anything in store OR Node has not even check yet.
     if (Object.keys(this.liveSegQueueAudio).length === 0 || this.liveSegQueueAudio[liveTargetTrack].length === 0) {
@@ -2119,7 +2117,6 @@ class SessionLive {
         segAmounts.push(this.liveSegQueueAudio[track].length);
       }
     }
-
 
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
       console(`[${this.sessionId}]: Cannot Generate audio Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
