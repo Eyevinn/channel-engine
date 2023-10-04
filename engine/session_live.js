@@ -2160,6 +2160,9 @@ class SessionLive {
     for (let i = 0; i < size; i++) {
       const seg = segments[variantKey][i];
       const nextSeg = segments[variantKey][i + 1] ? segments[variantKey][i + 1] : {};
+      if (seg.discontinuity && !seg.cue) {
+        m3u8 += "#EXT-X-DISCONTINUITY\n";
+      }
       m3u8 += segToM3u8(seg, i, size, nextSeg, previousSeg);
       if (m3u8.includes("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n")) {
         debug(`[${this.sessionId}]: Removing Duplicate Disc-tag from output M3u8`);
