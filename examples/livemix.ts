@@ -9,6 +9,25 @@ import { ChannelEngine, ChannelEngineOpts,
 } from "../index";
 const { v4: uuidv4 } = require('uuid');
 
+const DEMUX_CONTENT = {
+  ts: {
+    slate: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
+    vod: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
+    trailer: "https://trailer-admin-cdn.a2d.tv/virtualchannels/trailers/demux002/demux.m3u8",
+    bumper: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
+    live: "http://localhost:5000/channels/3/master.m3u8"
+  },
+  cmaf: {
+    slate: "https://vod.streaming.a2d.tv/trailers/fillers/6409d46c07b49f0029c1b170/output_v2.ism/.m3u8",
+    vod: "https://vod.streaming.a2d.tv/13ec7661-66d7-44d6-b818-7743fe916a87/b747af60-ef3f-11ed-bd7e-9125837ccca3_20343615.ism/.m3u8", // 66 min
+    trailer: "https://vod.streaming.a2d.tv/trailers/650c397b298d58002a812ca0/output_v2.ism/.m3u8",
+    bumper: "https://vod.streaming.a2d.tv/trailers/bumpers/tv4_summer/start/output_v2.ism/.m3u8",
+    live: "https://vc-engine-alb.a2d.tv/channels/a7b2c62f-99b7-4fd9-bde5-56201c59b0a2/master.m3u8"//"https://vc-engine-alb.a2d-dev.tv/channels/1d1847f1-2de7-4f87-b06c-c971107d0ca3/master.m3u8"
+  }
+}
+
+const HLS_CONTENT = DEMUX_CONTENT["ts"];
+
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
 class RefAssetManager implements IAssetManager {
   private assets;
@@ -151,7 +170,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
             type: StreamType.LIVE,
             start_time: startOffset,
             end_time: endTime,
-            uri: "http://localhost:8001/channels/1/master.m3u8",
+            uri: HLS_CONTENT.live,
           }/*,
           {
             eventId: this.generateID(),
@@ -181,7 +200,7 @@ const engineOptions: ChannelEngineOpts = {
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
   streamSwitchManager: refStreamSwitchManager,
-  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  defaultSlateUri: HLS_CONTENT.slate,
   slateRepetitions: 10, 
   redisUrl: process.env.REDIS_URL,
   useDemuxedAudio: true,

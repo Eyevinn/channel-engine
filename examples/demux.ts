@@ -28,9 +28,25 @@ class RefAssetManager implements IAssetManager {
         },
         
       ],
+      2: [
+        {
+          id: 2,
+          title: "DEV DEMUX ASSET ts but perfect match langs",
+          uri: "https://trailer-admin-cdn.a2d.tv/virtualchannels/dev_asset_001/demux/demux2.2.m3u8",
+        },
+      ],
+      3: [
+        {
+          id: 3,
+          title: "DEV DEMUX ASSET ts but has 3 langs not 2",
+          uri: "https://trailer-admin-cdn.a2d-dev.tv/demux/asset_001/master_720360enspde.m3u8",
+        },
+      ],
     };
     this.pos = {
       1: 0,
+      2: 0,
+      3: 0,
     };
   }
 
@@ -61,7 +77,14 @@ class RefAssetManager implements IAssetManager {
 
 class RefChannelManager implements IChannelManager {
   getChannels(): Channel[] {
-    return [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: this._getSubtitleTracks() }];
+    return [
+    //{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: this._getSubtitleTracks() },
+    //{ id: "2", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: this._getSubtitleTracks() },
+    { id: "3", profile: this._getProfile(), audioTracks: [
+      { language: "en", name: "English", default: true },
+      { language: "sp", name: "Spanish", default: false },
+      { language: "de", name: "German", default: false },
+    ], subtitleTracks: this._getSubtitleTracks() }];
   }
 
   _getProfile(): ChannelProfile[] {
@@ -90,8 +113,8 @@ class RefChannelManager implements IChannelManager {
   }
   _getSubtitleTracks(): SubtitleTracks[] {
     return [
-      { language: "zh", name: "chinese", default: true },
-      { language: "fr", name: "french", default: false }
+      // { language: "zh", name: "chinese", default: true },
+      // { language: "fr", name: "french", default: false }
     ];
   }
 }
@@ -114,4 +137,4 @@ const engineOptions: ChannelEngineOpts = {
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);
 engine.start();
-engine.listen(process.env.PORT || 8001);
+engine.listen(process.env.PORT || 5000);
