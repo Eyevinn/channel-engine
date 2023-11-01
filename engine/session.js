@@ -834,51 +834,51 @@ class Session {
       }
     } else {
       sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo", 1);
-      let audioIncrement;
-      if (this.use_demuxed_audio) {
-        let positionV = 0;
-        let positionA = 0;
-        const position = (await this._getCurrentPlayheadPosition()) * 1000;
-        positionV = position ? position / 1000 : 0;
-        let currentVod = await this._sessionState.getCurrentVod();
-        const sessionState = await this._sessionState.getValues(["vodMediaSeqAudio"]);
-        let posDiff;
-        let incrementValue = 1;
-        let index = 0;
-        const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
-        const thresh = 0.5;
-        const maxAcceptableDiff = 0.001;
-        debug(`[${this._sessionId}]: About to determine audio increment`);
-        do {
-          const audioPosition = (await this._getAudioPlayheadPosition(sessionState.vodMediaSeqAudio + index)) * 1000;
-          positionA = audioPosition ? audioPosition / 1000 : 0;
-          posDiff = (positionV - positionA).toFixed(3);
-          debug(`[${this._sessionId}]: positionV=${positionV};positionA=${positionA};posDiff=${posDiff}`);
-          if (posDiff <= maxAcceptableDiff) {
-            break;
-          }
-          if (posDiff > thresh) {
-            index++;
-            incrementValue++;
-          } else if (posDiff > maxAcceptableDiff) {
-            index = incrementValue;
-            debug(`[${this._sessionId}]: Audio Stepping index set to = ${index}`);
-            break;
-          }
-          if (sessionState.vodMediaSeqAudio + index > audioSeqLastIdx) {
-            break;
-          }
-        } while (!(-thresh < posDiff && posDiff < thresh) && !isNaN(posDiff));
-        audioIncrement = index;
-        debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be: [${positionV.toFixed(3)}][${positionA.toFixed(3)}] (${posDiff})`);
+      let playheadPosVideoMs;
+      let playheadAudio;
+      let playheadSubtitle;
+      if (this.use_demuxed_audio || this.use_vtt_subtitles) {
+        playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
       }
-      debug(`[${this._sessionId}]: Will increment audio with ${audioIncrement}`);
-      sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", audioIncrement);
 
-      if (this.use_vtt_subtitles) {
-        debug(`[${this._sessionId}]: Will increment subtitle with 1`);
-        sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", 1);
+      if (this.use_demuxed_audio) {
+        const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
+        const sessionStateObj = await this._sessionState.getValues(["vodMediaSeqAudio"]);
+        playheadAudio = await this._determineExtraMediaIncrement(
+          "audio",
+          playheadPosVideoMs,
+          audioSeqLastIdx,
+          sessionStateObj.vodMediaSeqAudio,
+          this._getAudioPlayheadPosition.bind(this)
+        );
+        // Perform the Increment
+        debug(`[${this._sessionId}]: Will increment audio with ${playheadAudio.increment}`);
+        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", playheadAudio.increment);
       }
+      if (this.use_vtt_subtitles) {
+        const playheadPosVideo = playheadPosVideo || (await this._getCurrentPlayheadPosition()) * 1000;
+        const subtitleSeqLastIdx = currentVod.getLiveMediaSequencesCount("subtitle") - 1;
+        const sessionStateObj = await this._sessionState.getValues(["vodMediaSeqSubtitle"]);
+        playheadSubtitle = await this._determineExtraMediaIncrement(
+          "subtitle",
+          playheadPosVideoMs,
+          subtitleSeqLastIdx,
+          sessionStateObj.vodMediaSeqSubtitle,
+          this._getSubtitlePlayheadPosition.bind(this)
+        );
+        // Perform the Increment
+        debug(`[${this._sessionId}]: Will increment subtitle with ${playheadSubtitle.increment}`);
+        sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", playheadSubtitle.increment);
+      }
+      debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be V[${(playheadPosVideoMs/1000).toFixed(3)}]${
+        playheadAudio ? `A[${(playheadAudio.position).toFixed(3)}]` : ""
+      }${
+        playheadSubtitle ? `S[${(playheadSubtitle.position).toFixed(3)})]` : ""
+      }${
+        playheadAudio ? ` (${playheadAudio.diff})` : ""
+      }${
+        playheadSubtitle ? ` (${playheadSubtitle.diff})` : ""
+      }`);
     }
 
     let newSessionState = {};
@@ -1388,6 +1388,7 @@ class Session {
             debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
             debug(`[${this._sessionId}]: playhead positions [V]=${currentVod.getPlayheadPositions("video")}`);
             debug(`[${this._sessionId}]: playhead positions [A]=${currentVod.getPlayheadPositions("audio")}`);
+            debug(`[${this._sessionId}]: playhead positions [S]=${currentVod.getPlayheadPositions("subtitle")}`);
             //debug(newVod);
             const updatedSessionState = await this._sessionState.setValues({
               "mediaSeq": 0,
@@ -1584,6 +1585,7 @@ class Session {
             debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
             debug(`[${this._sessionId}]: playhead positions [V]=${newVod.getPlayheadPositions("video")}`);
             debug(`[${this._sessionId}]: playhead positions [A]=${newVod.getPlayheadPositions("audio")}`);
+            debug(`[${this._sessionId}]: playhead positions [S]=${newVod.getPlayheadPositions("subtitle")}`);
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}; subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
@@ -2088,6 +2090,40 @@ class Session {
       return true;
     }
     return false;
+  }
+  
+  async _determineExtraMediaIncrement(_extraType, _currentPosVideo, _extraSeqFinalIndex, _vodMediaSeqExtra, _getExtraPlayheadPositionAsyncFn) {
+    debug(`[${this._sessionId}]: About to determine ${_extraType} increment. Video increment has already been executed.`);
+    let extraMediaIncrement = 0;
+    let positionV = _currentPosVideo ? _currentPosVideo / 1000 : 0;
+    let positionX;
+    let posDiff;
+    const threshold = 0.250;
+    while (extraMediaIncrement < _extraSeqFinalIndex) {
+     const currentPosExtraMedia = (await _getExtraPlayheadPositionAsyncFn(_vodMediaSeqExtra + extraMediaIncrement)) * 1000;
+     positionX = currentPosExtraMedia ? currentPosExtraMedia / 1000 : 0;
+     posDiff = (positionV - positionX).toFixed(3);
+     debug(`[${this._sessionId}]: positionV=${positionV};position${_extraType === "audio" ? "A" : "S"}=${positionX};posDiff=${posDiff}`);
+     if (isNaN(posDiff)) {
+      break;
+     }
+     if (positionX >= positionV) {
+      break;
+     }
+      const difference = Math.abs(posDiff);
+      if (difference > threshold && difference > Number.EPSILON) {
+        // Video position ahead of audio|sub position, further increment needed...
+        extraMediaIncrement++;
+      } else {
+        debug(`[${this._sessionId}]: Difference(${difference}) is acceptable; IncrementValue=${extraMediaIncrement}`);
+        break;
+      }
+    }
+    return {
+      increment: extraMediaIncrement,
+      position: positionX,
+      diff: posDiff
+    };
   }
 }
 
