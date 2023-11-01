@@ -18,7 +18,7 @@ describe("Session", () => {
     expect(id1).not.toEqual(id2);
   });
 
-  it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit", async () => {
+  it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case I", async () => {
     const session = new Session("dummy", null, sessionLiveStore);
     const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.
     const mockCurrentVideoPosition = 200.0 * 1000; // Video is 200s deep into its content.
@@ -36,6 +36,26 @@ describe("Session", () => {
       24
     );
     expect(output.increment).toBe(1);
+  });
+
+  it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case II", async () => {
+    const session = new Session("dummy", null, sessionLiveStore);
+    const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.
+    const mockCurrentVideoPosition = 200.0 * 1000; // Video is 200s deep into its content.
+    const mockMseqAudio = 25; // current mseq for audio on vod, 25 out of 50.
+    const mock_getAudioPlayheadPosition = async (pos_n_current) => {
+      const mockPositions = [192.16, 196.0, 199.84, 203.68, 207.52];
+      return mockPositions[pos_n_current - mockMseqAudio];
+    };
+    const output = await session._determineExtraMediaIncrement(
+      "audio",
+      mockCurrentVideoPosition,
+      mockFinalAudioIdx,
+      mockMseqAudio,
+      mock_getAudioPlayheadPosition,
+      24
+    );
+    expect(output.increment).toBe(2);
   });
 
   it("for demuxed, returns the appropriate audio increment value when they are in sync but there is a floating point error", async () => {
