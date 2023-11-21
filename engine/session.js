@@ -923,10 +923,19 @@ class Session {
         const mediaSequenceValueAudio = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
         audioInfo = ` mseq[A]={${playheadState.mediaSeqAudio + mediaSequenceValueAudio}}`
       }
-      debug(`[${this._sessionId}]: Session can now serve mseq[V]={${playheadState.mediaSeq + mediaSequenceValue}}` + audioInfo);
+      let subsInfo = "";
+      if (this.use_vtt_subtitles) {
+        const mediaSequenceValueSubtitle = currentVod.mediaSequenceValuesSubtitle[playheadState.vodMediaSeqSubtitle];
+        subsInfo = ` mseq[S]={${playheadState.mediaSeqSubtitle + mediaSequenceValueSubtitle}}`
+      }
+      debug(`[${this._sessionId}]: Session can now serve mseq[V]={${playheadState.mediaSeq + mediaSequenceValue}}` + audioInfo + subsInfo);
     }
 
-    debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio} of ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")})`);
+    debug(`[${this._sessionId}]: INCREMENT (mseq=${playheadState.mediaSeq + playheadState.vodMediaSeqVideo}) vodMediaSeq=(${playheadState.vodMediaSeqVideo}_${playheadState.vodMediaSeqAudio}${
+      this.use_vtt_subtitles ? `_${playheadState.vodMediaSeqSubtitle}` : ""
+    } of ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}${
+      this.use_vtt_subtitles ? `_${currentVod.getLiveMediaSequencesCount("subtitle")})` : ")"
+    }`);
 
     // As a FOLLOWER, we might need to read up from shared store... 
     if (playheadState.vodMediaSeqVideo < 2 || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
@@ -2098,7 +2107,7 @@ class Session {
     let positionV = _currentPosVideo ? _currentPosVideo / 1000 : 0;
     let positionX;
     let posDiff;
-    const threshold = 0.250;
+    const threshold = 0.500;
     while (extraMediaIncrement < _extraSeqFinalIndex) {
      const currentPosExtraMedia = (await _getExtraPlayheadPositionAsyncFn(_vodMediaSeqExtra + extraMediaIncrement)) * 1000;
      positionX = currentPosExtraMedia ? currentPosExtraMedia / 1000 : 0;
