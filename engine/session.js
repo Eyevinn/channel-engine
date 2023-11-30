@@ -560,231 +560,26 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    // Be sure that the leader is not in the middle of setting new vod data in store.
-    // Followers will never run this part...
-    let tries = 12;
-    while (tries > 0 && this.leaderIsSettingNextVod) {
-      debug(`[${this._sessionId}]: Leader is setting the next vod. Waiting 500ms_${tries}`);
-      await timer(500);
-      tries--;
-    }
-
-    const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo", "discSeq"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-
-    if (this.prevVodMediaSeq.video === null) {
-      this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
-    }
-    if (this.prevMediaSeqOffset.video === null) {
-      this.prevMediaSeqOffset.video = playheadState.mediaSeq;
-    }
-
-    if (playheadState.vodMediaSeqVideo > sessionState.vodMediaSeqVideo || (playheadState.vodMediaSeqVideo < sessionState.vodMediaSeqVideo && playheadState.mediaSeq === this.prevMediaSeqOffset.video)) {
-      const state = await this._sessionState.get("state");
-      const DELAY_TIME_MS = 1000;
-      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
-      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqVideo}_${sessionState.vodMediaSeqVideo}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
-      await timer(DELAY_TIME_MS);
-      playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
-    }
-
-    // Force reading up from store, but only once if the condition is right
-    if (playheadState.vodMediaSeqVideo < 2 || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
-      debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
-      debug(`[${this._sessionId}]: current-offset[${playheadState.mediaSeq}]_prev-offset[${this.prevMediaSeqOffset.video}]`);
-      // If true, then we have not updated the prev-values and not cleared the cache yet.
-      if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
-        this.isAllowedToClearVodCache = true;
-      }
-      const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
-      if (!isLeader && this.isAllowedToClearVodCache) {
-        debug(`[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`);
-        await this._sessionState.clearCurrentVodCache();
-        this.isAllowedToClearVodCache = false;
-        const diffMs = await this._playheadState.get("diffCompensation");
-        if (diffMs) {
-          this.diffCompensation = diffMs;
-          debug(`[${this._sessionId}]: Setting diffCompensation->${this.diffCompensation}`);
-          if (this.diffCompensation) {
-            this.timePositionOffset = this.diffCompensation;
-            cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-              { event: 'timePositionOffsetUpdated', channel: this._sessionId, offsetMs: this.timePositionOffset });
-          } else {
-            this.timePositionOffset = 0;
-          }
-        }
-      }
-    } else {
-      this.isAllowedToClearVodCache = true;
-    }
-
-    const currentVod = await this._sessionState.getCurrentVod();
-    if (currentVod) {
-      try {
-        let manifestMseq = playheadState.mediaSeq + playheadState.vodMediaSeqVideo;
-        let manifestDseq = sessionState.discSeq + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
-        if (currentVod.sequenceAlwaysContainNewSegments) {
-          const mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
-          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
-          manifestMseq = playheadState.mediaSeq + mediaSequenceValue;
-        }
-
-        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqVideo}]_[${currentVod.getLiveMediaSequencesCount()}]`);
-        const m3u8 = currentVod.getLiveMediaSequences(playheadState.mediaSeq, bw, playheadState.vodMediaSeqVideo, sessionState.discSeq, this.targetDurationPadding, this.forceTargetDuration);
-        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}][+${this.targetDurationPadding || 0}] Current media manifest for ${bw} requested`);
-        this.prevVodMediaSeq.video = playheadState.vodMediaSeqVideo;
-        this.prevMediaSeqOffset.video = playheadState.mediaSeq;
-        return m3u8;
-      } catch (err) {
-        logerror(this._sessionId, err);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-        throw new Error("Failed to generate manifest: " + JSON.stringify(playheadState));
-      }
-    } else {
-      throw new Error("Engine not ready");
-    }
+    const m3u8 = this._getM3u8File("video", bw, playbackSessionId);
+    return m3u8;
   }
 
   async getCurrentAudioManifestAsync(audioGroupId, audioLanguage, playbackSessionId) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    let currentVod = null;
-    const sessionState = await this._sessionState.getValues(["discSeqAudio", "vodMediaSeqAudio"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio", "playheadRef"]);
-
-    if (playheadState.vodMediaSeqAudio > sessionState.vodMediaSeqAudio || (playheadState.vodMediaSeqAudio < sessionState.vodMediaSeqAudio && playheadState.mediaSeqAudio === this.prevMediaSeqOffset.audio)) {
-      const state = await this._sessionState.get("state");
-      const DELAY_TIME_MS = 1000;
-      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
-      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqAudio}_${sessionState.vodMediaSeqAudio}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
-      await timer(DELAY_TIME_MS);
-      playheadState = await this._playheadState.getValues(["mediaSeqAudio", "vodMediaSeqAudio"]);
-    }
-    // local store the prev values
-    if (this.prevVodMediaSeq.audio === null) {
-      this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
-    }
-    if (this.prevMediaSeqOffset.audio === null) {
-      this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
-    }
-    currentVod = await this._sessionState.getCurrentVod();
-    if (currentVod) {
-      // condition suggesting that a new vod should exist
-      if (playheadState.vodMediaSeqAudio < 2 || playheadState.mediaSeqAudio !== this.prevMediaSeqOffset.audio) {
-        if (playheadState.playheadRef > this.currentPlayheadRef) {
-          await timer(500);
-          this.currentPlayheadRef = playheadState.playheadRef;
-          debug(`[${this._sessionId}]: While requesting audio manifest for ${audioGroupId}-${audioLanguage}, (mseq=${playheadState.vodMediaSeqAudio})`);
-          await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-          currentVod = await this._sessionState.getCurrentVod();
-        }
-      }
-      try {
-        let manifestMseq = playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio;
-        let manifestDseq = sessionState.discSeqAudio + currentVod.discontinuitiesAudio[playheadState.vodMediaSeqAudio];
-        if (currentVod.sequenceAlwaysContainNewSegments) {
-          const mediaSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
-          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}} AUDIO`);
-          manifestMseq = playheadState.mediaSeqAudio + mediaSequenceValue;
-        }
-        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqAudio}]_[${currentVod.getLiveMediaSequencesCount("audio")}] AUDIO (${audioGroupId})`);
-        const m3u8 = currentVod.getLiveMediaAudioSequences(
-          playheadState.mediaSeqAudio,
-          audioGroupId,
-          audioLanguage,
-          playheadState.vodMediaSeqAudio,
-          sessionState.discSeqAudio,
-          this.targetDurationPadding,
-          this.forceTargetDuration
-        );
-        // # Case: current VOD does not have the selected track.
-        if (!m3u8) {
-          debug(`[${this._sessionId}]: [${playheadState.mediaSeqAudio + playheadState.vodMediaSeqAudio}] Request Failed for current audio manifest for ${audioGroupId}-${audioLanguage}`);
-        }
-        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}] Current audio manifest for ${audioGroupId}-${audioLanguage} requested`);
-        this.prevVodMediaSeq.audio = playheadState.vodMediaSeqAudio;
-        this.prevMediaSeqOffset.audio = playheadState.mediaSeqAudio;
-        return m3u8;
-      } catch (err) {
-        logerror(this._sessionId, err);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-        throw new Error("Failed to generate audio manifest: " + JSON.stringify(playheadState));
-      }
-    } else {
-      throw new Error("Engine not ready");
-    }
+    const variantKey = JSON.stringify({groupId: audioGroupId, lang: audioLanguage});
+    const m3u8 = this._getM3u8File("audio", variantKey, playbackSessionId);
+    return m3u8;
   }
   
-  async getCurrentSubtitleManifestAsync(subtitleGroupId, subtitleLanguage) {
+  async getCurrentSubtitleManifestAsync(subtitleGroupId, subtitleLanguage, playbackSessionId) {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    let currentVod = null;
-    const sessionState = await this._sessionState.getValues(["discSeqSubtitle", "vodMediaSeqSubtitle"]);
-    let playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle", "playheadRef"]);
-
-    if (playheadState.vodMediaSeqSubtitle > sessionState.vodMediaSeqSubtitle || (playheadState.vodMediaSeqSubtitle < sessionState.vodMediaSeqSubtitle && playheadState.mediaSeqSubtitle === this.prevMediaSeqOffset.subtitle)) {
-      const state = await this._sessionState.get("state");
-      const DELAY_TIME_MS = 1000;
-      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
-      debug(`[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState.vodMediaSeqSubtitle}_${sessionState.vodMediaSeqSubtitle}). Waiting ${DELAY_TIME_MS}ms before reading from store again`);
-      await timer(DELAY_TIME_MS);
-      playheadState = await this._playheadState.getValues(["mediaSeqSubtitle", "vodMediaSeqSubtitle"]);
-    }
-    // local store the prev values
-    if (this.prevVodMediaSeq.subtitle === null) {
-      this.prevVodMediaSeq.subtitle = playheadState.vodMediaSeqSubtitle;
-    }
-    if (this.prevMediaSeqOffset.subtitle === null) {
-      this.prevMediaSeqOffset.subtitle = playheadState.mediaSeqSubtitle;
-    }
-    currentVod = await this._sessionState.getCurrentVod();
-    if (currentVod) {
-      // condition suggesting that a new vod should exist
-      if (playheadState.vodMediaSeqSubtitle < 2 || playheadState.mediaSeqSubtitle !== this.prevMediaSeqOffset.subtitle) {
-        if (playheadState.playheadRef > this.currentPlayheadRef) {
-          await timer(500);
-          this.currentPlayheadRef = playheadState.playheadRef;
-          debug(`[${this._sessionId}]: While requesting subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}, (mseq=${playheadState.vodMediaSeqSubtitle})`);
-          await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-          currentVod = await this._sessionState.getCurrentVod();
-        }
-      }
-      try {
-        let manifestMseq = playheadState.mediaSeqSubtitle + playheadState.vodMediaSeqSubtitle;
-        let manifestDseq = sessionState.discSeqSubtitle + currentVod.discontinuitiesSubtitle[playheadState.vodMediaSeqSubtitle];
-        if (currentVod.sequenceAlwaysContainNewSegments) {
-          const mediaSequenceValue = currentVod.mediaSequenceValuesSubtitle[playheadState.vodMediaSeqSubtitle];
-          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueSubtitle()}} SUBTITLES`);
-          manifestMseq = playheadState.mediaSeqSubtitle + mediaSequenceValue;
-        }
-        debug(`[${this._sessionId}]: [${playheadState.vodMediaSeqSubtitle}]_[${currentVod.getLiveMediaSequencesCount("subtitle")}] SUBTITLES (${subtitleGroupId})`);
-        const m3u8 = currentVod.getLiveMediaSubtitleSequences(
-          playheadState.mediaSeqSubtitle,
-          subtitleGroupId,
-          subtitleLanguage,
-          playheadState.vodMediaSeqSubtitle,
-          sessionState.discSeqSubtitle,
-          this.targetDurationPadding,
-          this.forceTargetDuration
-        );
-        // # Case: current VOD does not have the selected track.
-        if (!m3u8) {
-          debug(`[${this._sessionId}]: [${playheadState.mediaSeqSubtitle + playheadState.vodMediaSeqSubtitle}] Request Failed for current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage}`);
-        }
-        debug(`[${this._sessionId}]: [${manifestMseq}][${manifestDseq}] Current subtitle manifest for ${subtitleGroupId}-${subtitleLanguage} requested`);
-        this.prevVodMediaSeq.subtitle = playheadState.vodMediaSeqSubtitle;
-        this.prevMediaSeqOffset.subtitle = playheadState.mediaSeqSubtitle;
-        return m3u8;
-      } catch (err) {
-        logerror(this._sessionId, err);
-        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
-        throw new Error("Failed to generate subtitle manifest: " + JSON.stringify(playheadState));
-      }
-    } else {
-      throw new Error("Engine not ready");
-    }
+    const variantKey = JSON.stringify({groupId: subtitleGroupId, lang: subtitleLanguage});
+    const m3u8 = this._getM3u8File("subtitle", variantKey, playbackSessionId);
+    return m3u8;
   }
 
   async incrementAsync() {
@@ -2133,6 +1928,204 @@ class Session {
       position: positionX,
       diff: posDiff
     };
+  }
+
+  async _getM3u8File(variantType, variantKey, playbackSessionId) {
+    // Be sure that the leader is not in the middle of setting new vod data in store.
+    // Followers will never run this part...
+    let tries = 12;
+    while (tries > 0 && this.leaderIsSettingNextVod) {
+      const delayMs = 250;
+      debug(`[${this._sessionId}]: Leader is setting the next vod. Waiting ${delayMs}ms_${tries}`);
+      await timer(delayMs);
+      tries--;
+    }
+    // Media Sequence Data Keys
+    const MSDKeys = {
+      mediaSeq: null,
+      vodMediaSeq: null,
+      discSeq: null
+    };
+    if (variantType === "video") {
+      MSDKeys.mediaSeq = "mediaSeq";
+      MSDKeys.vodMediaSeq = "vodMediaSeqVideo";
+      MSDKeys.discSeq = "discSeq";
+    } else if (variantType === "audio") {
+      MSDKeys.mediaSeq = "mediaSeqAudio";
+      MSDKeys.vodMediaSeq = "vodMediaSeqAudio";
+      MSDKeys.discSeq = "discSeqAudio";
+    } else if (variantType === "subtitle") {
+      MSDKeys.mediaSeq = "mediaSeqSubtitle";
+      MSDKeys.vodMediaSeq = "vodMediaSeqSubtitle";
+      MSDKeys.discSeq = "discSeqSubtitle";
+    }
+    let currentVod = null;
+    const sessionState = await this._sessionState.getValues([MSDKeys.vodMediaSeq, MSDKeys.discSeq]);
+    let playheadState = await this._playheadState.getValues([MSDKeys.mediaSeq, MSDKeys.vodMediaSeq, "playheadRef"]);
+
+    if (this.prevVodMediaSeq[variantType] === null) {
+      this.prevVodMediaSeq[variantType] = playheadState[MSDKeys.vodMediaSeq];
+    }
+    if (this.prevMediaSeqOffset[variantType] === null) {
+      this.prevMediaSeqOffset[variantType] = playheadState[MSDKeys.mediaSeq];
+    }
+
+    if (
+      playheadState[MSDKeys.vodMediaSeq] > sessionState[MSDKeys.vodMediaSeq] ||
+      (playheadState[MSDKeys.vodMediaSeq] < sessionState[MSDKeys.vodMediaSeq] &&
+        playheadState[MSDKeys.mediaSeq] === this.prevMediaSeqOffset[variantType])
+    ) {
+      const state = await this._sessionState.get("state");
+      const DELAY_TIME_MS = 1000;
+      const ACTION = [SessionState.VOD_RELOAD_INIT, SessionState.VOD_RELOAD_INITIATING].includes(state) ? "Reloaded" : "Loaded Next";
+      debug(
+        `[${this._sessionId}]: Recently ${ACTION} Vod. PlayheadState not up-to-date (${playheadState[MSDKeys.vodMediaSeq]}_${
+          sessionState[MSDKeys.vodMediaSeq]
+        }). Waiting ${DELAY_TIME_MS}ms before reading from store again (${variantType})`
+      );
+      await timer(DELAY_TIME_MS);
+      playheadState = await this._playheadState.getValues([MSDKeys.mediaSeq, MSDKeys.vodMediaSeq]);
+    }
+
+    if (variantType === "video") {
+      // Force reading up from store, but only once if the condition is right.
+      if (playheadState.vodMediaSeqVideo < 2 || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
+        debug(`[${this._sessionId}]: current[${playheadState.vodMediaSeqVideo}]_prev[${this.prevVodMediaSeq.video}]`);
+        debug(`[${this._sessionId}]: current-offset[${playheadState.mediaSeq}]_prev-offset[${this.prevMediaSeqOffset.video}]`);
+        // If true, then we have not updated the prev-values and not cleared the cache yet.
+        if (playheadState.vodMediaSeqVideo < this.prevVodMediaSeq.video || playheadState.mediaSeq !== this.prevMediaSeqOffset.video) {
+          this.isAllowedToClearVodCache = true;
+        }
+        const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+        if (!isLeader && this.isAllowedToClearVodCache) {
+          debug(
+            `[${this._sessionId}]: Not a leader and first|second media sequence in a VOD is requested. Invalidate cache to ensure having the correct VOD.`
+          );
+          await this._sessionState.clearCurrentVodCache();
+          this.isAllowedToClearVodCache = false;
+          const diffMs = await this._playheadState.get("diffCompensation");
+          if (diffMs) {
+            this.diffCompensation = diffMs;
+            debug(`[${this._sessionId}]: Setting diffCompensation->${this.diffCompensation}`);
+            if (this.diffCompensation) {
+              this.timePositionOffset = this.diffCompensation;
+              cloudWatchLog(!this.cloudWatchLogging, "engine-session", {
+                event: "timePositionOffsetUpdated",
+                channel: this._sessionId,
+                offsetMs: this.timePositionOffset,
+              });
+            } else {
+              this.timePositionOffset = 0;
+            }
+          }
+        }
+      } else {
+        this.isAllowedToClearVodCache = true;
+      }
+    }
+
+    currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      // condition suggesting that a new vod should exist
+      if (playheadState[MSDKeys.vodMediaSeq] < 2 || playheadState[MSDKeys.mediaSeq] !== this.prevMediaSeqOffset.video) {
+        if (playheadState.playheadRef > this.currentPlayheadRef) {
+          await timer(500);
+          this.currentPlayheadRef = playheadState.playheadRef;
+          debug(`[${this._sessionId}]: While requesting ${variantType} manifest for ${variantKey}, (mseq=${playheadState[MSDKeys.vodMediaSeq]})`);
+          await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+          currentVod = await this._sessionState.getCurrentVod();
+        }
+      }
+      try {
+        let manifestMseq = playheadState[MSDKeys.mediaSeq] + playheadState[MSDKeys.vodMediaSeq];
+        let manifestDseq =
+          sessionState[MSDKeys.discSeq] + this._getCurrentVodData("discontinuities", variantType, currentVod)[playheadState[MSDKeys.vodMediaSeq]];
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          const mediaSequenceValue = this._getCurrentVodData("mseqValues", variantType, currentVod)[playheadState[MSDKeys.vodMediaSeq]];
+          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${this._getCurrentVodData("finalMseqValue", variantType, currentVod)}}`);
+          manifestMseq = playheadState[MSDKeys.mediaSeq] + mediaSequenceValue;
+        }
+
+        debug(`[${this._sessionId}]: [${playheadState[MSDKeys.vodMediaSeq]}]_[${this._getCurrentVodData("mseqCount", variantType, currentVod)}]`);
+
+        let m3u8;
+        let parsedGroupId;
+        let parsedLang;
+        if (variantType === "video") {
+          m3u8 = currentVod.getLiveMediaSequences(
+            playheadState[MSDKeys.mediaSeq],
+            variantKey,
+            playheadState[MSDKeys.vodMediaSeq],
+            sessionState[MSDKeys.discSeq],
+            this.targetDurationPadding,
+            this.forceTargetDuration
+          );
+        } else if ((variantType === "audio")) {
+          const data = JSON.parse(variantKey);
+          parsedGroupId = data.groupId;
+          parsedLang = data.lang;
+          m3u8 = currentVod.getLiveMediaAudioSequences(
+            playheadState[MSDKeys.mediaSeq],
+            parsedGroupId,
+            parsedLang,
+            playheadState[MSDKeys.vodMediaSeq],
+            sessionState[MSDKeys.discSeq],
+            this.targetDurationPadding,
+            this.forceTargetDuration
+          );
+        } else if (variantType === "subtitle") {
+          const data = JSON.parse(variantKey);
+          parsedGroupId = data.groupId;
+          parsedLang = data.lang;
+          m3u8 = currentVod.getLiveMediaSubtitleSequences(
+            playheadState[MSDKeys.mediaSeq],
+            parsedGroupId,
+            parsedLang,
+            playheadState[MSDKeys.vodMediaSeq],
+            sessionState[MSDKeys.discSeq],
+            this.targetDurationPadding,
+            this.forceTargetDuration
+          );
+        }
+        debug(
+          `[${this._sessionId}]:${playbackSessionId ? `[${playbackSessionId}]:` : ""} [${manifestMseq}][${manifestDseq}][+${this.targetDurationPadding || 0}] Current ${variantType} manifest for ${
+            variantType === "video" ? variantKey : `${parsedGroupId}_${parsedLang}`
+          } requested`
+        );
+        this.prevVodMediaSeq[variantType] = playheadState[MSDKeys.vodMediaSeq];
+        this.prevMediaSeqOffset[variantType] = playheadState[MSDKeys.mediaSeq];
+        return m3u8;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed to generate manifest: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
+
+  _getCurrentVodData(dataName, variantType, vod) {
+    switch (dataName) {
+      case "discontinuities":
+        if (variantType === "video") return vod.discontinuities;
+        if (variantType === "audio") return vod.discontinuitiesAudio;
+        if (variantType === "subtitle") return vod.discontinuitiesSubtitle;
+      case "mseqValues":
+        if (variantType === "video") return vod.mediaSequenceValues;
+        if (variantType === "audio") return vod.mediaSequenceValuesAudio;
+        if (variantType === "subtitle") return vod.mediaSequenceValuesSubtitle;
+      case "finalMseqValue":
+        if (variantType === "video") return vod.getLastSequenceMediaSequenceValue();
+        if (variantType === "audio") return vod.getLastSequenceMediaSequenceValueAudio();
+        if (variantType === "subtitle") return vod.getLastSequenceMediaSequenceValueSubtitle();
+      case "mseqCount":
+        if (variantType === "video") return vod.getLiveMediaSequencesCount();
+        if (variantType === "audio") return vod.getLiveMediaSequencesCount("audio");
+        if (variantType === "subtitle") return vod.getLiveMediaSequencesCount("subtitle");
+      default:
+        console.log(`WARNING! dataName:${dataName} is not valid`);
+    }
   }
 }
 
