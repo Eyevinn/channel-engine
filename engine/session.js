@@ -1071,32 +1071,40 @@ class Session {
       console.error(`[${this._sessionId}]: Will insert slate`);
       const slateVod = await this._loadSlate(currentVod);
       debug(`[${this._sessionId}]: slate loaded`);
-      let sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq", "mediaSeqAudio", "discSeqAudio"]);
+      let sessionState = await this._sessionState.getValues(["slateCount", "mediaSeq", "discSeq", "mediaSeqAudio", "discSeqAudio", "mediaSeqSubtitle", "discSeqSubtitle"]);
       let endValue = 0;
       let endValueAudio = 0;
+      let endValueSubtitle = 0;
       let lastDiscontinuity = 0;
       let lastDiscontinuityAudio = 0;
+      let lastDiscontinuitySubtitle = 0;
       if (currentVod) {
         if (currentVod.sequenceAlwaysContainNewSegments) {
           endValue = currentVod.getLastSequenceMediaSequenceValue();
           endValueAudio = currentVod.getLastSequenceMediaSequenceValueAudio();
+          endValueSubtitle = currentVod.getLastSequenceMediaSequenceValueSubtitle();
         } else {
           endValue = currentVod.getLiveMediaSequencesCount();
           endValueAudio = currentVod.getLiveMediaSequencesCount("audio");
+          endValueSubtitle = currentVod.getLiveMediaSequencesCount("subtitle");
         }
         lastDiscontinuity = currentVod.getLastDiscontinuity();
         lastDiscontinuityAudio = currentVod.getLastDiscontinuityAudio();
+        lastDiscontinuitySubtitle = currentVod.getLastDiscontinuitySubtitle();
       }
       const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
 
       const updatedSessionState = await this._sessionState.setValues({
         "vodMediaSeqVideo": 0,
         "vodMediaSeqAudio": 0,
+        "vodMediaSeqSubtitle": 0,
         "state": SessionState.VOD_NEXT_INITIATING,
         "mediaSeq": sessionState.mediaSeq + endValue,
         "mediaSeqAudio": sessionState.mediaSeqAudio + endValueAudio,
+        "mediaSeqSubtitle": sessionState.mediaSeqSubtitle + endValueAudio,
         "discSeq": sessionState.discSeq + lastDiscontinuity,
         "discSeqAudio": sessionState.discSeqAudio + lastDiscontinuityAudio,
+        "discSeqSubtitle": sessionState.discSeqSubtitle + lastDiscontinuitySubtitle,
         "slateCount": sessionState.slateCount + 1
       });
       sessionState = { ...sessionState, ...updatedSessionState };
