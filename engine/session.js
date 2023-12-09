@@ -1161,6 +1161,7 @@ class Session {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
               const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
                 forcedDemuxMode: this.use_demuxed_audio, 
+                allowedAudioLanguages: this._audioTracks,
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1342,7 +1343,8 @@ class Session {
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
               const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
-                forcedDemuxMode: this.use_demuxed_audio, 
+                forcedDemuxMode: this.use_demuxed_audio,
+                allowedAudioLanguages: this._audioTracks,
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1596,6 +1598,7 @@ class Session {
           .then(() => {
             const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
               forcedDemuxMode: this.use_demuxed_audio, 
+              allowedAudioLanguages: this._audioTracks,
               dummySubtitleEndpoint: this.dummySubtitleEndpoint,
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1700,7 +1703,8 @@ class Session {
           .then(() => {
             const hlsOpts = { 
               sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
-              forcedDemuxMode: this.use_demuxed_audio, 
+              forcedDemuxMode: this.use_demuxed_audio,
+              allowedAudioLanguages: this._audioTracks,
               dummySubtitleEndpoint: this.dummySubtitleEndpoint, 
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
