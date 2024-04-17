@@ -312,9 +312,8 @@ class Session {
   }
 
   async stopPlayheadAsync() {
-    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
     debug(`[${this._sessionId}]: Stopping playhead consumer`);
-    await this._playheadState.set("state", PlayheadState.STOPPED, isLeader);
+    await this._playheadState.setState(PlayheadState.STOPPED);
   }
 
   async getStatusAsync() {
