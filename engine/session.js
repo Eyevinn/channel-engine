@@ -1549,6 +1549,7 @@ class Session {
         return;
       case SessionState.VOD_NEXT_INITIATING:
         debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
+        debug(`[${this._sessionId}]: state=VOD_NEXT_INITIATING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
         if (!isLeader) {
           debug(`[${this._sessionId}]: not the leader so just waiting for the VOD to be initiated`);
         }
@@ -1668,7 +1669,8 @@ class Session {
             this.leaderIsSettingNextVod = false;
             await this._playheadState.set("playheadRef", Date.now(), isLeader);
             await this._playheadState.set("diffCompensation", this.diffCompensation, isLeader);
-            debug(`[${this._sessionId}]: sharing durrent vods diffCompensation=${this.diffCompensation}`);
+            debug(`[${this._sessionId}]: sharing currentVod's diffCompensation=${this.diffCompensation}`);
+            debug(`[${this._sessionId}]: sharing currentVod's diffCompensation=${this.diffCompensation}`);
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
