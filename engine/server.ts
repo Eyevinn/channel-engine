@@ -870,6 +870,7 @@ export class ChannelEngine {
             await timer(500);
           }
           debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
+          let ts1 = Date.now();
           if (switcherStatus[req.params[1]]) {
             debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
             body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
@@ -877,6 +878,7 @@ export class ChannelEngine {
             debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
             body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
           }
+          debug(`[${req.params[1]}]: Manifest Request Took (${Date.now() - ts1})ms`);
         }
 
         //verbose(`[${session.sessionId}] body=`);

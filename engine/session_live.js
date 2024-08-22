@@ -1032,11 +1032,6 @@ class SessionLive {
         if (manifestList.some((result) => result.status === "rejected")) {
           FETCH_ATTEMPTS--;
           debug(`[${this.sessionId}]: ALERT! Promises I: Failed, Rejection Found! Trying again in 1000ms...`);
-          console.log(
-            manifestList.map((r) => {
-              return { status: r.status };
-            })
-          );
           await timer(1000);
           continue;
         }
@@ -2228,7 +2223,7 @@ class SessionLive {
       return track;
     }
     let tracksMatchingOnLanguage = tracks.filter((t) => {
-      if (this._getLangFromTrack(t) === track) {
+      if (this._getLangFromTrack(t) === this._getLangFromTrack(track)) {
         return true;
       }
       return false;
@@ -2239,7 +2234,7 @@ class SessionLive {
     }
     // If no matches then check if we have any matched on group id, then use fallback (first) language
     let tracksMatchingOnGroupId = tracks.filter((t) => {
-      if (this._getLangFromTrack(t) === track) {
+      if (this._getGroupFromTrack(t) === this._getGroupFromTrack(track)) {
         return true;
       }
       return false;
@@ -2378,7 +2373,7 @@ class SessionLive {
       groupId: null,
       language: null,
     };
-    const match = track.match(/g:(.*?),l:(.*)/);
+    const match = track.match(/g:(.*?);l:(.*)/);
     if (match) {
       const g = match[1];
       const l = match[2];
@@ -2393,7 +2388,7 @@ class SessionLive {
   }
 
   _getLangFromTrack(track) {
-    const match = track.match(/g:(.*?),l:(.*)/);
+    const match = track.match(/g:(.*?);l:(.*)/);
     if (match) {
       const g = match[1];
       const l = match[2];
@@ -2406,7 +2401,7 @@ class SessionLive {
   }
 
   _getGroupFromTrack(track) {
-    const match = track.match(/g:(.*?),l:(.*)/);
+    const match = track.match(/g:(.*?);l:(.*)/);
     if (match) {
       const g = match[1];
       const l = match[2];
@@ -2419,7 +2414,7 @@ class SessionLive {
   }
 
   _getTrackFromGroupAndLang(g, l) {
-    return `g:${g},l:${l}`;
+    return `g:${g};l:${l}`;
   }
 
   _isBandwidth(bw) {
