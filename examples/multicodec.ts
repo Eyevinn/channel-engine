@@ -35,6 +35,7 @@ class RefAssetManager implements IAssetManager {
    *      playlistId
    *   }
    */
+  
   getNextVod(vodRequest: VodRequest): Promise<VodResponse> {
     console.log(this.assets);
     return new Promise((resolve, reject) => {

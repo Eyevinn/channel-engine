@@ -147,7 +147,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
   }
 
   getPrerollUri(channelId): Promise<string> {
-    const defaultPrerollSlateUri = "http://localhost:8002/playlist.m3u8"
+    const defaultPrerollSlateUri = "https://vod.streaming.a2d.tv/promotions/hls/64d11e635b55ad002b488abf/index.m3u8"
     return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
