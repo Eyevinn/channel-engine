@@ -4,7 +4,7 @@ const fetch = require("node-fetch");
 const url = require("url");
 const { AbortController } = require("abort-controller");
 const { SessionState } = require("./session_state");
-const { timer, findNearestValue, isValidUrl, fetchWithRetry, findAudioGroupOrLang } = require("./util");
+const { timer, findNearestValue, isValidUrl, fetchWithRetry, findAudioGroupOrLang, ItemIsEmpty } = require("./util");
 const m3u8 = require("@eyevinn/m3u8");
 
 const SwitcherState = Object.freeze({
@@ -117,10 +117,16 @@ class StreamSwitcher {
           if (isValidUrl(prerollUri)) {
             try {
               const segments = await this._loadPreroll(prerollUri);
+              if (this.useDemuxedAudio && ItemIsEmpty(segments.audioSegments)) {
+                const errmsg = `[${this.sessionId}]: Preroll is not demuxed. Preroll from uri=${prerollUri} will not be used.`;
+                debug(errmsg);
+                console.error("WARNING! " + errmsg);
+              }
               const prerollItem = {
                 segments: segments.mediaSegments,
                 audioSegments: segments.audioSegments,
                 maxAge: tsNow + 30 * 60 * 1000,
+                isValid: this.useDemuxedAudio ? !ItemIsEmpty(segments.audioSegments) : true
               };
               this.prerollsCache[this.sessionId] = prerollItem;
             } catch (err) {
@@ -247,7 +253,7 @@ class StreamSwitcher {
           }
 
           // Insert preroll if available for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             currVodSegments = this._mergeSegments(prerollSegments, currVodSegments, false);
@@ -304,7 +310,7 @@ class StreamSwitcher {
           }
 
           // Insert preroll if available for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
             if (this.useDemuxedAudio) {
@@ -345,7 +351,7 @@ class StreamSwitcher {
             return false;
           }
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             liveSegments.currMseqSegs = this._mergeSegments(prerollSegments, liveSegments.currMseqSegs, false);
             liveSegments.segCount += prerollSegments.length;
@@ -404,7 +410,7 @@ class StreamSwitcher {
           }
 
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
 
@@ -442,7 +448,7 @@ class StreamSwitcher {
           await sessionLive.resetLiveStoreAsync(0);
 
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
@@ -829,7 +835,7 @@ class StreamSwitcher {
       } else {
         const lastSeg = toSegments[bw][toSegments[bw].length - 1];
         if (lastSeg.uri && !lastSeg.discontinuity) {
-          toSegments[bw].push({ discontinuity: true, cue: { in: true } });
+          toSegments[bw].push({ discontinuity: true});
           OUTPUT_SEGMENTS[bw] = toSegments[bw].concat(fromSegments[targetBw]);
         } else if (lastSeg.discontinuity && !lastSeg.cue) {
           toSegments[bw][toSegments[bw].length - 1].cue = { in: true }
@@ -871,9 +877,10 @@ class StreamSwitcher {
           const size = toSegments[groupId][lang].length;
           const lastSeg = toSegments[groupId][lang][size - 1];
           if (lastSeg.uri && !lastSeg.discontinuity) {
-            toSegments[groupId][lang].push({ discontinuity: true, cue: { in: true } });
+            toSegments[groupId][lang].push({ discontinuity: true });
             OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
           } else if (lastSeg.discontinuity && !lastSeg.cue) {
+            console.log("lastSeg", lastSeg, toSegments[groupId][lang], 666)
             toSegments[targetGroupId][lang][toSegments[groupId][lang].length - 1].cue = { in: true }
             OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
           } else {

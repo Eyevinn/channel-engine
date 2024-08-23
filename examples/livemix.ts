@@ -5,42 +5,47 @@
 import { ChannelEngine, ChannelEngineOpts, 
   IAssetManager, IChannelManager, IStreamSwitchManager,
   VodRequest, VodResponse, Channel, ChannelProfile,
-  Schedule, AudioTracks
+  Schedule
 } from "../index";
 const { v4: uuidv4 } = require('uuid');
-
-const DEMUX_CONTENT = {
-  ts: {
-    slate: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
-    vod: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
-    trailer: "https://trailer-admin-cdn.a2d.tv/virtualchannels/trailers/demux002/demux.m3u8",
-    bumper: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
-    live: "http://localhost:5000/channels/3/master.m3u8"
-  },
-  cmaf: {
-    slate: "https://vod.streaming.a2d.tv/trailers/fillers/6409d46c07b49f0029c1b170/output_v2.ism/.m3u8",
-    vod: "https://vod.streaming.a2d.tv/13ec7661-66d7-44d6-b818-7743fe916a87/b747af60-ef3f-11ed-bd7e-9125837ccca3_20343615.ism/.m3u8", // 66 min
-    trailer: "https://vod.streaming.a2d.tv/trailers/650c397b298d58002a812ca0/output_v2.ism/.m3u8",
-    bumper: "https://vod.streaming.a2d.tv/trailers/bumpers/tv4_summer/start/output_v2.ism/.m3u8",
-    live: "https://vc-engine-alb.a2d.tv/channels/a7b2c62f-99b7-4fd9-bde5-56201c59b0a2/master.m3u8"//"https://vc-engine-alb.a2d-dev.tv/channels/1d1847f1-2de7-4f87-b06c-c971107d0ca3/master.m3u8"
-  }
-}
-
-const HLS_CONTENT = DEMUX_CONTENT["ts"];
 
 const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
 class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
   constructor(opts?) {
+    if (process.env.TEST_CHANNELS) {
+      this.assets = {};
+      this.pos = {};
+
+      const testChannelsCount = parseInt(process.env.TEST_CHANNELS, 10);
+      for (let i = 0; i < testChannelsCount; i++) {
+        const channelId = `${i + 1}`;
+        this.assets[channelId] = [
+          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+          { id: 2, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 4, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
+          { id: 5, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 6, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+        ];
+        this.pos[channelId] = 2;
+      }
+    } else {
       this.assets = {
         '1': [
-          { id: 1, title: "Tears of Steel", uri: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8" },
+          { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+          { id: 2, title: "Morbius Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/MORBIUS_Trailer_2020.mp4/master.m3u8" },
+          { id: 3, title: "The Outpost Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/THE_OUTPOST_Trailer_2020.mp4/master.m3u8" },
+          { id: 4, title: "Unhinged Trailer", uri: "https://maitv-vod.lab.eyevinn.technology/UNHINGED_Trailer_2020.mp4/master.m3u8" },
+          { id: 5, title: "TV Plus Megha", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-megha.mov/master.m3u8" },
+          { id: 6, title: "TV Plus Joachim", uri: "https://maitv-vod.lab.eyevinn.technology/tvplus-ad-joachim.mov/master.m3u8" },
         ]
       };
       this.pos = {
-        '1': 0
+        '1': 1
       };
+    }
   }
 
   /* @param {Object} vodRequest
@@ -64,8 +69,7 @@ class RefAssetManager implements IAssetManager {
             {
               pos: 0,
               duration: 15 * 1000,
-              url: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8"
-              
+              url: "https://maitv-vod.lab.eyevinn.technology/ads/apotea-15s.mp4/master.m3u8"
             }
           ]
         };
@@ -74,7 +78,7 @@ class RefAssetManager implements IAssetManager {
         const vodResponse = {
           id: vod.id,
           title: vod.title,
-          uri: vod.uri
+          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload
         };
         resolve(vodResponse);
       } else {
@@ -95,10 +99,10 @@ class RefChannelManager implements IChannelManager {
     if (process.env.TEST_CHANNELS) {
       const testChannelsCount = parseInt(process.env.TEST_CHANNELS, 10);
       for (let i = 0; i < testChannelsCount; i++) {
-        this.channels.push({ id: `${i + 1}`, profile: this._getProfile(), audioTracks: this._getAudioTracks() });
+        this.channels.push({ id: `${i + 1}`, profile: this._getProfile() });
       }
     } else {
-      this.channels = [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
+      this.channels = [{ id: "1", profile: this._getProfile() }];
     }
   }
 
@@ -112,12 +116,6 @@ class RefChannelManager implements IChannelManager {
       { bw: 1274000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [640, 286] },
       { bw: 742000, codecs: 'avc1.4d001f,mp4a.40.2', resolution: [480, 214] },
     ]
-  }
-
-  _getAudioTracks(): AudioTracks[] {
-    return [
-      { language: "en", name: "English", default: true },
-    ];
   }
 }
 const StreamType = Object.freeze({
@@ -147,7 +145,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
   }
 
   getPrerollUri(channelId): Promise<string> {
-    const defaultPrerollSlateUri = "https://vod.streaming.a2d.tv/promotions/hls/64d11e635b55ad002b488abf/index.m3u8"
+    const defaultPrerollSlateUri = "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8"
     return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
   }
 
@@ -170,8 +168,8 @@ class StreamSwitchManager implements IStreamSwitchManager {
             type: StreamType.LIVE,
             start_time: startOffset,
             end_time: endTime,
-            uri: HLS_CONTENT.live,
-          }/*,
+            uri: "https://d2fz24s2fts31b.cloudfront.net/out/v1/6484d7c664924b77893f9b4f63080e5d/manifest.m3u8",
+          },
           {
             eventId: this.generateID(),
             assetId: this.generateID(),
@@ -181,7 +179,7 @@ class StreamSwitchManager implements IStreamSwitchManager {
             end_time: (endTime + 100*1000) + streamDuration,
             uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
             duration: streamDuration,
-          }*/);
+          });
         }
         resolve(this.schedule[channelId]);
       } else {
@@ -200,10 +198,9 @@ const engineOptions: ChannelEngineOpts = {
   averageSegmentDuration: 2000,
   channelManager: refChannelManager,
   streamSwitchManager: refStreamSwitchManager,
-  defaultSlateUri: HLS_CONTENT.slate,
-  slateRepetitions: 10, 
+  defaultSlateUri: "https://maitv-vod.lab.eyevinn.technology/slate-consuo.mp4/master.m3u8",
+  slateRepetitions: 10,
   redisUrl: process.env.REDIS_URL,
-  useDemuxedAudio: true,
 };
 
 const engine = new ChannelEngine(refAssetManager, engineOptions);

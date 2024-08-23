@@ -2155,19 +2155,27 @@ class SessionLive {
     for (let i = 0; i < size; i++) {
       const seg = segments[variantKey][i];
       const nextSeg = segments[variantKey][i + 1] ? segments[variantKey][i + 1] : {};
-      if (seg.discontinuity && !seg.cue) {
+      if (seg.discontinuity) {
         m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
+      if (seg.cue && seg.cue.in) {
+        m3u8 += "#EXT-X-CUE-IN\n";
+      }
       m3u8 += segToM3u8(seg, i, size, nextSeg, previousSeg);
+        // In case of duplicate disc-tags, remove one.
       if (m3u8.includes("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n")) {
         debug(`[${this.sessionId}]: Removing Duplicate Disc-tag from output M3u8`);
-        // In case of duplicate disc-tags, remove one.
         m3u8 = m3u8.replace("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n", "#EXT-X-DISCONTINUITY\n");
+      }
+      if (m3u8.includes("#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n")) {
+        debug(`[${this.sessionId}]: Removing Duplicate Disc-tag from output M3u8`);
+        m3u8 = m3u8.replace("#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n", "#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n");
       }
       previousSeg = seg;
     }
     return m3u8;
   }
+  
   _findNearestBw(bw, array) {
     const sorted = array.sort((a, b) => b - a);
     return sorted.reduce((a, b) => {
@@ -2200,6 +2208,7 @@ class SessionLive {
     debug(`[${this.sessionId}]: ERROR Could not find any bandwidth with segments`);
     return null;
   }
+  
   _findAudioGroupsForLang(audioLanguage, segments) {
     let trackInfos = [];
     const groupIds = Object.keys(segments);
