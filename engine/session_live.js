@@ -2,7 +2,7 @@ const debug = require("debug")("engine-session-live");
 const allSettled = require("promise.allsettled");
 const crypto = require("crypto");
 const m3u8 = require("@eyevinn/m3u8");
-const { segToM3u8 } = require("@eyevinn/hls-vodtolive/utils.js");
+const { segToM3u8, urlResolve } = require("@eyevinn/hls-vodtolive/utils.js");
 const url = require("url");
 const fetch = require("node-fetch");
 const { m3u8Header } = require("./util.js");
@@ -1052,10 +1052,36 @@ class SessionLive {
           this.liveSourceM3Us[variantKey] = variantItem.value;
         });
 
+        const audio_mediaseqcounts = [];
+        const video_mediaseqcounts = [];
         const allStoredMediaSeqCounts = Object.keys(this.liveSourceM3Us).map((variant) => this.liveSourceM3Us[variant].mediaSeq);
+        Object.keys(this.liveSourceM3Us).map((variantKey) => {
+          if (!this._isBandwidth(variantKey)) {
+            audio_mediaseqcounts.push(this.liveSourceM3Us[variantKey].mediaSeq);
+          } else {
+            video_mediaseqcounts.push(this.liveSourceM3Us[variantKey].mediaSeq);
+          }
+        });
 
+        let MSEQ_COUNTS_ARE_IN_SYNC = false;
+        if (allStoredMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+          MSEQ_COUNTS_ARE_IN_SYNC = true;
+        } else {
+          // dont assume the worst
+          if (video_mediaseqcounts.every((val, i, arr) => val === arr[0]) && audio_mediaseqcounts.every((val, i, arr) => val === arr[0])) {
+            const MSEQ_DIFF_THRESHOLD = 2;
+            if (audio_mediaseqcounts.length > 0 && video_mediaseqcounts.length > 0) {
+              if (audio_mediaseqcounts[0] > video_mediaseqcounts[0] && audio_mediaseqcounts[0] - video_mediaseqcounts[0] > MSEQ_DIFF_THRESHOLD) {
+                debug(
+                  `[${this.sessionId}]: Audio Mseq counts seem to always be ahead. Will not take them into consideration when syncing Mseq Counts!`
+                );
+                MSEQ_COUNTS_ARE_IN_SYNC = true;
+              }
+            }
+          }
+        }
         // Handle if mediaSeqCounts are NOT synced up!
-        if (!allStoredMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+        if (!MSEQ_COUNTS_ARE_IN_SYNC) {
           bandwidthsToSkipOnRetry = [];
           audiotracksToSkipOnRetry = [];
           debug(`[${this.sessionId}]: Live Mseq counts=[${allStoredMediaSeqCounts}]`);
@@ -1082,7 +1108,7 @@ class SessionLive {
             }
           }
           // If 3 tries already and only video is unsynced, Make the BAD VARIANTS INHERIT M3U's from the good ones.
-          if (FETCH_ATTEMPTS >= 7 && audiotracksToSkipOnRetry.length === this.audioManifestURIs.length) {
+          if (FETCH_ATTEMPTS >= 4 && audiotracksToSkipOnRetry.length === this.audioManifestURIs.length) {
             // Find Highest MSEQ
             let [ahead, behind] = Object.keys(this.liveSourceM3Us).map((v) => {
               const c = this.liveSourceM3Us[v].mediaSeq;
@@ -2162,7 +2188,7 @@ class SessionLive {
         m3u8 += "#EXT-X-CUE-IN\n";
       }
       m3u8 += segToM3u8(seg, i, size, nextSeg, previousSeg);
-        // In case of duplicate disc-tags, remove one.
+      // In case of duplicate disc-tags, remove one.
       if (m3u8.includes("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n")) {
         debug(`[${this.sessionId}]: Removing Duplicate Disc-tag from output M3u8`);
         m3u8 = m3u8.replace("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n", "#EXT-X-DISCONTINUITY\n");
@@ -2175,7 +2201,7 @@ class SessionLive {
     }
     return m3u8;
   }
-  
+
   _findNearestBw(bw, array) {
     const sorted = array.sort((a, b) => b - a);
     return sorted.reduce((a, b) => {
@@ -2208,7 +2234,7 @@ class SessionLive {
     debug(`[${this.sessionId}]: ERROR Could not find any bandwidth with segments`);
     return null;
   }
-  
+
   _findAudioGroupsForLang(audioLanguage, segments) {
     let trackInfos = [];
     const groupIds = Object.keys(segments);
