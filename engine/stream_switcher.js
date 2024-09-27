@@ -165,7 +165,7 @@ class StreamSwitcher {
         validURI = await this._validURI(scheduleObj.uri);
         tries++;
         if (!validURI) {
-          const delayMs = tries * 500;
+          const delayMs = (tries * tries * 100);
           debug(`[${this.sessionId}]: Going to try validating Master URI again in ${delayMs}ms`);
           await timer(delayMs);
         }
@@ -508,6 +508,9 @@ class StreamSwitcher {
   }
 
   async _validURI(uri) {
+    if (!uri) {
+      return false;
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       debug(`[${this.sessionId}]: Request Timeout @ ${uri}`);
