@@ -282,7 +282,8 @@ export class ChannelEngine {
         cacheTTL: options.sharedStoreCacheTTL,
         volatileKeyTTL: options.volatileKeyTTL,
       }),
-      playheadStateStore: new PlayheadStateStore({ 
+      playheadStateStore: new PlayheadStateStore({
+        averageSegmentDuration: options.averageSegmentDuration,
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,

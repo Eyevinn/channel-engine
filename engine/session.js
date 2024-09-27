@@ -13,7 +13,6 @@ const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString } = r
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
-const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
 const DEFAULT_DIFF_COMPENSATION_RATE = 0.5;
@@ -39,7 +38,7 @@ class Session {
     //this.currentVod;
     this.currentMetadata = {};
     this._events = [];
-    this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
+    this.averageSegmentDuration = config.averageSegmentDuration;
     this.use_demuxed_audio = false;
     this.use_vtt_subtitles = false;
     this.dummySubtitleEndpoint = "";

@@ -12,7 +12,8 @@
     "postversion": "git push && git push --tags",
     "start": "node dist/examples/default.js",
     "start-demux": "node dist/examples/demux.js",
-    "start-livemix": "node dist/examples/livemix.js"
+    "start-livemix": "node dist/examples/livemix.js",
+    "start-livemix-demux": "node dist/examples/livemix-demux.js"
   },
   "engines": {
     "node": ">=14 <20"
