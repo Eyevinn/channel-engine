@@ -10,33 +10,33 @@ import { ChannelEngine, ChannelEngineOpts,
   const { v4: uuidv4 } = require('uuid');
   
   const DEMUX_CONTENT = {
-    ts: {
-      slate: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
-      vod: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8",
-      trailer: "https://trailer-admin-cdn.a2d.tv/virtualchannels/trailers/demux002/demux.m3u8",
-      bumper: "https://trailer-admin-cdn.a2d.tv/virtualchannels/bumper/demux/demux.m3u8",
-      live: "http://localhost:5000/channels/3/master.m3u8"
+    TS: {
+      slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
+      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VOD_TS_001/master.m3u8",
+      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_TS_001/master.m3u8",
+      bumper:  "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
+      live: null // If you do not have a demux live stream available, you can always use a local CE V2L stream (ex: demux.ts) 
     },
-    cmaf: {
-      slate: "https://vod.streaming.a2d.tv/trailers/fillers/6409d46c07b49f0029c1b170/output_v2.ism/.m3u8",
-      vod: "https://vod.streaming.a2d.tv/13ec7661-66d7-44d6-b818-7743fe916a87/b747af60-ef3f-11ed-bd7e-9125837ccca3_20343615.ism/.m3u8", // 66 min
-      trailer: "https://vod.streaming.a2d.tv/trailers/650c397b298d58002a812ca0/output_v2.ism/.m3u8",
-      bumper: "https://vod.streaming.a2d.tv/trailers/bumpers/tv4_summer/start/output_v2.ism/.m3u8",
-      live: "https://vc-engine-alb.a2d.tv/channels/a7b2c62f-99b7-4fd9-bde5-56201c59b0a2/master.m3u8"//"https://vc-engine-alb.a2d-dev.tv/channels/1d1847f1-2de7-4f87-b06c-c971107d0ca3/master.m3u8"
+    CMAF: {
+      slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_FILLER_CMAF_001/master.m3u8",
+      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_CMAF_001/master_en.m3u8", // 5 min
+      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_CMAF_001/master.m3u8",
+      bumper: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_CMAF_001/master.m3u8",
+      live: null 
     }
   };
   
-  const HLS_CONTENT = DEMUX_CONTENT.cmaf;
+  const HLS_CONTENT = DEMUX_CONTENT.CMAF;
 
-  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
-  
+  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinn-guide.eyevinn-lambda-stitch.auto.prod.osaas.io/stitch/master.m3u8";
+
   class RefAssetManager implements IAssetManager {
     private assets;
     private pos;
     constructor(opts?) {
         this.assets = {
           '1': [
-            { id: 1, title: "Tears of Steel", uri: HLS_CONTENT.vod },
+            { id: 1, title: "Untitled VOD", uri: HLS_CONTENT.vod },
           ]
         };
         this.pos = {
@@ -64,9 +64,8 @@ import { ChannelEngine, ChannelEngineOpts,
             breaks: [
               {
                 pos: 0,
-                duration: 15 * 1000,
-                url: "https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8"
-                
+                duration: 30 * 1000,
+                url: HLS_CONTENT.trailer
               }
             ]
           };
@@ -75,7 +74,7 @@ import { ChannelEngine, ChannelEngineOpts,
           const vodResponse = {
             id: vod.id,
             title: vod.title,
-            uri: vod.uri
+            uri:  STITCH_ENDPOINT + "?payload=" + encodedPayload
           };
           resolve(vodResponse);
         } else {
@@ -148,7 +147,7 @@ import { ChannelEngine, ChannelEngineOpts,
     }
   
     getPrerollUri(channelId): Promise<string> {
-      const defaultPrerollSlateUri = HLS_CONTENT.slate
+      const defaultPrerollSlateUri = HLS_CONTENT.bumper
       return new Promise((resolve, reject) => { resolve(defaultPrerollSlateUri); });
     }
   
@@ -156,14 +155,11 @@ import { ChannelEngine, ChannelEngineOpts,
       return new Promise((resolve, reject) => {
         if (this.schedule[channelId]) {
           const tsNow = Date.now();
-          const streamDuration = 60 * 1000;
+          const streamDuration = 2 * 60 * 1000;
           const startOffset = tsNow + streamDuration;
           const endTime = startOffset + streamDuration;
-          // Break in with live and scheduled VOD content after 60 seconds of VOD2Live the first time Channel Engine starts
-          // Required: "assetId", "start_time", "end_time", "uri", "duration"
-          // "duration" is only required for StreamType.VOD
           this.schedule[channelId] = this.schedule[channelId].filter((obj) => obj.end_time >= tsNow);
-          if (this.schedule[channelId].length === 0) {
+          if (this.schedule[channelId].length === 0 && HLS_CONTENT.live) {
             this.schedule[channelId].push({
               eventId: this.generateID(),
               assetId: this.generateID(),
@@ -172,7 +168,8 @@ import { ChannelEngine, ChannelEngineOpts,
               start_time: startOffset,
               end_time: endTime,
               uri: HLS_CONTENT.live,
-            }/*,
+            }
+            /*,
             {
               eventId: this.generateID(),
               assetId: this.generateID(),
@@ -182,7 +179,8 @@ import { ChannelEngine, ChannelEngineOpts,
               end_time: (endTime + 100*1000) + streamDuration,
               uri: "https://maitv-vod.lab.eyevinn.technology/COME_TO_DADDY_Trailer_2020.mp4/master.m3u8",
               duration: streamDuration,
-            }*/);
+            }*/
+           );
           }
           resolve(this.schedule[channelId]);
         } else {
@@ -198,13 +196,17 @@ import { ChannelEngine, ChannelEngineOpts,
   
   const engineOptions: ChannelEngineOpts = {
     heartbeat: "/",
-    averageSegmentDuration: 2000,
+    averageSegmentDuration: 6000,
     channelManager: refChannelManager,
     streamSwitchManager: refStreamSwitchManager,
     defaultSlateUri: HLS_CONTENT.slate,
     slateRepetitions: 10, 
+    slateDuration: 3000,
     redisUrl: process.env.REDIS_URL,
     useDemuxedAudio: true,
+    playheadDiffThreshold: 500,
+    alwaysNewSegments: true,
+    maxTickInterval: 8000,
   };
   
   const engine = new ChannelEngine(refAssetManager, engineOptions);

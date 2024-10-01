@@ -1575,61 +1575,75 @@ class Session {
             // 1) To tell Follower that, Leader is working on it!
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
             // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
-            let mSeq = this.switchDataForSession.mediaSeq;
-            let aSeq = this.switchDataForSession.audioSeq;
+            let mseqV = this.switchDataForSession.mediaSeq;
+            let mseqA = this.switchDataForSession.audioSeq;
+            let discSeqV = this.switchDataForSession.discSeq;
+            let discSeqA = this.switchDataForSession.discAudioSeq;
             let currentVod = await this._sessionState.getCurrentVod();
             if (currentVod.sequenceAlwaysContainNewSegments) {
               // (!) will need to compensate if using this setting on HLSVod Object.
-              Object.keys(this.switchDataForSession.transitionSegments).forEach(bw => {
+              Object.keys(this.switchDataForSession.transitionSegments).forEach((bw, i) => {
                 let shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
                 if (shiftedSeg && shiftedSeg.discontinuity) {
                   shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  if (i == 0) {
+                    discSeqV++;
+                  }
+                }
+                if (shiftedSeg && shiftedSeg.duration) {
+                  if (i == 0) {
+                    mseqV++;
+                  }
                 }
               });
               if (this.use_demuxed_audio) {
-                const groupIds = Object.keys(this.switchDataForSession.transitionAudioSegments)
+                const groupIds = Object.keys(this.switchDataForSession.transitionAudioSegments);
                 for (let i = 0; i < groupIds.length; i++) {
                   const groupId = groupIds[i];
-                  const langs = Object.keys(this.switchDataForSession.transitionAudioSegments[groupId])
+                  const langs = Object.keys(this.switchDataForSession.transitionAudioSegments[groupId]);
                   for (let j = 0; j < langs.length; j++) {
                     const lang = langs[j];
                     let shiftedSeg = this.switchDataForSession.transitionAudioSegments[groupId][lang].shift();
                     if (shiftedSeg && shiftedSeg.discontinuity) {
                       shiftedSeg = this.switchDataForSession.transitionAudioSegments[groupId][lang].shift();
+                      if (i == 0 && j == 0) {
+                        discSeqA++;
+                      }
                     }
-
+                    if (shiftedSeg && shiftedSeg.duration) {
+                      if (i == 0 && j == 0) {
+                        mseqA++;
+                      }
+                    }
                   }
                 }
               }
             }
-            const dSeq = this.switchDataForSession.discSeq;
-            const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
             const reloadBehind = this.switchDataForSession.reloadBehind;
+            const mseqOffsetV = this.switchDataForSession.mediaSeqOffset;
+            const mseqOffsetA = this.switchDataForSession.audioSeqOffset;
             const segments = this.switchDataForSession.transitionSegments;
-
-            const audioDSeq = this.switchDataForSession.discAudioSeq;
-            const aSeqOffset = this.switchDataForSession.audioSeqOffset;
             const audioSegments = this.switchDataForSession.transitionAudioSegments;
 
 
-            if ([mSeq, dSeq, mSeqOffset, reloadBehind, segments].includes(null)) {
+            if ([mseqV, discSeqV, mseqOffsetV, reloadBehind, segments].includes(null)) {
               debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
               return;
             }
 
-            if (this.use_demuxed_audio && [aSeq, audioDSeq, aSeqOffset, audioSegments].includes(null)) {
+            if (this.use_demuxed_audio && [mseqA, discSeqA, mseqOffsetA, audioSegments].includes(null)) {
               debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
               return;
             }
-            await this._sessionState.set("mediaSeq", mSeq);
-            await this._playheadState.set("mediaSeq", mSeq, isLeader);
-            await this._sessionState.set("discSeq", dSeq);
-            await this._sessionState.set("mediaSeqAudio", aSeq);
-            await this._playheadState.set("mediaSeqAudio", aSeq, isLeader);
-            await this._sessionState.set("discSeqAudio", audioDSeq);
+            await this._sessionState.set("mediaSeq", mseqV);
+            await this._playheadState.set("mediaSeq", mseqV, isLeader);
+            await this._sessionState.set("discSeq", discSeqV);
+            await this._sessionState.set("mediaSeqAudio", mseqA);
+            await this._playheadState.set("mediaSeqAudio", mseqA, isLeader);
+            await this._sessionState.set("discSeqAudio", discSeqA);
             // TODO: support demux^
-            debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
-            debug(`[${this._sessionId}]: Setting current audio media and discontinuity count -> [${aSeq}]:[${audioDSeq}]`);
+            debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mseqV}]:[${discSeqV}]`);
+            debug(`[${this._sessionId}]: Setting current audio media and discontinuity count -> [${mseqA}]:[${discSeqA}]`);
             // 3) Set new media segments/currentVod, to carry on the continuity from session-live
             debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
             const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);

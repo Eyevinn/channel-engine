@@ -59,6 +59,8 @@ class SessionLive {
     this.audioManifestURIs = {};
     this.liveSegQueue = {};
     this.lastRequestedMediaSeqRaw = null;
+    this.prevSeqBottomVideoSegUri = null;
+    this.prevSeqBottomAudioSegUri = null;
     this.liveSourceM3Us = {};
     this.liveSegQueueAudio = {};
     this.lastRequestedAudioSeqRaw = null;
@@ -163,6 +165,8 @@ class SessionLive {
     this.liveSegQueueAudio = {};
     this.lastRequestedMediaSeqRaw = null;
     this.lastRequestedAudioSeqRaw = null;
+    this.prevSeqBottomVideoSegUri = null;
+    this.prevSeqBottomAudioSegUri = null;
     this.liveSourceM3Us = {};
     this.liveAudioSourceM3Us = {};
     this.liveSegsForFollowers = {};
@@ -1218,12 +1222,14 @@ class SessionLive {
           );
           if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCount) {
             this.pushAmount = 1; // Follower from start
+            this.pushAmountAudio = this.pushAmount;
           } else {
             // TODO: To support and account for past discontinuity tags in the Live Source stream,
             // we will need to get the real 'current' discontinuity-sequence count from Leader somehow.
 
             // RESPAWNED NODES
             this.pushAmount = currentMseqRaw - leadersFirstSeqCounts.liveSourceMseqCount + 1;
+            this.pushAmountAudio = this.pushAmount;
 
             const transitSegs = await this.sessionLiveState.get("transitSegs");
             //debug(`[${this.sessionId}]: NEW FOLLOWER: I tried to get 'transitSegs'. This is what I found ${JSON.stringify(transitSegs)}`);
@@ -1242,8 +1248,10 @@ class SessionLive {
           // LEADER calculates pushAmount differently...
           if (this.firstTime) {
             this.pushAmount = 1; // Leader from start
+            this.pushAmountAudio = this.pushAmount;
           } else {
             this.pushAmount = currentMseqRaw - this.lastRequestedMediaSeqRaw;
+            this.pushAmountAudio = this.pushAmount;
             debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
           }
           debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
@@ -1307,14 +1315,14 @@ class SessionLive {
         for (let i = 0; i < Object.keys(this.mediaManifestURIs).length; i++) {
           let bw = Object.keys(this.mediaManifestURIs)[i];
           // will add new segments to live seg queue
-          pushPromises.push(this._parseMediaManifest(this.liveSourceM3Us[bw].M3U, this.mediaManifestURIs[bw], bw, isLeader));
+          pushPromises.push(this._parseMediaManifest(this.liveSourceM3Us[bw].M3U, this.mediaManifestURIs[bw], bw, i == 0, isLeader));
           debug(`[${this.sessionId}]: Pushed pushPromise for bw=${bw}`);
         }
         // Collect and Push Segment-Extracting Promises (audio)
         for (let i = 0; i < Object.keys(this.audioManifestURIs).length; i++) {
           let at = Object.keys(this.audioManifestURIs)[i];
           // will add new segments to live seg queue
-          pushPromises.push(this._parseAudioManifest(this.liveSourceM3Us[at].M3U, this.audioManifestURIs[at], at, isLeader));
+          pushPromises.push(this._parseAudioManifest(this.liveSourceM3Us[at].M3U, this.audioManifestURIs[at], at, i == 0, isLeader));
           debug(`[${this.sessionId}]: Pushed pushPromise for audiotrack=${at}`);
         }
         // Segment Pushing
@@ -1753,7 +1761,21 @@ class SessionLive {
     }
   }
 
-  _parseMediaManifest(m3u, mediaManifestUri, liveTargetBandwidth, isLeader) {
+ _pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstTrack) {
+    if (!isFirstTrack) {
+      return null;
+    }
+    for (let i = m3u.items.PlaylistItem.length - 1; i >= 0; i--) {
+      const pli = m3u.items.PlaylistItem[i];
+      if (pli.get("uri") === this.prevSeqBottomVideoSegUri || pli.get("uri") === this.prevSeqBottomAudioSegUri) {
+        let newAmount = m3u.items.PlaylistItem.length - i;
+        return newAmount;
+      }
+    }
+    return null;
+  };
+
+  _parseMediaManifest(m3u, mediaManifestUri, liveTargetBandwidth, isFirstBW, isLeader) {
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.liveSegQueue[liveTargetBandwidth]) {
@@ -1775,6 +1797,11 @@ class SessionLive {
           this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
         }
         this.targetDuration = m3u.get("targetDuration");
+
+        let newAmount = this._pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstBW);
+        if (newAmount !== null) {
+          this.pushAmount = newAmount;
+        }
         let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
         if (startIdx < 0) {
           this.restAmount = startIdx * -1;
@@ -1782,7 +1809,7 @@ class SessionLive {
         }
         if (mediaManifestUri) {
           // push segments
-          this._addLiveSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetBandwidth, isLeader, PlaylistTypes.VIDEO);
+          this._addLiveSegmentsToQueue(isFirstBW, startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetBandwidth, isLeader, PlaylistTypes.VIDEO);
         }
         resolve();
       } catch (exc) {
@@ -1792,7 +1819,7 @@ class SessionLive {
     });
   }
 
-  _parseAudioManifest(m3u, audioPlaylistUri, liveTargetAudiotrack, isLeader) {
+  _parseAudioManifest(m3u, audioPlaylistUri, liveTargetAudiotrack, isFirstAT, isLeader) {
     return new Promise(async (resolve, reject) => {
       try {
         if (!this.liveSegQueueAudio[liveTargetAudiotrack]) {
@@ -1813,17 +1840,21 @@ class SessionLive {
         WARN: We are assuming here that the MSEQ and Segment lengths are the same on Audio and Video
         and therefor need to push an equal amount of segments
         */
-        if (this.pushAmount >= 0) {
+        if (this.pushAmountAudio >= 0) {
           this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
         }
         this.targetDuration = m3u.get("targetDuration");
-        let startIdx = m3u.items.PlaylistItem.length - this.pushAmount;
+        let newAmount = this._pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstAT);
+        if (newAmount !== null) {
+          this.pushAmountAudio = newAmount;
+        }
+        let startIdx = m3u.items.PlaylistItem.length - this.pushAmountAudio;
         if (startIdx < 0) {
           this.restAmount = startIdx * -1;
           startIdx = 0;
         }
         if (audioPlaylistUri) {
-          this._addLiveSegmentsToQueue(startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetAudiotrack, isLeader, PlaylistTypes.AUDIO);
+          this._addLiveSegmentsToQueue(isFirstAT, startIdx, m3u.items.PlaylistItem, baseUrl, liveTargetAudiotrack, isLeader, PlaylistTypes.AUDIO);
         }
         resolve();
       } catch (exc) {
@@ -1841,16 +1872,19 @@ class SessionLive {
    * @param {string} baseUrl
    * @param {string} liveTargetBandwidth
    */
-  _addLiveSegmentsToQueue(startIdx, playlistItems, baseUrl, liveTargetVariant, isLeader, plType) {
+  _addLiveSegmentsToQueue(isFirst, startIdx, playlistItems, baseUrl, liveTargetVariant, isLeader, plType) {
     try {
       const leaderOrFollower = isLeader ? "LEADER" : "NEW FOLLOWER";
+      let initSegment = undefined;
+      let initSegmentByteRange = undefined;
+
       for (let i = startIdx; i < playlistItems.length; i++) {
         let seg = {};
         const playlistItem = playlistItems[i];
+        const playlistItemPrev = playlistItems[i - 1] ? playlistItems[i - 1] : null;
         let segmentUri;
         let byteRange = undefined;
-        let initSegment = undefined;
-        let initSegmentByteRange = undefined;
+
         let keys = undefined;
         let daterangeData = null;
         if (i === startIdx) {
@@ -1885,7 +1919,7 @@ class SessionLive {
             segmentUri = urlResolve(baseUrl, playlistItem.get("uri"));
           }
         }
-        if (playlistItem.get("discontinuity")) {
+        if (playlistItem.get("discontinuity") && (playlistItemPrev && !playlistItemPrev.get("discontinuity"))) {
           if (plType === PlaylistTypes.VIDEO) {
             this.liveSegQueue[liveTargetVariant].push({ discontinuity: true });
             this.liveSegsForFollowers[liveTargetVariant].push({ discontinuity: true });
@@ -1973,8 +2007,14 @@ class SessionLive {
           // Push new Live Segments! But do not push duplicates
           if (plType === PlaylistTypes.VIDEO) {
             this._pushToQueue(seg, liveTargetVariant, leaderOrFollower);
+            if (isFirst) {
+              this.prevSeqBottomVideoSegUri = seg.uri;
+            }
           } else if (plType === PlaylistTypes.AUDIO) {
             this._pushToQueueAudio(seg, liveTargetVariant, leaderOrFollower);
+            if (isFirst) {
+              this.prevSeqBottomAudioSegUri = seg.uri;
+            }
           } else {
             console.warn(`[${this.sessionId}]: WARNING: plType=${plType} Not valid (seg)`);
           }
@@ -1993,7 +2033,8 @@ class SessionLive {
     } else {
       this.liveSegQueue[liveTargetBandwidth].push(seg);
       this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
-      debug(`[${this.sessionId}]: ${logName}: Pushed Video segment (${seg.uri ? seg.uri : "Disc-tag"}) to 'liveSegQueue' (${liveTargetBandwidth})`);
+      debug(
+        `[${this.sessionId}]: ${logName}: Pushed Video segment (${seg.uri ? seg.uri : "Disc-tag"}) to 'liveSegQueue' (${liveTargetBandwidth})`);
     }
   }
 
