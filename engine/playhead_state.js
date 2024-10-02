@@ -62,7 +62,7 @@ class PlayheadStateStore extends SharedStateStore {
   constructor(opts) {
     super("playhead", opts, { 
       state: PlayheadState.IDLE, 
-      tickInterval: (opts.averageSegmentDuration/1000) || 3,  
+      tickInterval: opts ? (opts.averageSegmentDuration/1000) : 3,  
       mediaSeq: 0,
       vodMediaSeqVideo: 0,
       vodMediaSeqAudio: 0,
