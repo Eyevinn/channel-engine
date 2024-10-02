@@ -38,7 +38,7 @@ class Session {
     //this.currentVod;
     this.currentMetadata = {};
     this._events = [];
-    this.averageSegmentDuration = config.averageSegmentDuration;
+    this.averageSegmentDuration = null;
     this.use_demuxed_audio = false;
     this.use_vtt_subtitles = false;
     this.dummySubtitleEndpoint = "";
@@ -616,6 +616,7 @@ class Session {
     }
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
+      let countsData;
       try {
         let mediaSequenceValue = 0;
         if (currentVod.sequenceAlwaysContainNewSegments) {
@@ -625,6 +626,14 @@ class Session {
           mediaSequenceValue = playheadState.vodMediaSeqVideo;
         }
         const discSeqCount = discSeqOffset + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
+        debug(`[${this._sessionId}]: MediaSeq: (${playheadState.mediaSeq}+${mediaSequenceValue}=${(playheadState.mediaSeq + mediaSequenceValue)}) and DiscSeq: (${discSeqCount}) requested `);
+
+        countsData = {
+          'mediaSeq': (playheadState.mediaSeq + mediaSequenceValue),
+          'discSeq': discSeqCount,
+          'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
+        };
+
         let discSeqCountAudio;
         let audioSequenceValue;
         if (this.use_demuxed_audio) {
@@ -635,17 +644,12 @@ class Session {
           } else {
             audioSequenceValue = playheadState.vodMediaSeqAudio;
           }
+          debug(`[${this._sessionId}]: AudioSeq: (${playheadState.mediaSeqAudio}+${audioSequenceValue}=${(playheadState.mediaSeqAudio + audioSequenceValue)}) and DiscSeq: (${discSeqCountAudio}) requested `);
+          countsData['audioSeq'] = (playheadState.mediaSeqAudio + audioSequenceValue);
+          countsData['discSeqAudio'] = discSeqCountAudio;
+          countsData['vodMediaSeqAudio'] = playheadState.vodMediaSeqAudio;
         }
-        debug(`[${this._sessionId}]: MediaSeq: (${playheadState.mediaSeq}+${mediaSequenceValue}=${(playheadState.mediaSeq + mediaSequenceValue)}) and DiscSeq: (${discSeqCount}) requested `);
-        debug(`[${this._sessionId}]: AudioSeq: (${playheadState.mediaSeqAudio}+${audioSequenceValue}=${(playheadState.mediaSeqAudio + audioSequenceValue)}) and DiscSeq: (${discSeqCountAudio}) requested `);
-        return {
-          'mediaSeq': (playheadState.mediaSeq + mediaSequenceValue),
-          'discSeq': discSeqCount,
-          'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
-          'vodMediaSeqAudio': playheadState.vodMediaSeqAudio,
-          'audioSeq': playheadState.mediaSeqAudio + audioSequenceValue,
-          'discSeqAudio': discSeqCountAudio,
-        };
+        return countsData;
       } catch (err) {
         logerror(this._sessionId, err);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
@@ -1638,12 +1642,15 @@ class Session {
             await this._sessionState.set("mediaSeq", mseqV);
             await this._playheadState.set("mediaSeq", mseqV, isLeader);
             await this._sessionState.set("discSeq", discSeqV);
-            await this._sessionState.set("mediaSeqAudio", mseqA);
-            await this._playheadState.set("mediaSeqAudio", mseqA, isLeader);
-            await this._sessionState.set("discSeqAudio", discSeqA);
             // TODO: support demux^
             debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mseqV}]:[${discSeqV}]`);
-            debug(`[${this._sessionId}]: Setting current audio media and discontinuity count -> [${mseqA}]:[${discSeqA}]`);
+
+            if (this.use_demuxed_audio) {
+              await this._sessionState.set("mediaSeqAudio", mseqA);
+              await this._playheadState.set("mediaSeqAudio", mseqA, isLeader);
+              await this._sessionState.set("discSeqAudio", discSeqA);
+              debug(`[${this._sessionId}]: Setting current audio media and discontinuity count -> [${mseqA}]:[${discSeqA}]`); 
+            }
             // 3) Set new media segments/currentVod, to carry on the continuity from session-live
             debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
             const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
@@ -1652,10 +1659,12 @@ class Session {
               nextMseq = currentVod.getLiveMediaSequencesCount() - 1;
             }
 
-            const playheadStateAudio = await this._playheadState.getValues(["vodMediaSeqAudio"]);
-            let nextAudioMseq = playheadStateAudio.vodMediaSeqAudio + 1;
-            if (nextAudioMseq > currentVod.getLiveMediaSequencesCount("audio") - 1) {
-              nextAudioMseq = currentVod.getLiveMediaSequencesCount("audio") - 1;
+            if (this.use_demuxed_audio) {
+              const playheadStateAudio = await this._playheadState.getValues(["vodMediaSeqAudio"]);
+              let nextAudioMseq = playheadStateAudio.vodMediaSeqAudio + 1;
+              if (nextAudioMseq > currentVod.getLiveMediaSequencesCount("audio") - 1) {
+                nextAudioMseq = currentVod.getLiveMediaSequencesCount("audio") - 1;
+              }  
             }
 
             // ---------------------------------------------------.
@@ -1666,18 +1675,23 @@ class Session {
             await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             await this._sessionState.set("vodReloaded", 1);
             await this._sessionState.set("vodMediaSeqVideo", 0);
-            await this._sessionState.set("vodMediaSeqAudio", 0);
-            await this._sessionState.set("vodMediaSeqSubtitle", 0);
             await this._playheadState.set("vodMediaSeqVideo", 0, isLeader);
-            await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
-            await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
+            if (this.use_demuxed_audio) {
+              await this._sessionState.set("vodMediaSeqAudio", 0);
+              await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
+              await this._sessionState.set("vodMediaSeqSubtitle", 0);
+              await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
+            }
             this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
             // 4) Log to debug and cloudwatch
             debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
             debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
             debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
-            debug(`[${this._sessionId}]: audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}`);
+            if (this.use_demuxed_audio) {
+              debug(`[${this._sessionId}]: audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}`);
+              debug(`[${this._sessionId}]: subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
+            }
             cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "switchback", channel: this._sessionId, reqTimeMs: Date.now() - startTS });
             return;
           } else {

@@ -380,7 +380,7 @@ describe("The Stream Switcher", () => {
       const assetMgr = new TestAssetManager();
       const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
       const sessionLive = new SessionLive({ sessionId: "1" }, sessionLiveStore);
-      spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+      spyOn(sessionLive, "_loadAllPlaylistManifests").and.returnValue(mockLiveSegments);
 
       await session.initAsync();
       await session.incrementAsync();
@@ -406,7 +406,7 @@ describe("The Stream Switcher", () => {
       const assetMgr = new TestAssetManager();
       const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
       const sessionLive = new SessionLive({ sessionId: "1" }, sessionLiveStore);
-      spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+      spyOn(sessionLive, "_loadAllPlaylistManifests").and.returnValue(mockLiveSegments);
 
       await session.initAsync();
       await session.incrementAsync();
@@ -464,7 +464,7 @@ describe("The Stream Switcher", () => {
       const assetMgr = new TestAssetManager();
       const session = new Session(assetMgr, { sessionId: "1" }, sessionStore);
       const sessionLive = new SessionLive({ sessionId: "1" }, sessionLiveStore);
-      spyOn(sessionLive, "_loadAllMediaManifests").and.returnValue(mockLiveSegments);
+      spyOn(sessionLive, "_loadAllPlaylistManifests").and.returnValue(mockLiveSegments);
       spyOn(session, "setCurrentMediaSequenceSegments").and.returnValue(true);
       spyOn(session, "setCurrentMediaAndDiscSequenceCount").and.returnValue(true);
 
@@ -484,7 +484,7 @@ describe("The Stream Switcher", () => {
       expect(testStreamSwitcher.getEventId()).toBe(null);
     });
 
-  fit("should merge audio segments correctly", async () => {
+  it("should merge audio segments correctly", async () => {
     const switchMgr = new TestSwitchManager(5);
     const sessionLive = new StreamSwitcher({ streamSwitchManager: switchMgr });
     const fromSegments = {

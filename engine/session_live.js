@@ -596,12 +596,15 @@ class SessionLive {
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
-    return {
+    const counts = {
       mediaSeq: this.mediaSeqCount,
       discSeq: this.discSeqCount,
-      audioSeq: this.mediaSeqCount,
-      audioDiscSeq: this.discSeqCount,
     };
+    if (this.useDemuxedAudio) {
+      counts.audioSeq = this.audioSeqCount;
+      counts.audioDiscSeq = this.audioDiscSeqCount;
+    }
+    return counts;
   }
 
   getStatus() {
@@ -1761,7 +1764,7 @@ class SessionLive {
     }
   }
 
- _pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstTrack) {
+  _pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstTrack) {
     if (!isFirstTrack) {
       return null;
     }
@@ -1773,7 +1776,7 @@ class SessionLive {
       }
     }
     return null;
-  };
+  }
 
   _parseMediaManifest(m3u, mediaManifestUri, liveTargetBandwidth, isFirstBW, isLeader) {
     return new Promise(async (resolve, reject) => {
@@ -1919,7 +1922,7 @@ class SessionLive {
             segmentUri = urlResolve(baseUrl, playlistItem.get("uri"));
           }
         }
-        if (playlistItem.get("discontinuity") && (playlistItemPrev && !playlistItemPrev.get("discontinuity"))) {
+        if (playlistItem.get("discontinuity") && playlistItemPrev && !playlistItemPrev.get("discontinuity")) {
           if (plType === PlaylistTypes.VIDEO) {
             this.liveSegQueue[liveTargetVariant].push({ discontinuity: true });
             this.liveSegsForFollowers[liveTargetVariant].push({ discontinuity: true });
@@ -2033,8 +2036,7 @@ class SessionLive {
     } else {
       this.liveSegQueue[liveTargetBandwidth].push(seg);
       this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
-      debug(
-        `[${this.sessionId}]: ${logName}: Pushed Video segment (${seg.uri ? seg.uri : "Disc-tag"}) to 'liveSegQueue' (${liveTargetBandwidth})`);
+      debug(`[${this.sessionId}]: ${logName}: Pushed Video segment (${seg.uri ? seg.uri : "Disc-tag"}) to 'liveSegQueue' (${liveTargetBandwidth})`);
     }
   }
 

@@ -358,7 +358,7 @@ describe("SessionLive-Playhead consumer", () => {
       let remain = increments;
       let lastMseqNo = 0;
       while (remain > 0) {
-        await sessionLive._loadAllMediaManifests();
+        await sessionLive._loadAllPlaylistManifests();
         let manifest = await sessionLive.getCurrentMediaManifestAsync(180000);
 
         const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);
