@@ -1,9 +1,10 @@
 const debug = require("debug")("engine-stream-switcher");
 const crypto = require("crypto");
 const fetch = require("node-fetch");
+const url = require("url");
 const { AbortController } = require("abort-controller");
 const { SessionState } = require("./session_state");
-const { timer, findNearestValue, isValidUrl, fetchWithRetry } = require("./util");
+const { timer, findNearestValue, isValidUrl, fetchWithRetry, findAudioGroupOrLang, ItemIsEmpty } = require("./util");
 const m3u8 = require("@eyevinn/m3u8");
 
 const SwitcherState = Object.freeze({
@@ -116,9 +117,16 @@ class StreamSwitcher {
           if (isValidUrl(prerollUri)) {
             try {
               const segments = await this._loadPreroll(prerollUri);
+              if (this.useDemuxedAudio && ItemIsEmpty(segments.audioSegments)) {
+                const errmsg = `[${this.sessionId}]: Preroll is not demuxed. Preroll from uri=${prerollUri} will not be used.`;
+                debug(errmsg);
+                console.error("WARNING! " + errmsg);
+              }
               const prerollItem = {
-                segments: segments,
+                segments: segments.mediaSegments,
+                audioSegments: segments.audioSegments,
                 maxAge: tsNow + 30 * 60 * 1000,
+                isValid: this.useDemuxedAudio ? !ItemIsEmpty(segments.audioSegments) : true
               };
               this.prerollsCache[this.sessionId] = prerollItem;
             } catch (err) {
@@ -157,7 +165,7 @@ class StreamSwitcher {
         validURI = await this._validURI(scheduleObj.uri);
         tries++;
         if (!validURI) {
-          const delayMs = tries * 500;
+          const delayMs = (tries * tries * 100);
           debug(`[${this.sessionId}]: Going to try validating Master URI again in ${delayMs}ms`);
           await timer(delayMs);
         }
@@ -225,6 +233,12 @@ class StreamSwitcher {
     let currLiveCounts = 0;
     let currVodSegments = null;
     let eventSegments = null;
+
+    let liveAudioSegments = null;
+    let currVodAudioSegments = null;
+    let eventAudioSegments = null;
+
+
     let liveUri = null;
 
     switch (state) {
@@ -234,19 +248,29 @@ class StreamSwitcher {
           this.eventId = scheduleObj.eventId;
           currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
           currVodSegments = await session.getCurrentMediaSequenceSegments({ targetMseq: currVodCounts.vodMediaSeqVideo });
+          if (this.useDemuxedAudio) {
+            currVodAudioSegments = await session.getCurrentAudioSequenceSegments({ targetMseq: currVodCounts.vodMediaSeqAudio });
+          }
 
           // Insert preroll if available for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             currVodSegments = this._mergeSegments(prerollSegments, currVodSegments, false);
+            if (this.useDemuxedAudio) {
+
+              const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+              this._insertTimedMetadataAudio(prerollAudioSegments, scheduleObj.timedMetadata || {});
+              currVodAudioSegments = this._mergeAudioSegments(prerollAudioSegments, currVodAudioSegments, false);
+            }
           }
 
           // In risk that the SL-playhead might have updated some data after
           // we reset last time... we should Reset SessionLive before sending new data.
           await sessionLive.resetLiveStoreAsync(0);
-          await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
+          await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.discSeqAudio);
           await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
+          await sessionLive.setCurrentAudioSequenceSegments(currVodAudioSegments);
           liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
           if (!liveUri) {
@@ -275,8 +299,10 @@ class StreamSwitcher {
           this.eventId = scheduleObj.eventId;
           currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
+          eventAudioSegments = await session.getTruncatedVodAudioSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
-          if (!eventSegments) {
+
+          if (!eventSegments || (this.useDemuxedAudio && !eventAudioSegments)) {
             debug(`[${this.sessionId}]: [ ERROR Switching from V2L->VOD ]`);
             this.working = false;
             this.eventId = null;
@@ -284,13 +310,17 @@ class StreamSwitcher {
           }
 
           // Insert preroll if available for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
+            if (this.useDemuxedAudio) {
+              const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+              eventAudioSegments = this._mergeAudioSegments(prerollAudioSegments, eventAudioSegments, true);
+            }
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
-          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+          await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq);
+          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true, eventAudioSegments, 0);
 
           this.working = false;
           debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
@@ -307,32 +337,40 @@ class StreamSwitcher {
           debug(`[${this.sessionId}]: [ INIT Switching from LIVE->V2L ]`);
           this.eventId = null;
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          if (this.useDemuxedAudio) {
+            liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
+          }
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
-
-          if (this._isEmpty(liveSegments.currMseqSegs)) {
+          if (this._isEmpty(liveSegments.currMseqSegs) || (this.useDemuxedAudio && this._isEmpty(liveAudioSegments.currMseqSegs))) {
             this.working = false;
             this.streamTypeLive = false;
             debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
             return false;
           }
-
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             liveSegments.currMseqSegs = this._mergeSegments(prerollSegments, liveSegments.currMseqSegs, false);
             liveSegments.segCount += prerollSegments.length;
+            if (this.useDemuxedAudio) {
+              const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+              liveAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollAudioSegments, liveAudioSegments.currMseqSegs, false);
+              liveAudioSegments.segCount += prerollAudioSegments.length;
+            }
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq);
-          await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq, liveCounts.audioSeq, liveCounts.audioDiscSeq);
+          if (this.useDemuxedAudio) {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
+          } else {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false);
+          }
 
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
-
           this.working = false;
           this.streamTypeLive = false;
           debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
@@ -341,7 +379,7 @@ class StreamSwitcher {
           this.streamTypeLive = false;
           this.working = false;
           this.eventId = null;
-          debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ]`);
+          debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ] ${err}`);
           throw new Error(err);
         }
       case SwitcherState.LIVE_TO_VOD:
@@ -350,9 +388,12 @@ class StreamSwitcher {
           // TODO: Not yet fully tested/supported
           this.eventId = scheduleObj.eventId;
           liveSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
-
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
+          eventAudioSegments = await session.getTruncatedVodAudioSegments(scheduleObj.uri, scheduleObj.duration / 1000);
+
+
           if (!eventSegments) {
             debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->VOD ]`);
             this.streamTypeLive = false;
@@ -361,19 +402,28 @@ class StreamSwitcher {
             return false;
           }
 
-          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1);
-          await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1, liveCounts.audioSeq - 1, liveCounts.audioDiscSeq - 1);
+          if (this.useDemuxedAudio) {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
+          } else {
+            await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
+          }
 
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
+
+            if (this.useDemuxedAudio) {
+              const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
+              eventAudioSegments = this._mergeAudioSegments(prerollAudioSegments, eventAudioSegments, true);
+            }
           }
           await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
 
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
-          
+
           this.working = false;
           this.streamTypeLive = false;
           debug(`[${this.sessionId}]: Switched from LIVE->VOD`);
@@ -391,20 +441,31 @@ class StreamSwitcher {
           // TODO: Not yet fully tested/supported
           this.eventId = scheduleObj.eventId;
           eventSegments = await sessionLive.getCurrentMediaSequenceSegments();
+          eventAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
           await sessionLive.resetSession();
           await sessionLive.resetLiveStoreAsync(0);
 
           // Insert preroll, if available, for current channel
-          if (this.prerollsCache[this.sessionId]) {
+          if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
+
+            if (this.useDemuxedAudio) {
+              const prerollSegmentsAudio = this.prerollsCache[this.sessionId].audioSegments;
+              this._insertTimedMetadataAudio(prerollSegmentsAudio, scheduleObj.timedMetadata || {});
+              eventSegments.currMseqSegs = this._mergeAudioSegments(prerollSegmentsAudio, eventAudioSegments.currMseqSegs, false);
+            }
           }
 
-          await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq);
+          const faild = await sessionLive.setCurrentMediaAndDiscSequenceCount(currLiveCounts.mediaSeq, currLiveCounts.discSeq, currLiveCounts.audioSeq, currLiveCounts.audioDiscSeq);
+          if (!faild) {
+            console.error("cound not set switch live-> live", currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq)
+          }
           await sessionLive.setCurrentMediaSequenceSegments(eventSegments.currMseqSegs);
+          await sessionLive.setCurrentAudioSequenceSegments(eventAudioSegments.currMseqSegs);
           liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
           if (!liveUri) {
@@ -447,6 +508,9 @@ class StreamSwitcher {
   }
 
   async _validURI(uri) {
+    if (!uri) {
+      return false;
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       debug(`[${this.sessionId}]: Request Timeout @ ${uri}`);
@@ -470,8 +534,11 @@ class StreamSwitcher {
 
   async _loadPreroll(uri) {
     const prerollSegments = {};
+    const prerollSegmentsAudio = {};
     const mediaM3UPlaylists = {};
     const mediaURIs = {};
+    const audioURIs = {};
+    const audioM3UPlaylists = {};
     try {
       const m3u = await this._fetchParseM3u8(uri);
       debug(`[${this.sessionId}]: ...Fetched a New Preroll Slate Master Manifest from:\n${uri}`);
@@ -481,21 +548,69 @@ class StreamSwitcher {
         for (let i = 0; i < m3u.items.StreamItem.length; i++) {
           const streamItem = m3u.items.StreamItem[i];
           const bw = streamItem.get("bandwidth");
+
+
           const mediaUri = streamItem.get("uri");
           if (mediaUri.match("^http")) {
             mediaURIs[bw] = mediaUri;
           } else {
             mediaURIs[bw] = new URL(mediaUri, uri).href;
           }
+
+          if (streamItem.get("audio")) {
+            const audioGroupId = streamItem.get("audio")
+            audioURIs[audioGroupId] = {};
+            let audioGroupItems = m3u.items.MediaItem.filter((item) => {
+              return item.get("type") === "AUDIO" && item.get("group-id") === audioGroupId;
+            });
+            let audioLanguages = audioGroupItems.map((item) => {
+              let itemLang;
+              if (!item.get("language")) {
+                itemLang = item.get("name");
+              } else {
+                itemLang = item.get("language");
+              }
+              audioURIs[audioGroupId][itemLang] = [];
+              return itemLang;
+            });
+            for (let j = 0; j < audioGroupItems.length; j++) {
+              const mediaUri = audioGroupItems[j].get("uri");
+              if (mediaUri.match("^http")) {
+                audioURIs[audioGroupId][audioLanguages[j]] = mediaUri;
+              } else {
+                audioURIs[audioGroupId][audioLanguages[j]] = new URL(mediaUri, uri).href;
+              }
+            }
+          }
+        }
+
+        if (this.useDemuxedAudio && !audioURIs) {
+          throw new Error("Preroll is not demuxed");
         }
 
         // Fetch and parse Media URIs
         const bandwidths = Object.keys(mediaURIs);
         const loadMediaPromises = [];
+        const loadAudioPromises = [];
         // Queue up...
-        bandwidths.forEach((bw) => loadMediaPromises.push(this._fetchParseM3u8(mediaURIs[bw])));
+        bandwidths.forEach(
+          (bw) => loadMediaPromises.push(
+            this._fetchParseM3u8(mediaURIs[bw])
+          ));
+        if (this.useDemuxedAudio) {
+          const groupIds = Object.keys(audioURIs);
+          for (let i = 0; i < groupIds.length; i++) {
+            const groupId = groupIds[i];
+            const langs = Object.keys(audioURIs[groupId]);
+            for (let j = 0; j < langs.length; j++) {
+              const lang = langs[j];
+              loadAudioPromises.push(this._fetchParseM3u8(audioURIs[groupId][lang]));
+            }
+          }
+        }
         // Execute...
         const results = await Promise.allSettled(loadMediaPromises);
+        const resultsAudio = await Promise.allSettled(loadAudioPromises);
         // Process...
         results.forEach((item, idx) => {
           if (item.status === "fulfilled" && item.value) {
@@ -504,6 +619,18 @@ class StreamSwitcher {
             mediaM3UPlaylists[bw] = resultM3U.items.PlaylistItem;
           }
         });
+
+        if (resultsAudio) {
+          resultsAudio.forEach((item, idx) => {
+            const resultM3U = item.value;
+            const indexes = this._getGroupAndLangIdxFromIdx(idx, audioURIs)
+            if (!audioM3UPlaylists[indexes.groupId]) {
+              audioM3UPlaylists[indexes.groupId] = {};
+            }
+            audioM3UPlaylists[indexes.groupId][indexes.lang] = resultM3U.items.PlaylistItem;
+          });
+        }
+
       } else if (m3u.items.PlaylistItem.length > 0) {
         // Process the Media M3U.
         const arbitraryBw = 1;
@@ -520,81 +647,163 @@ class StreamSwitcher {
         if (!prerollSegments[bw]) {
           prerollSegments[bw] = [];
         }
-        for (let k = 0; k < mediaM3UPlaylists[bw].length; k++) {
-          let seg = {};
-          let playlistItem = mediaM3UPlaylists[bw][k];
-          let segmentUri;
-          let cueData = null;
-          let daterangeData = null;
-          let attributes = playlistItem["attributes"].attributes;
-          if (playlistItem.properties.discontinuity) {
-            prerollSegments[bw].push({ discontinuity: true });
-          }
-          if ("cuein" in attributes) {
-            if (!cueData) {
-              cueData = {};
+        prerollSegments[bw] = this._createCustomSimpleSegmentList(mediaM3UPlaylists[bw], mediaURIs[bw]);
+      }
+      if (this.useDemuxedAudio) {
+        const groupIds = Object.keys(audioM3UPlaylists);
+        for (let i = 0; i < groupIds.length; i++) {
+          const groupId = groupIds[i];
+          const langs = Object.keys(audioM3UPlaylists[groupId]);
+          for (let j = 0; j < langs.length; j++) {
+            const lang = langs[j];
+            if (!prerollSegmentsAudio[groupId]) {
+              prerollSegmentsAudio[groupId] = {};
             }
-            cueData["in"] = true;
-          }
-          if ("cueout" in attributes) {
-            if (!cueData) {
-              cueData = {};
+            if (!prerollSegmentsAudio[groupId][lang]) {
+              prerollSegmentsAudio[groupId][lang] = [];
             }
-            cueData["out"] = true;
-            cueData["duration"] = attributes["cueout"];
+            prerollSegmentsAudio[groupId][lang] = this._createCustomSimpleSegmentList(audioM3UPlaylists[groupId][lang], audioURIs[groupId][lang]);
           }
-          if ("cuecont" in attributes) {
-            if (!cueData) {
-              cueData = {};
-            }
-            cueData["cont"] = true;
-          }
-          if ("scteData" in attributes) {
-            if (!cueData) {
-              cueData = {};
-            }
-            cueData["scteData"] = attributes["scteData"];
-          }
-          if ("assetData" in attributes) {
-            if (!cueData) {
-              cueData = {};
-            }
-            cueData["assetData"] = attributes["assetData"];
-          }
-          if ("daterange" in attributes) {
-            if (!daterangeData) {
-              daterangeData = {};
-            }
-            let allDaterangeAttributes = Object.keys(attributes["daterange"]);
-            allDaterangeAttributes.forEach((attr) => {
-              if (attr.match(/DURATION$/)) {
-                daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
-              } else {
-                daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
-              }
-            });
-          }
-          if (playlistItem.properties.uri) {
-            if (playlistItem.properties.uri.match("^http")) {
-              segmentUri = playlistItem.properties.uri;
-            } else {
-              segmentUri = new URL(playlistItem.properties.uri, mediaURIs[bw]).href;
-            }
-            seg["duration"] = playlistItem.properties.duration;
-            seg["uri"] = segmentUri;
-            seg["cue"] = cueData;
-            if (daterangeData) {
-              seg["daterange"] = daterangeData;
-            }
-          }
-          prerollSegments[bw].push(seg);
         }
       }
       debug(`[${this.sessionId}]: Loaded all Variants of the Preroll Slate!`);
-      return prerollSegments;
+      return { mediaSegments: prerollSegments, audioSegments: prerollSegmentsAudio };
     } catch (err) {
       throw new Error(err);
     }
+  }
+
+  _createCustomSimpleSegmentList(segmentList, manifestURI) {
+    let segments = [];
+    for (let k = 0; k < segmentList.length; k++) {
+      try {
+        let seg = {};
+        const playlistItem = segmentList[k];
+        let segmentUri;
+        let byteRange = undefined;
+        let initSegment = undefined;
+        let initSegmentByteRange = undefined;
+        let keys = undefined;
+        let daterangeData = null;
+        let attributes = playlistItem["attributes"].attributes;
+        if (playlistItem.get("map-uri")) {
+          initSegmentByteRange = playlistItem.get("map-byterange");
+          if (playlistItem.get("map-uri").match("^http")) {
+            initSegment = playlistItem.get("map-uri");
+          } else {
+            initSegment = new URL(playlistItem.get("map-uri"), manifestURI).href;
+          }
+        }
+        // some items such as CUE-IN parse as a PlaylistItem
+        // but have no URI
+        if (playlistItem.get("uri")) {
+          if (playlistItem.get("uri").match("^http")) {
+            segmentUri = playlistItem.get("uri");
+          } else {
+            segmentUri = new URL(playlistItem.get("uri"), manifestURI).href;
+          }
+        }
+        if (playlistItem.get("discontinuity")) {
+          segments.push({ discontinuity: true });
+        }
+        if (playlistItem.get("byteRange")) {
+          let [_, r, o] = playlistItem.get("byteRange").match(/^(\d+)@*(\d*)$/);
+          if (!o) {
+            o = byteRangeOffset;
+          }
+          byteRangeOffset = parseInt(r) + parseInt(o);
+          byteRange = `${r}@${o}`;
+        }
+        if (playlistItem.get("keys")) {
+          keys = playlistItem.get("keys");
+        }
+        let assetData = playlistItem.get("assetdata");
+        let cueOut = playlistItem.get("cueout");
+        let cueIn = playlistItem.get("cuein");
+        let cueOutCont = playlistItem.get("cont-offset");
+        let duration = 0;
+        let scteData = playlistItem.get("sctedata");
+        if (typeof cueOut !== "undefined") {
+          duration = cueOut;
+        } else if (typeof cueOutCont !== "undefined") {
+          duration = playlistItem.get("cont-dur");
+        }
+        let cue =
+          cueOut || cueIn || cueOutCont || assetData
+            ? {
+                out: typeof cueOut !== "undefined",
+                cont: typeof cueOutCont !== "undefined" ? cueOutCont : null,
+                scteData: typeof scteData !== "undefined" ? scteData : null,
+                in: cueIn ? true : false,
+                duration: duration,
+                assetData: typeof assetData !== "undefined" ? assetData : null,
+              }
+            : null;
+        seg = {
+          duration: playlistItem.get("duration"),
+          timelinePosition: this.timeOffset != null ? this.timeOffset + timelinePosition : null,
+          cue: cue,
+          byteRange: byteRange,
+        };
+        if (initSegment) {
+          seg.initSegment = initSegment;
+        }
+        if (initSegmentByteRange) {
+          seg.initSegmentByteRange = initSegmentByteRange;
+        }
+        if (segmentUri) {
+          seg.uri = segmentUri;
+        }
+        if (keys) {
+          seg.keys = keys;
+        }
+        if (segments.length === 0) {
+          // Add daterange metadata if this is the first segment
+          if (this.rangeMetadata && !this._isEmpty(this.rangeMetadata)) {
+            seg["daterange"] = this.rangeMetadata;
+          }
+        }
+        if ("daterange" in attributes) {
+          if (!daterangeData) {
+            daterangeData = {};
+          }
+          let allDaterangeAttributes = Object.keys(attributes["daterange"]);
+          allDaterangeAttributes.forEach((attr) => {
+            if (attr.match(/DURATION$/)) {
+              daterangeData[attr.toLowerCase()] = parseFloat(attributes["daterange"][attr]);
+            } else {
+              daterangeData[attr.toLowerCase()] = attributes["daterange"][attr];
+            }
+          });
+        }
+        if (playlistItem.properties.uri) {
+          if (daterangeData && !this._isEmpty(this.daterangeData)) {
+            seg["daterange"] = daterangeData;
+          }
+        }
+        segments.push(seg);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return segments
+  }
+
+  _getGroupAndLangIdxFromIdx(idx, audioObject) {
+    const startIdx = 0;
+    let answerFound = false;
+    let storedLength = 0;
+    while (!answerFound) {
+      let groupIds = Object.keys(audioObject);
+      let langs = Object.keys(audioObject[groupIds[startIdx]]);
+      if (langs.length + storedLength > idx) {
+        answerFound = true
+      } else {
+        storedLength = langs.length;
+        startIdx++;
+      }
+    }
+    return { groupId: groupIds[startIdx], lang: langs[idx - storedLength] }
   }
 
   // Input: hls vod uri. Output: an M3U object.
@@ -629,7 +838,7 @@ class StreamSwitcher {
       } else {
         const lastSeg = toSegments[bw][toSegments[bw].length - 1];
         if (lastSeg.uri && !lastSeg.discontinuity) {
-          toSegments[bw].push({ discontinuity: true, cue: { in: true } });
+          toSegments[bw].push({ discontinuity: true});
           OUTPUT_SEGMENTS[bw] = toSegments[bw].concat(fromSegments[targetBw]);
         } else if (lastSeg.discontinuity && !lastSeg.cue) {
           toSegments[bw][toSegments[bw].length - 1].cue = { in: true }
@@ -640,6 +849,50 @@ class StreamSwitcher {
         }
       }
     });
+    return OUTPUT_SEGMENTS;
+  }
+
+  _mergeAudioSegments(fromSegments, toSegments, prepend) {
+    const OUTPUT_SEGMENTS = {};
+    const fromGroups = Object.keys(fromSegments);
+    const toGroups = Object.keys(toSegments);
+
+    for (let i = 0; i < toGroups.length; i++) {
+      const groupId = toGroups[i];
+      if (!OUTPUT_SEGMENTS[groupId]) {
+        OUTPUT_SEGMENTS[groupId] = {}
+      }
+      const toLangs = Object.keys(toSegments[groupId])
+      
+      for (let j = 0; j < toLangs.length; j++) {
+        const lang = toLangs[j];
+        if (!OUTPUT_SEGMENTS[groupId][lang]) {
+          OUTPUT_SEGMENTS[groupId][lang] = [];
+        }
+
+        const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+        const fromLangs = Object.keys(fromSegments[targetGroupId]);
+        const targetLang = findAudioGroupOrLang(lang, fromLangs);
+        if (prepend) {
+          OUTPUT_SEGMENTS[groupId][lang] = fromSegments[targetGroupId][targetLang].concat(toSegments[groupId][lang]);
+          OUTPUT_SEGMENTS[groupId][lang].unshift({ discontinuity: true });
+        } else {
+          const size = toSegments[groupId][lang].length;
+          const lastSeg = toSegments[groupId][lang][size - 1];
+          if (lastSeg.uri && !lastSeg.discontinuity) {
+            toSegments[groupId][lang].push({ discontinuity: true });
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+          } else if (lastSeg.discontinuity && !lastSeg.cue) {
+            console.log("lastSeg", lastSeg, toSegments[groupId][lang], 666)
+            toSegments[targetGroupId][lang][toSegments[groupId][lang].length - 1].cue = { in: true }
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+          } else {
+            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+            OUTPUT_SEGMENTS[groupId][lang].push({ discontinuity: true });
+          }
+        }
+      }
+    };
     return OUTPUT_SEGMENTS;
   }
 
@@ -654,8 +907,33 @@ class StreamSwitcher {
           daterangeData[k] = timedMetadata[k];
         });
       }
-      segments[bw][0]["daterange"] = daterangeData;
+      if (Object.keys(daterangeData).length > 0) {
+        segments[bw][0]["daterange"] = daterangeData;
+      }
     });
+  }
+
+  _insertTimedMetadataAudio(segments, timedMetadata) {
+    const groupIds = Object.keys(segments);
+    debug(`[${this.sessionId}]: Inserting timed metadata ${Object.keys(timedMetadata).join(',')}`);
+    for (let i = 0; i < groupIds.length; i++) {
+      const groupId = groupIds[i];
+      const langs = Object.keys(segments[groupId]);
+      for (let j = 0; j < langs.length; j++) {
+        const lang = langs[j];
+        let daterangeData = segments[groupId][lang][0]["daterange"];
+        if (!daterangeData) {
+          daterangeData = {};
+          Object.keys(timedMetadata).forEach((k) => {
+            daterangeData[k] = timedMetadata[k];
+          });
+        }
+        if (Object.keys(daterangeData).length > 0) {
+          segments[groupId][lang][0]["daterange"] = daterangeData;
+        }
+      }
+
+    }
   }
 }
 
