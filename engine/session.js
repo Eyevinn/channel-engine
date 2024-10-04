@@ -501,7 +501,7 @@ class Session {
         let mediaSequenceValue = 0;
         if (currentVod.sequenceAlwaysContainNewSegments) {
           mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
-          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
+          debug(`[${this._sessionId}]: V{${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
         } else {
           mediaSequenceValue = playheadState.vodMediaSeqVideo;
         }
@@ -556,7 +556,7 @@ class Session {
         let audioSequenceValue = 0;
         if (currentVod.sequenceAlwaysContainNewSegments) {
           audioSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
-          debug(`[${this._sessionId}]: {${audioSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}}`);
+          debug(`[${this._sessionId}]: A{${audioSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}}`);
         } else {
           audioSequenceValue = playheadState.vodMediaSeqAudio;
         }

@@ -385,7 +385,7 @@ describe("The initialize switching", () => {
     await sessionLive.setCurrentMediaSequenceSegments(mockLiveSegments);
     await sessionLive.setLiveUri(mockLiveUri);
 
-    sessionLive.mediaSeqCount += 7;
+    sessionLive.mediaSeqCountVideo += 7;
 
     const currCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
     const currSegments = await sessionLive.getCurrentMediaSequenceSegments();

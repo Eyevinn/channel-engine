@@ -43,14 +43,14 @@ class SessionLive {
     this.sessionId = crypto.randomBytes(20).toString("hex");
     this.sessionLiveStateStore = sessionLiveStore.sessionLiveStateStore;
     this.instanceId = sessionLiveStore.instanceId;
-    this.mediaSeqCount = 0;
-    this.prevMediaSeqCount = 0;
-    this.discSeqCount = 0;
-    this.prevDiscSeqCount = 0;
-    this.audioSeqCount = 0;
-    this.prevAudioSeqCount = 0;
-    this.audioDiscSeqCount = 0;
-    this.prevAudioDiscSeqCount = 0;
+    this.mediaSeqCountVideo = 0;
+    this.mediaSeqCountAudio = 0;
+    this.prevMediaSeqCountVideo = 0;
+    this.prevMediaSeqCountAudio = 0;
+    this.discSeqCountVideo = 0;
+    this.discSeqCountAudio = 0;
+    this.prevDiscSeqCountVideo = 0;
+    this.prevDiscSeqCountAudio = 0;
     this.targetDuration = 0;
     this.masterManifestUri = null;
     this.vodSegments = {};
@@ -58,12 +58,12 @@ class SessionLive {
     this.mediaManifestURIs = {};
     this.audioManifestURIs = {};
     this.liveSegQueue = {};
-    this.lastRequestedMediaSeqRaw = null;
+    this.lastRequestedMediaSeqRawVideo = null;
     this.prevSeqBottomVideoSegUri = null;
     this.prevSeqBottomAudioSegUri = null;
     this.liveSourceM3Us = {};
     this.liveSegQueueAudio = {};
-    this.lastRequestedAudioSeqRaw = null;
+    this.lastRequestedMediaSeqRawAudio = null;
     this.liveAudioSourceM3Us = {};
     this.playheadState = PlayheadState.IDLE;
     this.liveSegsForFollowers = {};
@@ -122,18 +122,18 @@ class SessionLive {
     );
     await timer(resetDelay);
     await this.sessionLiveState.set("liveSegsForFollowers", null);
-    await this.sessionLiveState.set("lastRequestedMediaSeqRaw", null);
+    await this.sessionLiveState.set("lastRequestedMediaSeqRawVideo", null);
     await this.sessionLiveState.set("liveSegsForFollowersAudio", null);
-    await this.sessionLiveState.set("lastRequestedAudioSeqRaw", null);
+    await this.sessionLiveState.set("lastRequestedMediaSeqRawAudio", null);
     await this.sessionLiveState.set("transitSegs", null);
     await this.sessionLiveState.set("transitSegsAudio", null);
     await this.sessionLiveState.set("firstCounts", {
-      liveSourceMseqCount: null,
-      liveSourceAudioMseqCount: null,
-      mediaSeqCount: null,
-      audioSeqCount: null,
-      discSeqCount: null,
-      audioDiscSeqCount: null,
+      liveSourceMseqCountVideo: null,
+      liveSourceMseqCountAudio: null,
+      mediaSeqCountVideo: null,
+      mediaSeqCountAudio: null,
+      discSeqCountVideo: null,
+      discSeqCountAudio: null,
     });
     debug(`[${this.instanceId}][${this.sessionId}]: LEADER: SessionLive values in Store have now been reset!`);
   }
@@ -149,12 +149,12 @@ class SessionLive {
       await timer(1000);
     }
 
-    this.mediaSeqCount = 0;
-    this.prevMediaSeqCount = 0;
-    this.discSeqCount = 0;
-    this.audioSeqCount = 0;
-    this.prevAudioSeqCount = 0;
-    this.audioDiscSeqCount = 0;
+    this.mediaSeqCountVideo = 0;
+    this.prevMediaSeqCountVideo = 0;
+    this.discSeqCountVideo = 0;
+    this.mediaSeqCountAudio = 0;
+    this.prevMediaSeqCountAudio = 0;
+    this.discSeqCountAudio = 0;
     this.targetDuration = 0;
     this.masterManifestUri = null;
     this.vodSegments = {};
@@ -163,8 +163,8 @@ class SessionLive {
     this.audioManifestURIs = {};
     this.liveSegQueue = {};
     this.liveSegQueueAudio = {};
-    this.lastRequestedMediaSeqRaw = null;
-    this.lastRequestedAudioSeqRaw = null;
+    this.lastRequestedMediaSeqRawVideo = null;
+    this.lastRequestedMediaSeqRawAudio = null;
     this.prevSeqBottomVideoSegUri = null;
     this.prevSeqBottomAudioSegUri = null;
     this.liveSourceM3Us = {};
@@ -401,7 +401,7 @@ class SessionLive {
         }
       }
     } else {
-      debug(`[${this.sessionId}]: 'vodSegmentsAudio' not empty = Using 'transitSegs'`);
+      debug(`[${this.sessionId}]: 'vodSegmentsAudio' not empty = Using 'transitSegsAudio'`);
     }
     debug(
       `[${this.sessionId}]: Setting CurrentAudioSequenceSegments. First seg is: [${
@@ -412,8 +412,8 @@ class SessionLive {
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (isLeader) {
       //debug(`[${this.sessionId}]: LEADER: I am adding 'transitSegs'=${JSON.stringify(this.vodSegments)} to Store for future followers`);
-      await this.sessionLiveState.set("transitSegs", this.vodSegmentsAudio);
-      debug(`[${this.sessionId}]: LEADER: I am adding 'transitSegs' to Store for future followers`);
+      await this.sessionLiveState.set("transitSegsAudio", this.vodSegmentsAudio);
+      debug(`[${this.sessionId}]: LEADER: I am adding 'transitSegsAudio' to Store for future followers`);
     }
   }
 
@@ -427,12 +427,12 @@ class SessionLive {
       return false;
     }
     debug(
-      `[${this.sessionId}]: Setting mediaSeqCount, discSeqCount, audioSeqCount and audioDiscSeqCount to: [${mediaSeq}]:[${discSeq}], [${audioMediaSeq}]:[${audioDiscSeq}]`
+      `[${this.sessionId}]: Setting mediaSeqCountVideo, discSeqCountVideo, mediaSeqCountAudio and discSeqCountAudio to-> [${mediaSeq}]:[${discSeq}], [${audioMediaSeq}]:[${audioDiscSeq}]`
     );
-    this.mediaSeqCount = mediaSeq;
-    this.discSeqCount = discSeq;
-    this.audioSeqCount = audioMediaSeq;
-    this.audioDiscSeqCount = audioDiscSeq;
+    this.mediaSeqCountVideo = mediaSeq;
+    this.discSeqCountVideo = discSeq;
+    this.mediaSeqCountAudio = audioMediaSeq;
+    this.discSeqCountAudio = audioDiscSeq;
 
     // IN CASE: New/Respawned Node Joins the Live Party
     // Don't use what Session gave you. Use the Leaders number if it's available
@@ -440,49 +440,49 @@ class SessionLive {
     let liveCounts = await this.sessionLiveState.get("firstCounts");
     if (liveCounts === null) {
       liveCounts = {
-        liveSourceMseqCount: null,
-        mediaSeqCount: null,
-        discSeqCount: null,
-        liveSourceAudioMseqCount: null,
-        audioSeqCount: null,
-        audioDiscSeqCount: null,
+        liveSourceMseqCountVideo: null,
+        mediaSeqCountVideo: null,
+        discSeqCountVideo: null,
+        liveSourceMseqCountAudio: null,
+        mediaSeqCountAudio: null,
+        discSeqCountAudio: null,
       };
     }
     if (isLeader) {
-      liveCounts.discSeqCount = this.discSeqCount;
-      liveCounts.audioDiscSeqCount = this.audioDiscSeqCount;
+      liveCounts.discSeqCountVideo = this.discSeqCountVideo;
+      liveCounts.discSeqCountAudio = this.discSeqCountAudio;
       await this.sessionLiveState.set("firstCounts", liveCounts);
     } else {
-      const leadersMediaSeqCount = liveCounts.mediaSeqCount;
-      const leadersDiscSeqCount = liveCounts.discSeqCount;
-      const leadersAudioSeqCount = liveCounts.audioSeqCount;
-      const leadersAudioDiscSeqCount = liveCounts.audioDiscSeqCount;
+      const prevDiscSeqCountVideo = liveCounts.mediaSeqCountVideo;
+      const leadersDiscSeqCountVideo = liveCounts.discSeqCountVideo;
+      const leadersMediaSeqCountAudio = liveCounts.mediaSeqCountAudio;
+      const leadersDiscSeqCountAudio = liveCounts.discSeqCountAudio;
 
-      if (leadersMediaSeqCount !== null) {
-        this.mediaSeqCount = leadersMediaSeqCount;
-        debug(`[${this.sessionId}]: Setting mediaSeqCount to: [${this.mediaSeqCount}]`);
+      if (prevDiscSeqCountVideo !== null) {
+        this.mediaSeqCountVideo = prevDiscSeqCountVideo;
+        debug(`[${this.sessionId}]: Setting mediaSeqCountVideo to: [${this.mediaSeqCountVideo}]`);
         const transitSegs = await this.sessionLiveState.get("transitSegs");
         if (!this._isEmpty(transitSegs)) {
           debug(`[${this.sessionId}]: Getting and loading 'transitSegs'`);
           this.vodSegments = transitSegs;
         }
       }
-      if (leadersAudioSeqCount !== null) {
-        this.audioSeqCount = leadersAudioSeqCount;
-        debug(`[${this.sessionId}]: Setting mediaSeqCount to: [${this.audioSeqCount}]`);
-        const transitAudioSegs = await this.sessionLiveState.get("transitAudioSegs");
-        if (!this._isEmpty(transitAudioSegs)) {
-          debug(`[${this.sessionId}]: Getting and loading 'transitSegs'`);
-          this.vodSegmentsAudio = transitAudioSegs;
+      if (leadersMediaSeqCountAudio !== null) {
+        this.mediaSeqCountAudio = leadersMediaSeqCountAudio;
+        debug(`[${this.sessionId}]: Setting mediaSeqCountAudio to: [${this.mediaSeqCountAudio}]`);
+        const transitSegsAudio = await this.sessionLiveState.get("transitSegsAudio");
+        if (!this._isEmpty(transitSegsAudio)) {
+          debug(`[${this.sessionId}]: Getting and loading 'transitSegsAudio'`);
+          this.vodSegmentsAudio = transitSegsAudio;
         }
       }
-      if (leadersDiscSeqCount !== null) {
-        this.discSeqCount = leadersDiscSeqCount;
-        debug(`[${this.sessionId}]: Setting discSeqCount to: [${this.discSeqCount}]`);
+      if (leadersDiscSeqCountVideo !== null) {
+        this.discSeqCountVideo = leadersDiscSeqCountVideo;
+        debug(`[${this.sessionId}]: Setting discSeqCountVideo to: [${this.discSeqCount}]`);
       }
-      if (leadersAudioDiscSeqCount !== null) {
-        this.audioDiscSeqCount = leadersAudioDiscSeqCount;
-        debug(`[${this.sessionId}]: Setting discSeqCount to: [${this.audioDiscSeqCount}]`);
+      if (leadersDiscSeqCountAudio !== null) {
+        this.discSeqCountAudio = leadersDiscSeqCountAudio;
+        debug(`[${this.sessionId}]: Setting discSeqCountAudio to: [${this.discSeqCountAudio}]`);
       }
     }
     return true;
@@ -506,9 +506,9 @@ class SessionLive {
     this.allowedToSet = false;
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
-      const leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
-      if (leadersMediaSeqRaw > this.lastRequestedMediaSeqRaw) {
-        this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
+      const leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
+      if (leadersMediaSeqRaw > this.lastRequestedMediaSeqRawVideo) {
+        this.lastRequestedMediaSeqRawVideo = leadersMediaSeqRaw;
         this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
         this._updateLiveSegQueue();
       }
@@ -537,7 +537,7 @@ class SessionLive {
       debug(`[${this.sessionId}]: Getting current media segments for bw=${bw}`);
     }
 
-    this.discSeqCount += increment;
+    this.discSeqCountVideo += increment;
     return {
       currMseqSegs: currentMediaSequenceSegments,
       segCount: segmentCount,
@@ -554,9 +554,9 @@ class SessionLive {
     this.allowedToSet = false;
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
-      const leadersAudioSeqRaw = await this.sessionLiveState.get("lastRequestedAudioSeqRaw");
-      if (leadersAudioSeqRaw > this.lastRequestedAudioSeqRaw) {
-        this.lastRequestedAudioSeqRaw = leadersAudioSeqRaw;
+      const leadersAudioSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawAudio");
+      if (leadersAudioSeqRaw > this.lastRequestedMediaSeqRawAudio) {
+        this.lastRequestedMediaSeqRawAudio = leadersAudioSeqRaw;
         this.liveSegsForFollowersAudio = await this.sessionLiveState.get("liveSegsForFollowersAudio");
         this._updateLiveSegQueueAudio();
       }
@@ -588,7 +588,7 @@ class SessionLive {
       });
       debug(`[${this.sessionId}]: Getting current audio segments for ${vodTargetTrack}`);
     }
-    this.audioDiscSeqCount += increment;
+    this.discSeqCountAudio += increment;
     return {
       currMseqSegs: currentAudioSequenceSegments,
       segCount: segmentCount,
@@ -597,12 +597,12 @@ class SessionLive {
 
   async getCurrentMediaAndDiscSequenceCount() {
     const counts = {
-      mediaSeq: this.mediaSeqCount,
-      discSeq: this.discSeqCount,
+      mediaSeq: this.mediaSeqCountVideo,
+      discSeq: this.discSeqCountVideo,
     };
     if (this.useDemuxedAudio) {
-      counts.audioSeq = this.audioSeqCount;
-      counts.audioDiscSeq = this.audioDiscSeqCount;
+      counts.audioSeq = this.mediaSeqCountAudio;
+      counts.audioDiscSeq = this.discSeqCountAudio;
     }
     return counts;
   }
@@ -859,18 +859,18 @@ class SessionLive {
   async _collectSegmentsFromStore() {
     try {
       // check if audio is enabled
-      let hasAudio = this.audioManifestURIs.length > 0 ? true : false;
+      let hasAudio = !this._isEmpty(this.audioManifestURIs) ? true : false;
       // -------------------------------------
       //  If I am a Follower-node then my job
       //  ends here, where I only read from store.
       // -------------------------------------
       let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-      if (!isLeader && this.lastRequestedMediaSeqRaw !== null) {
+      if (!isLeader && this.lastRequestedMediaSeqRawVideo !== null) {
         debug(`[${this.sessionId}]: FOLLOWER: Reading data from store!`);
 
-        let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+        let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
 
-        if (!leadersMediaSeqRaw < this.lastRequestedMediaSeqRaw && this.blockGenerateManifest) {
+        if (!leadersMediaSeqRaw < this.lastRequestedMediaSeqRawVideo && this.blockGenerateManifest) {
           this.blockGenerateManifest = false;
         }
 
@@ -896,7 +896,7 @@ class SessionLive {
           );
           await timer(waitTimeMs);
           this.timerCompensation = false;
-          leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+          leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
           attempts--;
         }
 
@@ -910,14 +910,14 @@ class SessionLive {
         attempts = 10;
         //  CHECK AGAIN CASE 2: Store Old
         while (
-          (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw && attempts > 0) ||
+          (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRawVideo && attempts > 0) ||
           (this._containsSegment(this.liveSegsForFollowers, liveSegsInStore) && attempts > 0)
         ) {
           if (!this.allowedToSet) {
             debug(`[${this.sessionId}]: We are about to switch away from LIVE. Abort fetching from Store`);
             break;
           }
-          if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+          if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRawVideo) {
             isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
             if (isLeader) {
               debug(`[${this.instanceId}][${this.sessionId}]: I'm the new leader`);
@@ -925,28 +925,28 @@ class SessionLive {
             }
           }
           if (this._containsSegment(this.liveSegsForFollowers, liveSegsInStore)) {
-            debug(`[${this.sessionId}]: FOLLOWER: _containsSegment=true,${leadersMediaSeqRaw},${this.lastRequestedMediaSeqRaw}`);
+            debug(`[${this.sessionId}]: FOLLOWER: _containsSegment=true,${leadersMediaSeqRaw},${this.lastRequestedMediaSeqRawVideo}`);
           }
           const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
           const waitTimeMs = parseInt(segDur / 3, 10);
           debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
           await timer(waitTimeMs);
           this.timerCompensation = false;
-          leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+          leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
           liveSegsInStore = await this.sessionLiveState.get("liveSegsForFollowers");
           liveSegsInStoreAudio = hasAudio ? await this.sessionLiveState.get("liveSegsForFollowersAudio") : null;
           attempts--;
         }
         // FINALLY
-        if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRaw) {
+        if (leadersMediaSeqRaw <= this.lastRequestedMediaSeqRawVideo) {
           debug(`[${this.instanceId}][${this.sessionId}]: The leader is still alive`);
           return;
         }
         // Follower updates its manifest building blocks (segment holders & counts)
-        this.lastRequestedMediaSeqRaw = leadersMediaSeqRaw;
+        this.lastRequestedMediaSeqRawVideo = leadersMediaSeqRaw;
         this.liveSegsForFollowers = liveSegsInStore;
         this.liveSegsForFollowersAudio = liveSegsInStoreAudio;
-        debug(
+        debug(hasAudio,
           `[${this.sessionId}]: These are the segments from store:\nV[${JSON.stringify(this.liveSegsForFollowers)}]${
             hasAudio ? `\nA[${JSON.stringify(this.liveSegsForFollowersAudio)}]` : ""
           }`
@@ -1059,26 +1059,26 @@ class SessionLive {
           this.liveSourceM3Us[variantKey] = variantItem.value;
         });
 
-        const audio_mediaseqcounts = [];
-        const video_mediaseqcounts = [];
-        const allStoredMediaSeqCounts = Object.keys(this.liveSourceM3Us).map((variant) => this.liveSourceM3Us[variant].mediaSeq);
+        const audio_mediaSeqCountVideos = [];
+        const video_mediaSeqCountVideos = [];
+        const allStoredMediaSeqCountsVideo = Object.keys(this.liveSourceM3Us).map((variant) => this.liveSourceM3Us[variant].mediaSeq);
         Object.keys(this.liveSourceM3Us).map((variantKey) => {
           if (!this._isBandwidth(variantKey)) {
-            audio_mediaseqcounts.push(this.liveSourceM3Us[variantKey].mediaSeq);
+            audio_mediaSeqCountVideos.push(this.liveSourceM3Us[variantKey].mediaSeq);
           } else {
-            video_mediaseqcounts.push(this.liveSourceM3Us[variantKey].mediaSeq);
+            video_mediaSeqCountVideos.push(this.liveSourceM3Us[variantKey].mediaSeq);
           }
         });
 
         let MSEQ_COUNTS_ARE_IN_SYNC = false;
-        if (allStoredMediaSeqCounts.every((val, i, arr) => val === arr[0])) {
+        if (allStoredMediaSeqCountsVideo.every((val, i, arr) => val === arr[0])) {
           MSEQ_COUNTS_ARE_IN_SYNC = true;
         } else {
           // dont assume the worst
-          if (video_mediaseqcounts.every((val, i, arr) => val === arr[0]) && audio_mediaseqcounts.every((val, i, arr) => val === arr[0])) {
+          if (video_mediaSeqCountVideos.every((val, i, arr) => val === arr[0]) && audio_mediaSeqCountVideos.every((val, i, arr) => val === arr[0])) {
             const MSEQ_DIFF_THRESHOLD = 2;
-            if (audio_mediaseqcounts.length > 0 && video_mediaseqcounts.length > 0) {
-              if (audio_mediaseqcounts[0] > video_mediaseqcounts[0] && audio_mediaseqcounts[0] - video_mediaseqcounts[0] > MSEQ_DIFF_THRESHOLD) {
+            if (audio_mediaSeqCountVideos.length > 0 && video_mediaSeqCountVideos.length > 0) {
+              if (audio_mediaSeqCountVideos[0] > video_mediaSeqCountVideos[0] && audio_mediaSeqCountVideos[0] - video_mediaSeqCountVideos[0] > MSEQ_DIFF_THRESHOLD) {
                 debug(
                   `[${this.sessionId}]: Audio Mseq counts seem to always be ahead. Will not take them into consideration when syncing Mseq Counts!`
                 );
@@ -1087,13 +1087,13 @@ class SessionLive {
             }
           }
         }
-        // Handle if mediaSeqCounts are NOT synced up!
+        // Handle if mediaSeqCountVideos are NOT synced up!
         if (!MSEQ_COUNTS_ARE_IN_SYNC) {
           bandwidthsToSkipOnRetry = [];
           audiotracksToSkipOnRetry = [];
-          debug(`[${this.sessionId}]: Live Mseq counts=[${allStoredMediaSeqCounts}]`);
+          debug(`[${this.sessionId}]: Live Mseq counts=[${allStoredMediaSeqCountsVideo}]`);
           // Figure out what variants's are behind.
-          HIGHEST_MEDIA_SEQUENCE_COUNT = Math.max(...allStoredMediaSeqCounts);
+          HIGHEST_MEDIA_SEQUENCE_COUNT = Math.max(...allStoredMediaSeqCountsVideo);
           Object.keys(this.liveSourceM3Us).map((variantKey) => {
             if (this.liveSourceM3Us[variantKey].mediaSeq === HIGHEST_MEDIA_SEQUENCE_COUNT) {
               if (this._isBandwidth(variantKey)) {
@@ -1146,13 +1146,13 @@ class SessionLive {
           }
         }
 
-        currentMseqRaw = allStoredMediaSeqCounts[0];
+        currentMseqRaw = allStoredMediaSeqCountsVideo[0];
 
         if (!isLeader) {
           let leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
           let tries = 20;
 
-          while ((!isLeader && !leadersFirstSeqCounts.liveSourceMseqCount && tries > 0) || leadersFirstSeqCounts.liveSourceMseqCount === 0) {
+          while ((!isLeader && !leadersFirstSeqCounts.liveSourceMseqCountVideo && tries > 0) || leadersFirstSeqCounts.liveSourceMseqCountVideo === 0) {
             debug(
               `[${this.sessionId}]: NEW FOLLOWER: Waiting for LEADER to add 'firstCounts' in store! Will look again after 1000ms (tries left=${tries})`
             );
@@ -1174,7 +1174,7 @@ class SessionLive {
             } else {
               debug(`[${this.sessionId}][${this.instanceId}]: The leader is still alive`);
               leadersFirstSeqCounts = await this.sessionLiveState.get("firstCounts");
-              if (!leadersFirstSeqCounts.liveSourceMseqCount) {
+              if (!leadersFirstSeqCounts.liveSourceMseqCountVideo) {
                 debug(
                   `[${this.sessionId}][${this.instanceId}]: Could not find 'firstCounts' in store. Abort Executing Promises II & Returning to Playhead.`
                 );
@@ -1199,13 +1199,13 @@ class SessionLive {
 
           // Respawners never do this, only starter followers.
           // Edge Case: FOLLOWER transitioned from session with different segments from LEADER
-          if (leadersFirstSeqCounts.discSeqCount !== this.discSeqCount) {
-            this.discSeqCount = leadersFirstSeqCounts.discSeqCount;
+          if (leadersFirstSeqCounts.discSeqCountVideo !== this.discSeqCountVideo) {
+            this.discSeqCountVideo = leadersFirstSeqCounts.discSeqCountVideo;
           }
-          if (leadersFirstSeqCounts.mediaSeqCount !== this.mediaSeqCount) {
-            this.mediaSeqCount = leadersFirstSeqCounts.mediaSeqCount;
+          if (leadersFirstSeqCounts.mediaSeqCountVideo !== this.mediaSeqCountVideo) {
+            this.mediaSeqCountVideo = leadersFirstSeqCounts.mediaSeqCountVideo;
             debug(
-              `[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${this.mediaSeqCount}][${this.discSeqCount}], and reading 'transitSegs' from store`
+              `[${this.sessionId}]: FOLLOWER transistioned with wrong V2L segments, updating counts to [${this.mediaSeqCountVideo}][${this.discSeqCount}], and reading 'transitSegs' from store`
             );
             const transitSegs = await this.sessionLiveState.get("transitSegs");
             if (!this._isEmpty(transitSegs)) {
@@ -1221,9 +1221,9 @@ class SessionLive {
 
           // Prepare to load segments...
           debug(
-            `[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${currentMseqRaw} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCount}`
+            `[${this.instanceId}][${this.sessionId}]: Newest mseq from LIVE=${currentMseqRaw} First mseq in store=${leadersFirstSeqCounts.liveSourceMseqCountVideo}`
           );
-          if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCount) {
+          if (currentMseqRaw === leadersFirstSeqCounts.liveSourceMseqCountVideo) {
             this.pushAmount = 1; // Follower from start
             this.pushAmountAudio = this.pushAmount;
           } else {
@@ -1231,7 +1231,7 @@ class SessionLive {
             // we will need to get the real 'current' discontinuity-sequence count from Leader somehow.
 
             // RESPAWNED NODES
-            this.pushAmount = currentMseqRaw - leadersFirstSeqCounts.liveSourceMseqCount + 1;
+            this.pushAmount = currentMseqRaw - leadersFirstSeqCounts.liveSourceMseqCountVideo + 1;
             this.pushAmountAudio = this.pushAmount;
 
             const transitSegs = await this.sessionLiveState.get("transitSegs");
@@ -1253,9 +1253,9 @@ class SessionLive {
             this.pushAmount = 1; // Leader from start
             this.pushAmountAudio = this.pushAmount;
           } else {
-            this.pushAmount = currentMseqRaw - this.lastRequestedMediaSeqRaw;
+            this.pushAmount = currentMseqRaw - this.lastRequestedMediaSeqRawVideo;
             this.pushAmountAudio = this.pushAmount;
-            debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedMediaSeqRaw}=${this.pushAmount}`);
+            debug(`[${this.sessionId}]: ...calculating pushAmount=${currentMseqRaw}-${this.lastRequestedMediaSeqRawVideo}=${this.pushAmount}`);
           }
           debug(`[${this.sessionId}]: ...pushAmount=${this.pushAmount}`);
           break;
@@ -1263,6 +1263,7 @@ class SessionLive {
         // Live Source Data is in sync, and LEADER & new FOLLOWER are in sync
         break;
       }
+
       return {
         success: FETCH_ATTEMPTS ? true : false,
         currentMseqRaw: currentMseqRaw,
@@ -1282,14 +1283,14 @@ class SessionLive {
       const audioTracksExist = Object.keys(this.audioManifestURIs).length > 0 ? true : false;
       // NEW FOLLOWER - Edge Case: One Instance is ahead of another. Read latest live segs from store
       if (!isLeader) {
-        const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
+        const leadersCurrentMseqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
         const counts = await this.sessionLiveState.get("firstCounts");
-        const leadersFirstMseqRaw = counts.liveSourceMseqCount;
+        const leadersFirstMseqRaw = counts.liveSourceMseqCountVideo;
         if (leadersCurrentMseqRaw !== null && leadersCurrentMseqRaw > current_mediasequence_raw) {
           // if leader never had any segs from prev mseq
           if (leadersFirstMseqRaw !== null && leadersFirstMseqRaw === leadersCurrentMseqRaw) {
             // Follower updates it's manifest ingedients (segment holders & counts)
-            this.lastRequestedMediaSeqRaw = leadersCurrentMseqRaw;
+            this.lastRequestedMediaSeqRawVideo = leadersCurrentMseqRaw;
             this.liveSegsForFollowers = await this.sessionLiveState.get("liveSegsForFollowers");
             if (audioTracksExist) {
               this.liveSegsForFollowersAudio = await this.sessionLiveState.get("liveSegsForFollowersAudio");
@@ -1303,10 +1304,10 @@ class SessionLive {
 
             this.firstTime = false;
             debug(
-              `[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`
+              `[${this.sessionId}]: Got all needed segments from live-source (read from store).\nWe are now able to build Live Manifest: [${this.mediaSeqCountVideo}]`
             );
             return;
-          } else if (leadersCurrentMseqRaw < this.lastRequestedMediaSeqRaw) {
+          } else if (leadersCurrentMseqRaw < this.lastRequestedMediaSeqRawVideo) {
             // WE ARE A RESPAWN-NODE, and we are ahead of leader.
             this.blockGenerateManifest = true;
           }
@@ -1353,7 +1354,7 @@ class SessionLive {
           // Do not replace old data with empty data
           if (segListSize > 0) {
             debug(`[${this.sessionId}]: LEADER: Adding data to store!`);
-            await this.sessionLiveState.set("lastRequestedMediaSeqRaw", this.lastRequestedMediaSeqRaw);
+            await this.sessionLiveState.set("lastRequestedMediaSeqRawVideo", this.lastRequestedMediaSeqRawVideo);
             await this.sessionLiveState.set("liveSegsForFollowers", this.liveSegsForFollowers);
             if (audioTracksExist) {
               await this.sessionLiveState.set("liveSegsForFollowersAudio", this.liveSegsForFollowersAudio);
@@ -1366,21 +1367,21 @@ class SessionLive {
           // Buy some time for followers (NOT Respawned) to fetch their own L.S m3u8.
           await timer(1000); // maybe remove
           let firstCounts = await this.sessionLiveState.get("firstCounts");
-          firstCounts.liveSourceMseqCount = this.lastRequestedMediaSeqRaw;
-          firstCounts.mediaSeqCount = this.prevMediaSeqCount;
-          firstCounts.discSeqCount = this.prevDiscSeqCount;
+          firstCounts.liveSourceMseqCountVideo = this.lastRequestedMediaSeqRawVideo;
+          firstCounts.mediaSeqCountVideo = this.prevMediaSeqCountVideo;
+          firstCounts.discSeqCountVideo = this.prevDiscSeqCountVideo;
 
           debug(`[${this.sessionId}]: LEADER: I am adding 'firstCounts'=${JSON.stringify(firstCounts)} to Store for future followers`);
           await this.sessionLiveState.set("firstCounts", firstCounts);
         }
-        debug(`[${this.sessionId}]: LEADER: I am using segs from Mseq=${this.lastRequestedMediaSeqRaw}`);
+        debug(`[${this.sessionId}]: LEADER: I am using segs from Mseq=${this.lastRequestedMediaSeqRawVideo}`);
       } else {
-        debug(`[${this.sessionId}]: NEW FOLLOWER: I am using segs from Mseq=${this.lastRequestedMediaSeqRaw}`);
+        debug(`[${this.sessionId}]: NEW FOLLOWER: I am using segs from Mseq=${this.lastRequestedMediaSeqRawVideo}`);
       }
 
       this.firstTime = false;
       debug(
-        `[${this.sessionId}]: Got all needed segments from live-source (from all bandwidths).\nWe are now able to build Live Manifest: [${this.mediaSeqCount}]`
+        `[${this.sessionId}]: Got all needed segments from live-source (from all bandwidths).\nWe are now able to build Live Manifest: [${this.mediaSeqCountVideo}]`
       );
 
       return;
@@ -1398,7 +1399,7 @@ class SessionLive {
   async _loadAllPlaylistManifests() {
     try {
       let isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
-      if (!isLeader && this.lastRequestedMediaSeqRaw !== null) {
+      if (!isLeader && this.lastRequestedMediaSeqRawVideo !== null) {
         // FOLLWERS Do this
         await this._collectSegmentsFromStore();
       } else {
@@ -1508,7 +1509,7 @@ class SessionLive {
 
   /**
    * Shifts V2L or LIVE items if total segment duration (V2L+LIVE) are over the target duration.
-   * It will also update and increment SessionLive's MediaSeqCount and DiscSeqCount based
+   * It will also update and increment SessionLive's mediaSeqCountVideo and DiscSeqCount based
    * on what was shifted.
    * @param {string} instanceName Name of instance "LEADER" | "FOLLOWER"
    * @returns {number} The new total duration in seconds
@@ -1571,21 +1572,21 @@ class SessionLive {
     removedDiscontinuities = outputLIVE.removedDiscontinuities;
 
     // Update Session Live Discontinuity Sequence Count...
-    this.prevDiscSeqCount = this.discSeqCount;
-    this.discSeqCount += removedDiscontinuities;
+    this.prevDiscSeqCountVideo = this.discSeqCountVideo;
+    this.discSeqCountVideo += removedDiscontinuities;
     // Update Session Live Media Sequence Count...
-    this.prevMediaSeqCount = this.mediaSeqCount;
-    this.mediaSeqCount += removedSegments;
+    this.prevMediaSeqCountVideo = this.mediaSeqCountVideo;
+    this.mediaSeqCountVideo += removedSegments;
     if (this.restAmount) {
-      this.mediaSeqCount += this.restAmount;
-      debug(`[${this.sessionId}]: ${instanceName}: Added restAmount=[${this.restAmount}] to 'mediaSeqCount'`);
+      this.mediaSeqCountVideo += this.restAmount;
+      debug(`[${this.sessionId}]: ${instanceName}: Added restAmount=[${this.restAmount}] to 'mediaSeqCountVideo'`);
       this.restAmount = 0;
     }
 
-    if (this.discSeqCount !== this.prevDiscSeqCount) {
-      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevDiscSeqCount}} -> {${this.discSeqCount}}`);
+    if (this.discSeqCountVideo !== this.prevDiscSeqCountVideo) {
+      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevDiscSeqCountVideo}} -> {${this.discSeqCount}}`);
     }
-    debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from [${this.prevMediaSeqCount}] -> [${this.mediaSeqCount}]`);
+    debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from [${this.prevMediaSeqCountVideo}] -> [${this.mediaSeqCountVideo}]`);
     debug(`[${this.sessionId}]: ${instanceName}: Finished updating all Counts and Segment Queues!`);
     return totalDur;
   }
@@ -1650,21 +1651,21 @@ class SessionLive {
     removedDiscontinuities = outputLIVE.removedDiscontinuities;
 
     // Update Session Live Discontinuity Sequence Count...
-    this.prevAudioDiscSeqCount = this.audioDiscSeqCount;
-    this.audioDiscSeqCount += removedDiscontinuities;
+    this.prevDiscSeqCountAudio = this.discSeqCountAudio;
+    this.discSeqCountAudio += removedDiscontinuities;
     // Update Session Live Audio Sequence Count...
-    this.prevAudioSeqCount = this.audioSeqCount;
-    this.audioSeqCount += removedSegments;
+    this.prevMediaSeqCountAudio = this.mediaSeqCountAudio;
+    this.mediaSeqCountAudio += removedSegments;
     if (this.restAmountAudio) {
-      this.audioSeqCount += this.restAmountAudio;
-      debug(`[${this.sessionId}]: ${instanceName}: Added restAmountAudio=[${this.restAmountAudio}] to 'audioSeqCount'`);
+      this.mediaSeqCountAudio += this.restAmountAudio;
+      debug(`[${this.sessionId}]: ${instanceName}: Added restAmountAudio=[${this.restAmountAudio}] to 'mediaSeqCountAudio'`);
       this.restAmountAudio = 0;
     }
 
-    if (this.audioDiscSeqCount !== this.prevAudioDiscSeqCount) {
-      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevAudioDiscSeqCount}} -> {${this.audioDiscSeqCount}}`);
+    if (this.discSeqCountAudio !== this.prevDiscSeqCountAudio) {
+      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from {${this.prevDiscSeqCountAudio}} -> {${this.discSeqCountAudio}}`);
     }
-    debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from [${this.prevAudioSeqCount}] -> [${this.audioSeqCount}]`);
+    debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from [${this.prevMediaSeqCountAudio}] -> [${this.mediaSeqCountAudio}]`);
     debug(`[${this.sessionId}]: ${instanceName}: Finished updating all Counts and Segment Queues!`);
     return totalDur;
   }
@@ -1794,10 +1795,10 @@ class SessionLive {
         }
 
         //debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
-        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRaw}]`);
+        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRawVideo}]`);
 
         if (this.pushAmount >= 0) {
-          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
+          this.lastRequestedMediaSeqRawVideo = m3u.get("mediaSequence");
         }
         this.targetDuration = m3u.get("targetDuration");
 
@@ -1838,13 +1839,13 @@ class SessionLive {
         }
 
         //debug(`[${this.sessionId}]: Current RAW Mseq:  [${m3u.get("mediaSequence")}]`);
-        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedAudioSeqRaw}]`);
+        //debug(`[${this.sessionId}]: Previous RAW Mseq: [${this.lastRequestedMediaSeqRawAudio}]`);
         /* 
         WARN: We are assuming here that the MSEQ and Segment lengths are the same on Audio and Video
         and therefor need to push an equal amount of segments
         */
         if (this.pushAmountAudio >= 0) {
-          this.lastRequestedMediaSeqRaw = m3u.get("mediaSequence");
+          this.lastRequestedMediaSeqRawVideo = m3u.get("mediaSequence");
         }
         this.targetDuration = m3u.get("targetDuration");
         let newAmount = this._pushAmountBasedOnPreviousLastSegmentURI(m3u, isFirstAT);
@@ -2083,8 +2084,8 @@ class SessionLive {
     //  DO NOT GENERATE MANIFEST CASE: Node is NOT in sync with Leader. (Store has new segs, but node hasn't read them yet)
     const isLeader = await this.sessionLiveStateStore.isLeader(this.instanceId);
     if (!isLeader) {
-      let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRaw");
-      if (leadersMediaSeqRaw !== this.lastRequestedMediaSeqRaw) {
+      let leadersMediaSeqRaw = await this.sessionLiveState.get("lastRequestedMediaSeqRawVideo");
+      if (leadersMediaSeqRaw !== this.lastRequestedMediaSeqRawVideo) {
         debug(`[${this.sessionId}]: FOLLOWER: Cannot Generate Manifest! <${this.instanceId}> New segments need to be collected first!...`);
         return null;
       }
@@ -2121,14 +2122,14 @@ class SessionLive {
       }
     }
 
-    debug(`[${this.sessionId}]: Started Generating the Manifest File:[${this.mediaSeqCount}]...`);
+    debug(`[${this.sessionId}]: Started Generating the Manifest File:[${this.mediaSeqCountVideo}]...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + Math.round(this.targetDuration) + "\n";
-    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCount + "\n";
-    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCount + "\n";
+    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCountVideo + "\n";
+    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCountVideo + "\n";
     if (Object.keys(this.vodSegments).length !== 0) {
       // Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegments[vodTargetBandwidth].length}) VOD segments to manifest`);
@@ -2199,15 +2200,17 @@ class SessionLive {
         this.targetDuration = vodSeg.duration;
       }
     }
-
-    debug(`[${this.sessionId}]: Started Generating the Audio Manifest File:[${this.audioSeqCount}]...`);
+    /*
+       TODO: Add Program Date Time (PDT) to the manifest
+    */
+    debug(`[${this.sessionId}]: Started Generating the Audio Manifest File:[${this.mediaSeqCountAudio}]...`);
     let m3u8 = "#EXTM3U\n";
     m3u8 += "#EXT-X-VERSION:6\n";
     m3u8 += m3u8Header(this.instanceId);
     m3u8 += "#EXT-X-INDEPENDENT-SEGMENTS\n";
     m3u8 += "#EXT-X-TARGETDURATION:" + Math.round(this.targetDuration) + "\n";
-    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.audioSeqCount + "\n";
-    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.audioDiscSeqCount + "\n";
+    m3u8 += "#EXT-X-MEDIA-SEQUENCE:" + this.mediaSeqCountAudio + "\n";
+    m3u8 += "#EXT-X-DISCONTINUITY-SEQUENCE:" + this.discSeqCountAudio + "\n";
     if (Object.keys(this.vodSegmentsAudio).length !== 0) {
       // Add transitional segments if there are any left.
       debug(`[${this.sessionId}]: Adding a Total of (${this.vodSegmentsAudio[vodTargetTrack].length}) VOD audio segments to manifest`);
