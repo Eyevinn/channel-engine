@@ -258,7 +258,6 @@ class StreamSwitcher {
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             currVodSegments = this._mergeSegments(prerollSegments, currVodSegments, false);
             if (this.useDemuxedAudio) {
-
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               this._insertTimedMetadataAudio(prerollAudioSegments, scheduleObj.timedMetadata || {});
               currVodAudioSegments = this._mergeAudioSegments(prerollAudioSegments, currVodAudioSegments, false);
@@ -830,12 +829,34 @@ class StreamSwitcher {
     const OUTPUT_SEGMENTS = {};
     const fromBws = Object.keys(fromSegments);
     const toBws = Object.keys(toSegments);
+
+    // go through toSegments from the bottom and find the segment which has a duration and timelinePosition.
+    // then go through fromSegments and add the duration to the timelinePosition of each segment.
+    // then merge the segments.
+    toSegmentsLastTimelinePosition = 0;
+    const bw = toBws[0];
+    for (let i = toSegments[bw].length - 1; i >= 0; i--) {
+      const segment = toSegments[bw][i];
+      if (segment.duration && segment.timelinePosition) {
+        toSegmentsLastTimelinePosition = segment.timelinePosition;
+        break;
+      }
+    }
+  
     toBws.forEach((bw) => {
       const targetBw = findNearestValue(bw, fromBws);
       if (prepend) {
         OUTPUT_SEGMENTS[bw] = fromSegments[targetBw].concat(toSegments[bw]);
         OUTPUT_SEGMENTS[bw].unshift({ discontinuity: true });
       } else {
+        let newtlp = 0;
+        fromSegments[targetBw] = fromSegments[targetBw].map(seg => {
+          if (seg.duration) {
+            newtlp += seg.duration * 1000;
+            seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
+            return seg;
+          }
+        });
         const lastSeg = toSegments[bw][toSegments[bw].length - 1];
         if (lastSeg.uri && !lastSeg.discontinuity) {
           toSegments[bw].push({ discontinuity: true});
@@ -877,6 +898,16 @@ class StreamSwitcher {
           OUTPUT_SEGMENTS[groupId][lang] = fromSegments[targetGroupId][targetLang].concat(toSegments[groupId][lang]);
           OUTPUT_SEGMENTS[groupId][lang].unshift({ discontinuity: true });
         } else {
+
+          let newtlp = 0;
+          fromSegments[groupId][lang] = fromSegments[groupId][lang].map(seg => {
+            if (seg.duration) {
+              newtlp += seg.duration * 1000;
+              seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
+              return seg;
+            }
+          });
+
           const size = toSegments[groupId][lang].length;
           const lastSeg = toSegments[groupId][lang][size - 1];
           if (lastSeg.uri && !lastSeg.discontinuity) {
