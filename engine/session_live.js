@@ -328,7 +328,8 @@ class SessionLive {
           this.vodSegments[bw].push(v2lSegment);
           if (v2lSegment.timelinePosition) {
             this.timeOffsetVideo = v2lSegment.timelinePosition;
-          } else if (v2lSegment.duration) {
+          } else if (this.timeOffsetVideo > 0 && v2lSegment.duration) {
+            // In case a vinjette is added to the beginning of the stream and V2L doesn't provide timelinePosition on it
             this.timeOffsetVideo += v2lSegment.duration * 1000;
             v2lSegment.timelinePosition = this.timeOffsetVideo;
           }
