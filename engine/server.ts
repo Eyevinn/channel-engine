@@ -335,23 +335,23 @@ export class ChannelEngine {
       this.streamerOpts.diffCompensationRate = options.diffCompensationRate;
     }
     const handleMasterRoute = async (req, res, next) => {
-      debug(req.params);
+      debug(req.params, req.query);
       let m;
       if (req.params.file.match(/master.m3u8/)) {
         await this._handleMasterManifest(req, res, next);
-      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master(\d+).m3u8(;session=(.*))?$/)) {
         req.params[0] = m[1];
-        req.params[1] = m[2];
+        req.params[1] = m[2] || req.query['channel'];
         await this._handleMediaManifest(req, res, next);
-      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8(;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        req.params[2] = m[3];
+        req.params[2] = m[3] || req.query['channel'];
         await this._handleAudioManifest(req, res, next);
-      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8(;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        req.params[2] = m[3];
+        req.params[2] = m[3] || req.query['channel'];
         await this._handleSubtitleManifest(req, res, next);
       }
     };
@@ -779,29 +779,30 @@ export class ChannelEngine {
   async _handleMediaManifest(req, res, next) {
     debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
-    const session = sessions[req.params[1]];
-    const sessionLive = sessionsLive[req.params[1]];
+    const channelId = req.params[1] || req.query['channel'];
+    const session = sessions[channelId];
+    const sessionLive = sessionsLive[channelId];
     if (session && sessionLive) {
       try {
         let ts1 = Date.now();
         let body = null;
         if (!this.streamSwitchManager) {
-          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
+          debug(`[${channelId}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
         } else {
-          while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
-            debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+          while (switcherStatus[channelId] === null || switcherStatus[channelId] === undefined) {
+            debug(`[${channelId}]: (${switcherStatus[channelId]}) Waiting for streamSwitcher to respond`);
             await timer(500);
           }
-          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
-          if (switcherStatus[req.params[1]]) {
-            debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
+          debug(`switcherStatus[${channelId}]=[${switcherStatus[channelId]}]`);
+          if (switcherStatus[channelId]) {
+            debug(`[${channelId}]: Responding with Live-stream manifest`);
             body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
           } else {
-            debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
+            debug(`[${channelId}]: Responding with VOD2Live manifest`);
             body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
           }
-          debug(`[${req.params[1]}]: Media Manifest Request Took (${Date.now() - ts1})ms`);
+          debug(`[${channelId}]: Media Manifest Request Took (${Date.now() - ts1})ms`);
         }
         //verbose(`[${session.sessionId}] body=`);
         //verbose(body);
@@ -824,29 +825,30 @@ export class ChannelEngine {
   async _handleAudioManifest(req, res, next) {
     debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
     debug(req.params);
-    const session = sessions[req.params[2]];
-    const sessionLive = sessionsLive[req.params[2]];
+    const channelId = req.params[2] || req.query['channel'];
+    const session = sessions[channelId];
+    const sessionLive = sessionsLive[channelId];
     if (session && sessionLive) {
       try {
         let body = null;
         let ts1: number = Date.now();
         if (!this.streamSwitchManager) {
-          debug(`[${req.params[2]}]: Responding with VOD2Live manifest`);
+          debug(`[${channelId}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentAudioManifestAsync(req.params[0], req.params[1], req.headers["x-playback-session-id"]);
         } else {
-          while (switcherStatus[req.params[2]] === null || switcherStatus[req.params[2]] === undefined) {
-            debug(`[${req.params[2]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+          while (switcherStatus[channelId] === null || switcherStatus[channelId] === undefined) {
+            debug(`[${channelId}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
             await timer(500);
           }
-          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[2]]}]`);
-          if (switcherStatus[req.params[2]]) {
-            debug(`[${req.params[2]}]: Responding with Live-stream manifest`);
+          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[channelId]}]`);
+          if (switcherStatus[channelId]) {
+            debug(`[${channelId}]: Responding with Live-stream manifest`);
             body = await sessionLive.getCurrentAudioManifestAsync(req.params[0], req.params[1]);
           } else {
-            debug(`[${req.params[2]}]: Responding with VOD2Live manifest`);
+            debug(`[${channelId}]: Responding with VOD2Live manifest`);
             body = await session.getCurrentAudioManifestAsync(req.params[0], req.params[1], req.headers["x-playback-session-id"]);
           }
-          debug(`[${req.params[2]}]: Audio Manifest Request Took (${Date.now() - ts1})ms`);
+          debug(`[${channelId}]: Audio Manifest Request Took (${Date.now() - ts1})ms`);
         }
 
         res.sendRaw(200, Buffer.from(body, 'utf8'), {
@@ -867,7 +869,8 @@ export class ChannelEngine {
 
   async _handleSubtitleManifest(req, res, next) {
     debug(`req.url=${req.url}`);
-    const session = sessions[req.params[2]];
+    const channelId = req.params[2] || req.query['channel'];
+    const session = sessions[channelId];
     if (session) {
       try {
         const body = await session.getCurrentSubtitleManifestAsync(
