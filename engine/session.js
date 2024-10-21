@@ -9,7 +9,7 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString } = require('./util.js');
+const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString, roundToTwoDecimals } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
@@ -243,9 +243,9 @@ class Session {
               { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset });
           }
           const diff = position - timePosition;
-          debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
+          debug(`[${this._sessionId}]: ${timePosition}:${roundToTwoDecimals(position) }:${diff > 0 ? '+' : ''}${roundToTwoDecimals(diff) }ms`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
+            { event: 'playheadDiff', channel: this._sessionId, diffMs: roundToTwoDecimals(diff) });
           if (this.alwaysNewSegments) {
             // Apply Playhead diff compensation, only after external diff compensation has concluded.
             if (this.diffCompensation <= 0) {

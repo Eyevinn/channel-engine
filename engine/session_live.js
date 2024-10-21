@@ -812,7 +812,7 @@ class SessionLive {
             this.liveSegQueue[liveBw] = [];
           }
           // Do not push duplicates
-          const liveSegURIs = this.liveSegQueue[liveBw].filter((seg) => seg.uri).map((seg) => seg.uri);
+          const liveSegURIs = this.liveSegQueue[liveBw].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);
 
           if (liveSegFromLeader.uri && liveSegURIs.includes(liveSegFromLeader.uri)) {
             debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push! (${liveBw})`);
@@ -853,9 +853,9 @@ class SessionLive {
             this.liveSegQueueAudio[fat] = [];
           }
           // Do not push duplicates
-          const liveSegURIs = this.liveSegQueueAudio[fat].filter((seg) => seg.uri).map((seg) => seg.uri);
+          const liveSegURIs = this.liveSegQueueAudio[fat].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);;
           if (liveSegFromLeader.uri && liveSegURIs.includes(liveSegFromLeader.uri)) {
-            debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push! (${liveGroupId})`);
+            debug(`[${this.sessionId}]: FOLLOWER: Found duplicate live segment. Skip push! (${followerAudiotracks[0]})`);
           } else {
             this.liveSegQueueAudio[fat].push(liveSegFromLeader);
             debug(
@@ -1591,14 +1591,14 @@ class SessionLive {
     for (let i = 0; i < variantKeys.length; i++) {
       let seg = _segments[variantKeys[i]].shift();
       if (i === 0) {
-        debug(`[${this.sessionId}]: ${_name}: (${variantKeys[i]}) Ejected from playlist->: ${JSON.stringify(seg, null, 2)}`);
+        debug(`[${this.sessionId}]: ${_name}: (${variantKeys[i]}) Ejected from playlist->: ${JSON.stringify(seg)}`);
       }
       if (seg && seg.discontinuity) {
         incrementDiscSeqCount = true;
         if (_segments[variantKeys[i]].length > 0) {
           seg = _segments[variantKeys[i]].shift();
           if (i === 0) {
-            debug(`[${this.sessionId}]: ${_name}: (${variantKeys[i]}) Ejected from playlist->: ${JSON.stringify(seg, null, 2)}`);
+            debug(`[${this.sessionId}]: ${_name}: (${variantKeys[i]}) Ejected from playlist->: ${JSON.stringify(seg)}`);
           }
         }
       }
@@ -1686,7 +1686,7 @@ class SessionLive {
     }
 
     if (this.discSeqCountVideo !== this.prevDiscSeqCountVideo) {
-      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from V{${this.prevDiscSeqCountVideo}} -> {${this.discSeqCount}}`);
+      debug(`[${this.sessionId}]: ${instanceName}: Incrementing Dseq Count from V{${this.prevDiscSeqCountVideo}} -> {${this.discSeqCountVideo}}`);
     }
     debug(`[${this.sessionId}]: ${instanceName}: Incrementing Mseq Count from V[${this.prevMediaSeqCountVideo}] -> V[${this.mediaSeqCountVideo}]`);
     debug(`[${this.sessionId}]: ${instanceName}: Finished updating all V-Counts and Segment Queues!`);
