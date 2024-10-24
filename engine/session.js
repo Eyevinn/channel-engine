@@ -9,7 +9,7 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString, roundToTwoDecimals } = require('./util.js');
+const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString, roundToThreeDecimals } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
@@ -243,9 +243,9 @@ class Session {
               { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset });
           }
           const diff = position - timePosition;
-          debug(`[${this._sessionId}]: ${timePosition}:${roundToTwoDecimals(position) }:${diff > 0 ? '+' : ''}${roundToTwoDecimals(diff) }ms`);
+          debug(`[${this._sessionId}]: ${timePosition}:${roundToThreeDecimals(position) }:${diff > 0 ? '+' : ''}${roundToThreeDecimals(diff) }ms`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'playheadDiff', channel: this._sessionId, diffMs: roundToTwoDecimals(diff) });
+            { event: 'playheadDiff', channel: this._sessionId, diffMs: roundToThreeDecimals(diff) });
           if (this.alwaysNewSegments) {
             // Apply Playhead diff compensation, only after external diff compensation has concluded.
             if (this.diffCompensation <= 0) {
@@ -2003,7 +2003,7 @@ class Session {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
     const playheadPositions = currentVod.getPlayheadPositions();
-    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${roundToTwoDecimals(playheadPositions[sessionState.vodMediaSeqVideo])}`);
+    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${roundToThreeDecimals(playheadPositions[sessionState.vodMediaSeqVideo])}`);
     return playheadPositions[sessionState.vodMediaSeqVideo];
   }
 
@@ -2013,7 +2013,7 @@ class Session {
     if (seqIdx >= playheadPositions.length - 1) {
       seqIdx = playheadPositions.length - 1
     }
-    debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${roundToTwoDecimals(playheadPositions[seqIdx])}`);
+    debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${roundToThreeDecimals(playheadPositions[seqIdx])}`);
     return playheadPositions[seqIdx];
   }
 
@@ -2023,7 +2023,7 @@ class Session {
     if (seqIdx >= playheadPositions.length - 1) {
       seqIdx = playheadPositions.length - 1
     }
-    debug(`[${this._sessionId}]: Current subtitle playhead position (${seqIdx}): ${roundToTwoDecimals(playheadPositions[seqIdx])}`);
+    debug(`[${this._sessionId}]: Current subtitle playhead position (${seqIdx}): ${roundToThreeDecimals(playheadPositions[seqIdx])}`);
     return playheadPositions[seqIdx];
   }
 
@@ -2089,7 +2089,7 @@ class Session {
      const currentPosExtraMedia = (await _getExtraPlayheadPositionAsyncFn(_vodMediaSeqExtra + extraMediaIncrement)) * 1000;
      positionX = currentPosExtraMedia ? currentPosExtraMedia / 1000 : 0;
      posDiff = (positionV - positionX).toFixed(3);
-     debug(`[${this._sessionId}]: positionV=${roundToTwoDecimals(positionV)};position${_extraType === "audio" ? "A" : "S"}=${roundToTwoDecimals(positionX)};posDiff=${posDiff}`);
+     debug(`[${this._sessionId}]: positionV=${roundToThreeDecimals(positionV)};position${_extraType === "audio" ? "A" : "S"}=${roundToThreeDecimals(positionX)};posDiff=${posDiff}`);
      if (isNaN(posDiff)) {
       break;
      }

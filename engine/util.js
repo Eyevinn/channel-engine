@@ -250,8 +250,8 @@ const timeLeft = (endTimestamp, currentTimestamp) => {
   return msg;
 };
 
-const roundToTwoDecimals = (number) => {
-  const r = Math.round(number * 100) / 100;
+const roundToThreeDecimals = (number) => {
+  const r = Math.round(number * 1000) / 1000;
   return r
 }
 
@@ -271,5 +271,5 @@ module.exports = {
   codecsFromString,
   timeLeft,
   findAudioGroupOrLang,
-  roundToTwoDecimals
+  roundToThreeDecimals
 };

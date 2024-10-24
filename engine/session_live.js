@@ -5,7 +5,7 @@ const m3u8 = require("@eyevinn/m3u8");
 const { segToM3u8, urlResolve } = require("@eyevinn/hls-vodtolive/utils.js");
 const url = require("url");
 const fetch = require("node-fetch");
-const { m3u8Header, roundToTwoDecimals } = require("./util.js");
+const { m3u8Header, roundToThreeDecimals } = require("./util.js");
 const { AbortController } = require("abort-controller");
 
 const timer = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -829,7 +829,7 @@ class SessionLive {
       // Remove older segments and update counts
       const newTotalDuration = this._incrementAndShift("FOLLOWER");
       if (newTotalDuration) {
-        debug(`[${this.sessionId}]: FOLLOWER: New Adjusted Playlist Duration=${roundToTwoDecimals(newTotalDuration)}s`);
+        debug(`[${this.sessionId}]: FOLLOWER: New Adjusted Playlist Duration=${roundToThreeDecimals(newTotalDuration)}s`);
       }
     } catch (e) {
       console.error(e);
@@ -1559,7 +1559,7 @@ class SessionLive {
         };
       }
       debug(
-        `[${this.sessionId}]: ${_name}: (${roundToTwoDecimals(_totalDur)})s/(${TARGET_PLAYLIST_DURATION_SEC})s - Playlist Duration is Over the Target. Shift needed!`
+        `[${this.sessionId}]: ${_name}: (${roundToThreeDecimals(_totalDur)})s/(${TARGET_PLAYLIST_DURATION_SEC})s - Playlist Duration is Over the Target. Shift needed!`
       );
       _segments = result.segments;
       if (result.timeToRemove) {
@@ -1640,7 +1640,7 @@ class SessionLive {
       }
     });
     totalDur = vodTotalDur + liveTotalDur;
-    debug(`[${this.sessionId}]: ${instanceName}: L2L dur->: ${roundToTwoDecimals(liveTotalDur)}s | V2L dur->: ${vodTotalDur}s | Total dur->: ${totalDur}s`);
+    debug(`[${this.sessionId}]: ${instanceName}: L2L dur->: ${roundToThreeDecimals(liveTotalDur)}s | V2L dur->: ${vodTotalDur}s | Total dur->: ${totalDur}s`);
 
     /** --- SHIFT then INCREMENT --- **/
 
