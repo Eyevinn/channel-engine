@@ -2157,7 +2157,7 @@ class SessionLive {
   }
 
   _pushToQueue(seg, liveTargetBandwidth, logName) {
-    const liveSegURIs = this.liveSegQueue[liveTargetBandwidth].filter((seg) => seg.uri).map((seg) => seg.uri);
+    const liveSegURIs = this.liveSegQueue[liveTargetBandwidth].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);
     if (seg.uri && liveSegURIs.includes(seg.uri)) {
       debug(`[${this.sessionId}]: ${logName}: Found duplicate live segment. Skip push! (${liveTargetBandwidth})`);
     } else {
@@ -2168,7 +2168,7 @@ class SessionLive {
   }
 
   _pushToQueueAudio(seg, liveTargetAudiotrack, logName) {
-    const liveSegURIs = this.liveSegQueueAudio[liveTargetAudiotrack].filter((seg) => seg.uri).map((seg) => seg.uri);
+    const liveSegURIs = this.liveSegQueueAudio[liveTargetAudiotrack].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);
     if (seg.uri && liveSegURIs.includes(seg.uri)) {
       debug(`[${this.sessionId}]: ${logName}: Found duplicate live segment. Skip push! track -> (${liveTargetAudiotrack})`);
     } else {
