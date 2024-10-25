@@ -1524,7 +1524,7 @@ class Session {
             await this._sessionState.remove("nextVod");
             this.leaderIsSettingNextVod = false;
             await this._playheadState.set("diffCompensation", this.diffCompensation, isLeader);
-            debug(`[${this._sessionId}]: sharing durrent vods diffCompensation=${this.diffCompensation}`);
+            debug(`[${this._sessionId}]: sharing current vods diffCompensation=${this.diffCompensation}`);
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
@@ -1574,8 +1574,8 @@ class Session {
       case SessionState.VOD_RELOAD_INIT:
         try {
           debug(`[${this._sessionId}]: state=VOD_RELOAD_INIT`);
-          if (this.diffCompensation !== 0) {
-            this.diffCompensation = 0;
+          if (this.diffCompensation <= 0) {
+            this.diffCompensation = 0.1;
           }
           if (isLeader) {
             const startTS = Date.now();
