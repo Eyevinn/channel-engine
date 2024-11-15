@@ -240,7 +240,7 @@ class Session {
           if (this.timePositionOffset && this.diffCompensation <= 0 && this.alwaysNewSegments) {
             timePosition -= this.timePositionOffset;
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-              { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset });
+              { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset }); // why does this trigger and timeposoff is large? TODO
           }
           const diff = position - timePosition;
           debug(`[${this._sessionId}]: ${timePosition}:${roundToThreeDecimals(position) }:${diff > 0 ? '+' : ''}${roundToThreeDecimals(diff) }ms`);
