@@ -10,6 +10,7 @@ function isTrue(s) {
 }
 
 const REDIS_VERBOSE_LOG = process.env.REDIS_VERBOSE_LOG ? isTrue(process.env.REDIS_VERBOSE_LOG) : false;
+const REDIS_POOL_SIZE = process.env.REDIS_POOL_SIZE ? parseInt(process.env.REDIS_POOL_SIZE) : 15;
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
@@ -24,7 +25,7 @@ class RedisStateStore {
       debug(`Overriding default, volatileKeyTTL=${opts.volatileKeyTTL}s`);
       this.volatileKeyTTL = opts.volatileKeyTTL;
     }
-    this.pool = this.createRedisPool(10, opts.redisUrl);
+    this.pool = this.createRedisPool(REDIS_POOL_SIZE, opts.redisUrl);
   }
 
   createRedisPool(size, redisUrl) {
