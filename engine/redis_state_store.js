@@ -10,7 +10,7 @@ function isTrue(s) {
 }
 
 const REDIS_VERBOSE_LOG = process.env.REDIS_VERBOSE_LOG ? isTrue(process.env.REDIS_VERBOSE_LOG) : false;
-const REDIS_POOL_SIZE = process.env.REDIS_POOL_SIZE ? parseInt(process.env.REDIS_POOL_SIZE) : 30;
+const REDIS_POOL_SIZE = process.env.REDIS_POOL_SIZE ? parseInt(process.env.REDIS_POOL_SIZE) : 15;
 
 class RedisStateStore {
   constructor(keyPrefix, opts) {
