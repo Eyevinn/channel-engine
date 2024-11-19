@@ -769,15 +769,7 @@ class Session {
         debug(`[${this._sessionId}]: Will increment subtitle with ${playheadSubtitle.increment}`);
         sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", playheadSubtitle.increment);
       }
-      debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be V[${(playheadPosVideoMs/1000).toFixed(3)}]${
-        playheadAudio ? `A[${(playheadAudio.position).toFixed(3)}]` : ""
-      }${
-        playheadSubtitle ? `S[${(playheadSubtitle.position).toFixed(3)})]` : ""
-      }${
-        playheadAudio ? ` (${playheadAudio.diff})` : ""
-      }${
-        playheadSubtitle ? ` (${playheadSubtitle.diff})` : ""
-      }`);
+      this._logCurrentPlayheadPositions(playheadPosVideoMs, playheadAudio, playheadSubtitle);
     }
 
     let newSessionState = {};
@@ -2307,6 +2299,37 @@ class Session {
         if (variantType === "subtitle") return vod.getLiveMediaSequencesCount("subtitle");
       default:
         console.log(`WARNING! dataName:${dataName} is not valid`);
+    }
+  }
+
+  _logCurrentPlayheadPositions(playheadPosVideoMs, playheadAudio, playheadSubtitle) {
+    try {
+      let videoPositionValue = "";
+      let audioPositionValue = "";
+      let subtitlePositionValue = "";
+      if (playheadPosVideoMs != null || playheadPosVideoMs != undefined) {
+        videoPositionValue = (playheadPosVideoMs / 1000).toFixed(3);
+      } else {
+        videoPositionValue = "null";
+      }
+      if ((playheadAudio && playheadAudio.position != null) || (playheadAudio && playheadAudio.position != undefined)) {
+        audioPositionValue = playheadAudio.position.toFixed(3);
+      } else {
+        audioPositionValue = "null";
+      }
+      if ((playheadSubtitle && playheadSubtitle.position != null) || (playheadSubtitle && playheadSubtitle.position != undefined)) {
+        subtitlePositionValue = playheadSubtitle.position.toFixed(3);
+      } else {
+        subtitlePositionValue = "null";
+      }
+  
+      debug(
+        `[${this._sessionId}]: Current VOD Playhead Positions are to be V[${videoPositionValue}]${playheadAudio ? `A[${audioPositionValue}]` : ""}${
+          playheadSubtitle ? `S[${subtitlePositionValue})]` : ""
+        }${playheadAudio ? ` (${playheadAudio.diff})` : ""}${playheadSubtitle ? ` (${playheadSubtitle.diff})` : ""}`
+      );
+    } catch (err) {
+      logerror(this._sessionId, err);
     }
   }
 }
