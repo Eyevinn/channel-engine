@@ -1,6 +1,6 @@
 const Redis = require("ioredis");
 const debug = require("debug")("redis-state-store");
-const { cloudWatchLog } = require("./util.js");
+const { cloudWatchLog, timer } = require("./util.js");
 
 const DEFAULT_VOLATILE_KEY_TTL = 5; // Timeout so it should not expire within one normal increment iteration (in seconds)
 
@@ -37,7 +37,14 @@ class RedisStateStore {
     return pool;
   }
 
-  getClientFromPool() {
+  async getClientFromPool(maxWaitTime = 5000) {
+    const startTime = Date.now();
+    while (this.pool.length === 0) {
+      if (Date.now() - startTime > maxWaitTime) {
+        console.error("[!] Timeout: No available Redis clients in the pool");
+      }
+      await timer(100);
+    }
     return this.pool.pop();
   }
 
@@ -68,7 +75,7 @@ class RedisStateStore {
   }
 
   async resetAllAsync() {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     try {
       await client.flushall();
       console.log("Flushed Redis db");
@@ -80,7 +87,7 @@ class RedisStateStore {
   }
 
   async getValues(id, keys) {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     const pipeline = client.pipeline();
     let data = {};
     const startMs = Date.now();
@@ -113,7 +120,7 @@ class RedisStateStore {
   }
 
   async getAsync(id, key) {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     const startMs = Date.now();
     const storeKey = `${this.keyPrefix}${id}${key}`;
     const reply = await client.get(storeKey);
@@ -134,7 +141,7 @@ class RedisStateStore {
   }
 
   async setValues(id, data) {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     const returnData = {};
     const startMs = Date.now();
     const pipeline = client.pipeline();
@@ -161,7 +168,7 @@ class RedisStateStore {
   }
 
   async setAsync(id, key, value) {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     const startMs = Date.now();
     const storeKey = `${this.keyPrefix}${id}${key}`;
     const res = await client.set(storeKey, JSON.stringify(value));
@@ -176,7 +183,7 @@ class RedisStateStore {
   async setVolatileAsync(id, key, value) {
     const data = await this.setAsync(id, key, value);
     const storeKey = `${this.keyPrefix}${id}${key}`;
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
 
     await client.expire(storeKey, this.volatileKeyTTL);
     debug(`REDIS expire ${storeKey} ${this.volatileKeyTTL}s`);
@@ -185,7 +192,7 @@ class RedisStateStore {
   }
 
   async removeAsync(id, key) {
-    const client = this.getClientFromPool();
+    const client = await this.getClientFromPool();
     const startMs = Date.now();
     const storeKey = `${this.keyPrefix}${id}${key}`;
     const res = await client.del(storeKey);
