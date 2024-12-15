@@ -16,7 +16,7 @@
     "start-livemix-demux": "node dist/examples/livemix-demux.js"
   },
   "engines": {
-    "node": ">=16 <20"
+    "node": ">=14 <20"
   },
   "author": "Eyevinn Technology AB <work@eyevinn.se>",
   "contributors": [
