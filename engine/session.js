@@ -736,9 +736,8 @@ class Session {
       let playheadPosVideoMs;
       let playheadAudio;
       let playheadSubtitle;
-      if (this.use_demuxed_audio || this.use_vtt_subtitles) {
-        playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
-      }
+      
+      playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
 
       if (this.use_demuxed_audio) {
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
