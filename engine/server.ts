@@ -569,13 +569,17 @@ export class ChannelEngine {
   }
 
   listen(port) {
-    this.server.listen({ port: port}, (err) => {
+    this.server.listen({ port: port }, (err) => {
       if (err) {
         console.error(err);
         process.exit(1);
       }
+      const addressInfo = this.server.server.address();
+      const host = addressInfo.address === '::' ? 'localhost' : addressInfo.address; 
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+      const url = `${protocol}://${host}:${addressInfo.port}`;
+      debug('%s listening at %s', this.server.name || 'Fastify', url);
     });
-    debug('%s listening at %s', this.server.name, this.server.url);
   }
 
   async getStatusForSessionAsync(sessionId) {
