@@ -30,15 +30,15 @@ const constants = {
   STR_ORIGIN: 'origin',
   HTTP_NO_CONTENT: 204
 }
-
-exports.handler = function (req, res, next) {
-  if (req.method !== 'OPTIONS') return next();
-  res.once('header', function () {
-    res.header(constants.AC_ALLOW_ORIGIN, '*');
-    res.header(constants.AC_ALLOW_CREDS, true);
-    res.header(constants.AC_ALLOW_METHODS, ['GET', 'OPTIONS']);
-    res.header(constants.AC_ALLOW_HEADERS, ['x-health-key']);
-  });
-
-  res.send(constants.HTTP_NO_CONTENT);
-}
+module.exports.handler = async function (req, res) {
+  if (req.method !== 'OPTIONS') return;
+  res
+    .header('server', 'fastify')
+    .header(constants.AC_ALLOW_ORIGIN, '*')
+    .header(constants.AC_ALLOW_CREDS, 'true')
+    .header(constants.AC_ALLOW_METHODS, 'GET, OPTIONS')
+    .header(constants.AC_ALLOW_HEADERS, 'x-health-key')
+    .status(204)
+    .send();
+  return;
+};

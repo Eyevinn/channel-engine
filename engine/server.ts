@@ -269,11 +269,8 @@ export class ChannelEngine {
       this.server.server.keepAliveTimeout = options.keepAliveTimeout;
       this.server.server.headersTimeout = options.keepAliveTimeout + 1000;  
     }
-    // this.server.register(cors, {
-    //   origin: '*',
-    //   methods: ['GET', 'POST', 'PUT', 'DELETE'], 
-    // });
-    this.server.options('*', preflight.handler); 
+
+    this.server.options('*', preflight.handler);
 
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
