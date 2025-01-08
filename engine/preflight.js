@@ -33,7 +33,6 @@ const constants = {
 module.exports.handler = async function (req, res) {
   if (req.method !== 'OPTIONS') return;
   res
-    .header('server', 'fastify')
     .header(constants.AC_ALLOW_ORIGIN, '*')
     .header(constants.AC_ALLOW_CREDS, 'true')
     .header(constants.AC_ALLOW_METHODS, 'GET, OPTIONS')
