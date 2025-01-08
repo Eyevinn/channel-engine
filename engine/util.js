@@ -2,6 +2,12 @@ const { version } = require("../package.json");
 const fetch = require("node-fetch");
 const { AbortController } = require("abort-controller");
 
+const COMMON_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Cache-Control": "no-cache"
+}
+
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
@@ -271,5 +277,6 @@ module.exports = {
   codecsFromString,
   timeLeft,
   findAudioGroupOrLang,
-  roundToThreeDecimals
+  roundToThreeDecimals,
+  COMMON_HEADERS
 };

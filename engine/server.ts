@@ -8,7 +8,7 @@ const SessionLive = require('./session_live.js');
 const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 const SubtitleSlicer = require('./subtitle_slicer.js');
-const { timer }= require('./util.js');
+const { timer, COMMON_HEADERS }= require('./util.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
@@ -938,9 +938,7 @@ export class ChannelEngine {
     
     if (this.sessionHealthKey && this.sessionHealthKey !== request.headers['x-health-key']) {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(403)
         .send({ "message": "Invalid Session-Health-Key" });
       return;
@@ -973,9 +971,7 @@ export class ChannelEngine {
   
     if (failingSessions.length === 0) {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(200)
         .send({
           "health": "ok",
@@ -985,9 +981,7 @@ export class ChannelEngine {
         });
     } else {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(503)
         .send({
           "health": "unhealthy",
@@ -1006,9 +1000,7 @@ export class ChannelEngine {
       
       if (status.playhead && status.playhead.state === "running") {
         reply
-          .header("Content-Type", "application/json")
-          .header("Access-Control-Allow-Origin", "*")
-          .header("Cache-Control", "no-cache")
+          .headers(COMMON_HEADERS)
           .status(200)
           .send(JSON.stringify({ 
             "health": "ok", 
@@ -1036,9 +1028,7 @@ export class ChannelEngine {
     
     if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(403)
         .send({ "message": "Invalid Session-Reset-Key" });
       return;
@@ -1076,9 +1066,7 @@ export class ChannelEngine {
 
     if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(403)
         .send({ "message": "Invalid Session-Reset-Key" });
       return;
@@ -1108,9 +1096,7 @@ export class ChannelEngine {
       }
 
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(200)
         .send({
           "status": "ok",
@@ -1119,9 +1105,7 @@ export class ChannelEngine {
         });
     } catch (e) {
       reply
-        .header("Content-Type", "application/json")
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Cache-Control", "no-cache")
+.headers(COMMON_HEADERS)
         .status(500)
         .send({ "error": e });
       return;
