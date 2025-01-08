@@ -4,7 +4,6 @@ const nock = require("nock");
 const Readable = require('stream').Readable;
 const { v4: uuidv4 } = require('uuid');
 const { SessionLiveStateStore } = require('../../engine/session_live_state.js');
-const { ExpectationFailedError } = require('restify-errors');
 
 const mockBaseUri = "https://mock.mock.com/";
 const mockLiveUri = "https://mock.mock.com/live/master.m3u8";

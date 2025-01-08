@@ -304,7 +304,7 @@ export class ChannelEngine {
     };
 
     if (options && options.staticDirectory) {
-      this.server.register(require('fastify-static'), {
+      this.server.register(require('@fastify/static'), {
         root: path.join(__dirname, options.staticDirectory),
         prefix: '/', 
       });
