@@ -269,11 +269,8 @@ export class ChannelEngine {
       this.server.server.keepAliveTimeout = options.keepAliveTimeout;
       this.server.server.headersTimeout = options.keepAliveTimeout + 1000;  
     }
-    // this.server.register(cors, {
-    //   origin: '*',
-    //   methods: ['GET', 'POST', 'PUT', 'DELETE'], 
-    // });
-    this.server.options('*', preflight.handler); 
+
+    this.server.options('*', preflight.handler);
 
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
@@ -940,11 +937,12 @@ export class ChannelEngine {
     debug(`req.url=${request.url}`);
     
     if (this.sessionHealthKey && this.sessionHealthKey !== request.headers['x-health-key']) {
-      reply.status(403).send(JSON.stringify({ "message": "Invalid Session-Health-Key" }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(403)
+        .send({ "message": "Invalid Session-Health-Key" });
       return;
     }
   
@@ -974,26 +972,28 @@ export class ChannelEngine {
     };
   
     if (failingSessions.length === 0) {
-      reply.status(200).send(JSON.stringify({ 
-        "health": "ok", 
-        "engine": engineStatus, 
-        "count": endpoints.length, 
-        "sessionEndpoints": endpoints 
-      }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",  
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(200)
+        .send({
+          "health": "ok",
+          "engine": engineStatus,
+          "count": endpoints.length,
+          "sessionEndpoints": endpoints
+        });
     } else {
-      reply.status(503).send(JSON.stringify({ 
-        "health": "unhealthy", 
-        "engine": engineStatus, 
-        "failed": failingSessions 
-      }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(503)
+        .send({
+          "health": "unhealthy",
+          "engine": engineStatus,
+          "failed": failingSessions
+        });
     }
   }
 
@@ -1005,23 +1005,25 @@ export class ChannelEngine {
       const status = await session.getStatusAsync();
       
       if (status.playhead && status.playhead.state === "running") {
-        reply.status(200).send(JSON.stringify({ 
-          "health": "ok", 
-          "tick": status.playhead.tickMs, 
-          "mediaSeq": status.playhead.mediaSeq 
-        }), {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",  
-        });
+        reply
+          .header("Content-Type", "application/json")
+          .header("Access-Control-Allow-Origin", "*")
+          .header("Cache-Control", "no-cache")
+          .status(200)
+          .send(JSON.stringify({ 
+            "health": "ok", 
+            "tick": status.playhead.tickMs, 
+            "mediaSeq": status.playhead.mediaSeq 
+          }));
       } else {
-        reply.status(503).send(JSON.stringify({ 
-          "health": "unhealthy" 
-        }), {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",
-        });
+        reply
+          .header("Content-Type", "application/json")
+          .header("Access-Control-Allow-Origin", "*")
+          .header("Cache-Control", "no-cache")
+          .status(503)
+          .send({ 
+            "health": "unhealthy" 
+          });
       }
     } else {
       reply.status(404).send({ message: 'Invalid session' });
@@ -1033,11 +1035,12 @@ export class ChannelEngine {
     debug(`req.url=${request.url}`);
     
     if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
-      reply.status(403).send(JSON.stringify({ "message": "Invalid Session-Reset-Key" }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(403)
+        .send({ "message": "Invalid Session-Reset-Key" });
       return;
     }
   
@@ -1056,26 +1059,28 @@ export class ChannelEngine {
       }
     }
   
-    reply.status(200).send(JSON.stringify({ 
-      "status": "ok", 
-      "instanceId": this.instanceId, 
-      "resets": sessionResets 
-    }), {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-cache",
-    });
+    reply
+      .header("Content-Type", "application/json")
+      .header("Access-Control-Allow-Origin", "*")
+      .header("Cache-Control", "no-cache")
+      .status(200)
+      .send(JSON.stringify({ 
+        "status": "ok", 
+        "instanceId": this.instanceId, 
+        "resets": sessionResets 
+      }));
   }
 
   async _handleSessionReset(request, reply) {
     debug(`req.url=${request.url}`);
 
     if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
-      reply.status(403).send(JSON.stringify({ "message": "Invalid Session-Reset-Key" }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(403)
+        .send({ "message": "Invalid Session-Reset-Key" });
       return;
     }
 
@@ -1093,30 +1098,32 @@ export class ChannelEngine {
         await session.resetAsync(sessionId);
         sessionResets.push(sessionId);
       } else {
-        reply.status(400).send(JSON.stringify({ "message": "Invalid Session ID" }), {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",
-        });
+        reply
+          .header("Content-Type", "application/json")
+          .header("Access-Control-Allow-Origin", "*")
+          .header("Cache-Control", "no-cache")
+          .status(400)
+          .send({ "message": "Invalid Session ID" });
         return;
       }
 
-      reply.status(200).send(JSON.stringify({
-        "status": "ok",
-        "instanceId": this.instanceId,
-        "resets": sessionResets
-      }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(200)
+        .send({
+          "status": "ok",
+          "instanceId": this.instanceId,
+          "resets": sessionResets
+        });
     } catch (e) {
-      reply.status(500).send(JSON.stringify({ "error": e }), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      reply.status(404).send({ message: 'Invalid session' });
+      reply
+        .header("Content-Type", "application/json")
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Cache-Control", "no-cache")
+        .status(500)
+        .send({ "error": e });
       return;
     }
   }
