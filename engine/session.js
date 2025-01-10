@@ -351,9 +351,10 @@ class Session {
     if (id) {
       await this._sessionStateStore.reset(id);
       await this._playheadStateStore.reset(id);
+    } else {
+      await this._sessionStateStore.resetAll();
+      await this._playheadStateStore.resetAll();
     }
-    await this._sessionStateStore.resetAll();
-    await this._playheadStateStore.resetAll();
   }
 
   async getSessionState() {
