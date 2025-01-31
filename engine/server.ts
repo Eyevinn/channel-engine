@@ -356,6 +356,11 @@ export class ChannelEngine {
         req.params[1] = m[2];
         req.params[2] = m[3] || session;
         await this._handleSubtitleManifest(req, res);
+      } else {
+        res.header("X-Instance-Id", this.instanceId + `<${version}>`);
+        res.status(404).send({ 
+          message: "Manifest not found - invalid format or unsupported manifest type" 
+        });
       }
     };
     this.server.get('/live/:file', async (req, res) => {
