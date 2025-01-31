@@ -79,11 +79,14 @@ class Session {
     this.alwaysMapBandwidthByNearest = null;
     this.partialStoreHLSVod = null;
     this.currentPlayheadRef = null;
+    this.disableLegacyMasterManifestFormat = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
       }
-
+      if (config.disableLegacyMasterManifestFormat) {
+        this.disableLegacyMasterManifestFormat = config.disableLegacyMasterManifestFormat;
+      }
       if (config.partialStoreHLSVod) {
         this.partialStoreHLSVod = config.partialStoreHLSVod;
       }
@@ -1025,7 +1028,7 @@ class Session {
               `,NAME="${audioTrack.name}"` +
               `,AUTOSELECT=YES,DEFAULT=${audioTrack.default ? 'YES' : 'NO'}` +
               `,CHANNELS="${channels ? channels : 2}"` +
-              `,URI="master-${audioGroupIdFileName}_${audioTrack.language}.m3u8%3Bsession=${this._sessionId}"` +
+              `,URI="master-${audioGroupIdFileName}_${audioTrack.language}.m3u8${!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : ""}` +
               "\n";
           }
         }
@@ -1047,7 +1050,7 @@ class Session {
               `,LANGUAGE="${subtitleTrack.language}"` +
               `,NAME="${subtitleTrack.name}"` +
               `,AUTOSELECT=YES,DEFAULT=${subtitleTrack.default ? 'YES' : 'NO'}` +
-              `,URI="subtitles-${subtitleGroupId}_${subtitleTrack.language}.m3u8%3Bsession=${this._sessionId}"` +
+              `,URI="subtitles-${subtitleGroupId}_${subtitleTrack.language}.m3u8${!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : ""}` +
               "\n";
           }
         }
@@ -1080,7 +1083,7 @@ class Session {
               `,AUDIO="${audioGroupIdToUse}"` +
               (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
               (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-            m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+            m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
           }
         } else {
           m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw +
@@ -1089,7 +1092,7 @@ class Session {
             (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') +
             (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
             (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-          m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+          m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
         }
       });
     } else {
@@ -1100,7 +1103,7 @@ class Session {
           (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') +
           (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
           (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-        m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+        m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
       });
     }
 

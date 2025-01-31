@@ -339,21 +339,22 @@ export class ChannelEngine {
     const handleMasterRoute = async (req, res) => {
       debug(req.params);
       let m;
+      const session = req.params.channelId;
       if (req.params.file.match(/master.m3u8/)) {
         await this._handleMasterManifest(req, res);
-      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master(\d+).m3u8(?:;session=(.*))?$/)) {
         req.params[0] = m[1];
-        req.params[1] = m[2];
+        req.params[1] = m[2] || session; 
         await this._handleMediaManifest(req, res);
-      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8(?:;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        req.params[2] = m[3];
+        req.params[2] = m[3] || session;
         await this._handleAudioManifest(req, res);
-      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8(?:;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        req.params[2] = m[3];
+        req.params[2] = m[3] || session;
         await this._handleSubtitleManifest(req, res);
       }
     };
