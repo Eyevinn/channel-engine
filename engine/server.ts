@@ -767,6 +767,8 @@ export class ChannelEngine {
   
       try {
         const body = await session.getMasterManifestAsync(filter);
+        const buffer = Buffer.from(body, 'utf8');
+        
         reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
@@ -775,8 +777,9 @@ export class ChannelEngine {
           "Cache-Control": "max-age=300",
           "X-Session-Id": session.sessionId,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        reply.raw.end(Buffer.from(body, 'utf8'));
+        reply.raw.end(buffer);
       } catch (err) {
         throw this._errorHandler(err);
       }
@@ -795,13 +798,15 @@ export class ChannelEngine {
           request.params[1],
           request.headers["x-playback-session-id"]
         );
+        const buffer = Buffer.from(body, 'utf8');
         reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        reply.raw.end(Buffer.from(body, 'utf8'));
+        reply.raw.end(buffer);
       } catch (err) {
         throw this._gracefulErrorHandler(err);
       }
@@ -821,13 +826,15 @@ export class ChannelEngine {
           request.params[1],
           request.headers["x-playback-session-id"]
         );
+        const buffer = Buffer.from(body, 'utf8');
         reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        reply.raw.end(Buffer.from(body, 'utf8'));
+        reply.raw.end(buffer);
       } catch (err) {
         throw this._gracefulErrorHandler(err);
       }
@@ -841,13 +848,15 @@ export class ChannelEngine {
     debug(`req.url=${request.url}`);
     try {
       const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n\n`;
+      const buffer = Buffer.from(body, 'utf8');
       reply.raw.writeHead(200, {
         "Content-Type": "text/vtt",
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         "X-Instance-Id": this.instanceId + `<${version}>`,
+        "Content-Length": buffer.length
       });
-      reply.raw.end(Buffer.from(body, 'utf8'));
+      reply.raw.end(buffer);
     } catch (err) {
       throw this._gracefulErrorHandler(err);
     }
@@ -858,76 +867,80 @@ export class ChannelEngine {
     try {
       const slicer = new SubtitleSlicer();
       const body = await slicer.generateVtt(request.query);
+      const buffer = Buffer.from(body, 'utf8');
       reply.raw.writeHead(200, {
         "Content-Type": "text/vtt",
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         "X-Instance-Id": this.instanceId + `<${version}>`,
+        "Content-Length": buffer.length
       });
-      reply.raw.end(Buffer.from(body, 'utf8'));
+      reply.raw.end(buffer);
     } catch (err) {
       throw this._gracefulErrorHandler(err);
     }
   }
 
   async _handleMediaManifest(request, reply) {
-  debug(`x-playback-session-id=${request.headers["x-playback-session-id"]} req.url=${request.url}`);
-  debug(request.params);
-  const session = sessions[request.params[1]];
-  const sessionLive = sessionsLive[request.params[1]];
+    debug(`x-playback-session-id=${request.headers["x-playback-session-id"]} req.url=${request.url}`);
+    debug(request.params);
+    const session = sessions[request.params[1]];
+    const sessionLive = sessionsLive[request.params[1]];
 
-  if (session && sessionLive) {
-    try {
-      let body = null;
-      if (!this.streamSwitchManager) {
-        debug(`[${request.params[1]}]: Responding with VOD2Live manifest`);
-        body = await session.getCurrentMediaManifestAsync(request.params[0], request.headers["x-playback-session-id"]);
-      } else {
-        while (switcherStatus[request.params[1]] === null || switcherStatus[request.params[1]] === undefined) {
-          debug(`[${request.params[1]}]: (${switcherStatus[request.params[1]]}) Waiting for streamSwitcher to respond`);
-          await timer(500);
-        }
-        debug(`switcherStatus[${request.params[1]}]=[${switcherStatus[request.params[1]]}]`);
-        if (switcherStatus[request.params[1]]) {
-          debug(`[${request.params[1]}]: Responding with Live-stream manifest`);
-          body = await sessionLive.getCurrentMediaManifestAsync(request.params[0]);
-        } else {
+    if (session && sessionLive) {
+      try {
+        let body = null;
+        if (!this.streamSwitchManager) {
           debug(`[${request.params[1]}]: Responding with VOD2Live manifest`);
           body = await session.getCurrentMediaManifestAsync(request.params[0], request.headers["x-playback-session-id"]);
+        } else {
+          while (switcherStatus[request.params[1]] === null || switcherStatus[request.params[1]] === undefined) {
+            debug(`[${request.params[1]}]: (${switcherStatus[request.params[1]]}) Waiting for streamSwitcher to respond`);
+            await timer(500);
+          }
+          debug(`switcherStatus[${request.params[1]}]=[${switcherStatus[request.params[1]]}]`);
+          if (switcherStatus[request.params[1]]) {
+            debug(`[${request.params[1]}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentMediaManifestAsync(request.params[0]);
+          } else {
+            debug(`[${request.params[1]}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentMediaManifestAsync(request.params[0], request.headers["x-playback-session-id"]);
+          }
         }
-      }
 
-      reply.raw.writeHead(200, {
-        "Content-Type": "application/vnd.apple.mpegurl",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
-        "X-Instance-Id": this.instanceId + `<${version}>`,
-      });
-      reply.raw.end(Buffer.from(body, 'utf8'));
-    } catch (err) {
-      throw this._gracefulErrorHandler(err);
+        const buffer = Buffer.from(body, 'utf8');
+        reply.raw.writeHead(200, {
+          "Content-Type": "application/vnd.apple.mpegurl",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+          "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
+        });
+        reply.raw.end(buffer);
+      } catch (err) {
+        throw this._gracefulErrorHandler(err);
+      }
+    } else {
+      reply.status(404).send({ message: 'Invalid session' });
+      return;
     }
-  } else {
-    reply.status(404).send({ message: 'Invalid session' });
-    return;
-  }
   }
 
   async _handleEventStream(request, reply) {
-  debug(`req.url=${request.url}`);
-  const eventStream = eventStreams[request.params.sessionId];
+    debug(`req.url=${request.url}`);
+    const eventStream = eventStreams[request.params.sessionId];
 
-  if (eventStream) {
-    try {
-      const body = await eventStream.poll();
-      reply.status(200).send(body); 
-    } catch (err) {
-      throw this._errorHandler(err);
+    if (eventStream) {
+      try {
+        const body = await eventStream.poll();
+        reply.status(200).send(body); 
+      } catch (err) {
+        throw this._errorHandler(err);
+      }
+    } else {
+      debug(`No event stream found for session=${request.params.sessionId}`);
+      reply.status(200).send({});
     }
-  } else {
-    debug(`No event stream found for session=${request.params.sessionId}`);
-    reply.status(200).send({});
-  }
   }
 
   async _handleStatus(request, reply) {
