@@ -668,7 +668,7 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const m3u8 = this._getM3u8File("video", bw, playbackSessionId);
+    const m3u8 = await this._getM3u8File("video", bw, playbackSessionId);
     return m3u8;
   }
 
@@ -677,7 +677,7 @@ class Session {
       throw new Error('Session not ready');
     }
     const variantKey = JSON.stringify({groupId: audioGroupId, lang: audioLanguage});
-    const m3u8 = this._getM3u8File("audio", variantKey, playbackSessionId);
+    const m3u8 = await this._getM3u8File("audio", variantKey, playbackSessionId);
     return m3u8;
   }
   
@@ -686,7 +686,7 @@ class Session {
       throw new Error('Session not ready');
     }
     const variantKey = JSON.stringify({groupId: subtitleGroupId, lang: subtitleLanguage});
-    const m3u8 = this._getM3u8File("subtitle", variantKey, playbackSessionId);
+    const m3u8 = await this._getM3u8File("subtitle", variantKey, playbackSessionId);
     return m3u8;
   }
 
