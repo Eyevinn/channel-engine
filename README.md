@@ -32,8 +32,6 @@ Please see the [Documentation](https://vod2live.docs.eyevinn.technology) for int
 
 ![Screenshot of demo site](docs/demosite.png)
 
-A live demo and example is available here: [https://vod2live.eyevinn.technology](https://vod2live.eyevinn.technology)
-
 ## Features
 
 - Produce 24/7 HLS live channels based on already transcoded HLS VODs
@@ -74,7 +72,7 @@ Supported Node.js Versions
 | 6.x     | Yes       |
 | 7.x    | No        |
 
-## Usage
+## Usage (Docker)
 
 Follow [this tutorial](https://vod2live.docs.eyevinn.technology/getting-started.html) to get started building your own FAST channel engine.
 
@@ -87,6 +85,36 @@ docker run -d -p 8000:8000 -p 8001:8001 \
 ```
 
 Open the URL http://localhost:8001/ in your browser for a multiview of all 50 channels, and to playback one of the 50 channels point your HLS video player to the URL: http://localhost:8000/channels/<N>/master.m3u8 where <N> is a number between 1 and 50.
+
+## Usage (Eyevinn Open Source Cloud)
+
+Available as an open web service in [Eyevinn Open Source Cloud (OSC)](https://www.osaas.io).
+
+1. Sign up for an [OSC account](https://www.osaas.io)
+2. Get the personal access token in the web console (Settings/API)
+3. Store it in the environment variable `OSC_ACCESS_TOKEN` in your shell
+
+```bash
+% export OSC_ACCESS_TOKEN=<personal-access-token>
+```
+
+4. Launch a channel called `guide` using the OSC command line tool.
+
+```bash
+% npx -y @osaas/cli create channel-engine guide \
+  -o type=Loop \
+  -o url=https://lab.cdn.eyevinn.technology/osc/osc-reel/a4e1156e-f872-455f-9f1f-be73b5effba8/index.m3u8
+Instance created:
+{
+  id: 'eyevinnlab-guide',
+  name: 'guide',
+  type: 'Loop',
+  url: 'https://lab.cdn.eyevinn.technology/osc/osc-reel/a4e1156e-f872-455f-9f1f-be73b5effba8/index.m3u8',
+  playback: 'https://eyevinnlab.ce.prod.osaas.io/channels/guide/master.m3u8'
+}  
+```
+
+This will create a linear channel by looping the Open Source Cloud demo reel video. Channel is available for playback on URL https://eyevinnlab.ce.prod.osaas.io/channels/guide/master.m3u8 in this case.
 
 ## Migration
 
