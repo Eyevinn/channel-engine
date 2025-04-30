@@ -740,7 +740,7 @@ class StreamSwitcher {
             : null;
         seg = {
           duration: playlistItem.get("duration"),
-          timelinePosition: this.timeOffset != null ? this.timeOffset + timelinePosition : null,
+          timelinePosition: null,
           cue: cue,
           byteRange: byteRange,
         };
@@ -833,12 +833,14 @@ class StreamSwitcher {
     // go through toSegments from the bottom and find the segment which has a duration and timelinePosition.
     // then go through fromSegments and add the duration to the timelinePosition of each segment.
     // then merge the segments.
-    toSegmentsLastTimelinePosition = 0;
+    let toSegmentsLastTimelinePosition = 0;
+    let hasValidTimelinePosition = false;
     const bw = toBws[0];
     for (let i = toSegments[bw].length - 1; i >= 0; i--) {
       const segment = toSegments[bw][i];
       if (segment.duration && segment.timelinePosition) {
         toSegmentsLastTimelinePosition = segment.timelinePosition;
+        hasValidTimelinePosition = true;
         break;
       }
     }
@@ -849,14 +851,19 @@ class StreamSwitcher {
         OUTPUT_SEGMENTS[bw] = fromSegments[targetBw].concat(toSegments[bw]);
         OUTPUT_SEGMENTS[bw].unshift({ discontinuity: true });
       } else {
-        let newtlp = 0;
-        fromSegments[targetBw] = fromSegments[targetBw].map(seg => {
-          if (seg.duration) {
-            newtlp += seg.duration * 1000;
-            seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
+        // Only set timelinePosition on fromSegments if toSegments have valid timelinePosition
+        if (hasValidTimelinePosition) {
+          let newtlp = 0;
+          fromSegments[targetBw] = fromSegments[targetBw].map(seg => {
+            if (seg.duration) {
+              newtlp += seg.duration * 1000;
+              seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
+              return seg;
+            }
             return seg;
-          }
-        });
+          });
+        }
+  
         const lastSeg = toSegments[bw][toSegments[bw].length - 1];
         if (lastSeg.uri && !lastSeg.discontinuity) {
           toSegments[bw].push({ discontinuity: true});
@@ -878,53 +885,74 @@ class StreamSwitcher {
     const fromGroups = Object.keys(fromSegments);
     const toGroups = Object.keys(toSegments);
 
-    for (let i = 0; i < toGroups.length; i++) {
-      const groupId = toGroups[i];
-      if (!OUTPUT_SEGMENTS[groupId]) {
-        OUTPUT_SEGMENTS[groupId] = {}
-      }
-      const toLangs = Object.keys(toSegments[groupId])
-      
-      for (let j = 0; j < toLangs.length; j++) {
-        const lang = toLangs[j];
-        if (!OUTPUT_SEGMENTS[groupId][lang]) {
-          OUTPUT_SEGMENTS[groupId][lang] = [];
+    let toSegmentsLastTimelinePosition = 0;
+    let hasValidTimelinePosition = false;
+    try {
+      for (let i = 0; i < toGroups.length; i++) {
+        const groupId = toGroups[i];
+        if (!OUTPUT_SEGMENTS[groupId]) {
+          OUTPUT_SEGMENTS[groupId] = {}
         }
-
-        const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
-        const fromLangs = Object.keys(fromSegments[targetGroupId]);
-        const targetLang = findAudioGroupOrLang(lang, fromLangs);
-        if (prepend) {
-          OUTPUT_SEGMENTS[groupId][lang] = fromSegments[targetGroupId][targetLang].concat(toSegments[groupId][lang]);
-          OUTPUT_SEGMENTS[groupId][lang].unshift({ discontinuity: true });
-        } else {
-
-          let newtlp = 0;
-          fromSegments[groupId][lang] = fromSegments[groupId][lang].map(seg => {
-            if (seg.duration) {
-              newtlp += seg.duration * 1000;
-              seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
-              return seg;
+        const toLangs = Object.keys(toSegments[groupId])
+  
+        for (let j = 0; j < toLangs.length; j++) {
+          const lang = toLangs[j];
+          for (let i = toSegments[groupId][lang].length - 1; i >= 0; i--) {
+            const segment = toSegments[groupId][lang][i];         
+            if (segment.duration && segment.timelinePosition) {
+              toSegmentsLastTimelinePosition = segment.timelinePosition;
+              hasValidTimelinePosition = true;
+              break;
             }
-          });
-
-          const size = toSegments[groupId][lang].length;
-          const lastSeg = toSegments[groupId][lang][size - 1];
-          if (lastSeg.uri && !lastSeg.discontinuity) {
-            toSegments[groupId][lang].push({ discontinuity: true });
-            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
-          } else if (lastSeg.discontinuity && !lastSeg.cue) {
-            console.log("lastSeg", lastSeg, toSegments[groupId][lang], 666)
-            toSegments[targetGroupId][lang][toSegments[groupId][lang].length - 1].cue = { in: true }
-            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+          } 
+        }
+  
+        for (let j = 0; j < toLangs.length; j++) {
+          const lang = toLangs[j];
+          if (!OUTPUT_SEGMENTS[groupId][lang]) {
+            OUTPUT_SEGMENTS[groupId][lang] = [];
+          }
+  
+          const targetGroupId = findAudioGroupOrLang(groupId, fromGroups);
+          const fromLangs = Object.keys(fromSegments[targetGroupId]);
+          const targetLang = findAudioGroupOrLang(lang, fromLangs);
+          if (prepend) {
+            OUTPUT_SEGMENTS[groupId][lang] = fromSegments[targetGroupId][targetLang].concat(toSegments[groupId][lang]);
+            OUTPUT_SEGMENTS[groupId][lang].unshift({ discontinuity: true });
           } else {
-            OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
-            OUTPUT_SEGMENTS[groupId][lang].push({ discontinuity: true });
+            if (hasValidTimelinePosition) {
+              // Add timelinePosition to fromSegments in case of preroll
+              let newtlp = 0;
+              fromSegments[targetGroupId][targetLang] = fromSegments[targetGroupId][targetLang].map(seg => {
+                if (seg.duration) {
+                  newtlp += seg.duration * 1000;
+                  seg.timelinePosition = toSegmentsLastTimelinePosition + newtlp;   
+                  return seg;
+                }
+                return seg;
+              });
+            }
+  
+            const size = toSegments[groupId][lang].length;
+            const lastSeg = toSegments[groupId][lang][size - 1];
+            if (lastSeg.uri && !lastSeg.discontinuity) {
+              toSegments[groupId][lang].push({ discontinuity: true });
+              OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+            } else if (lastSeg.discontinuity && !lastSeg.cue) {
+              toSegments[targetGroupId][lang][toSegments[groupId][lang].length - 1].cue = { in: true }
+              OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+            } else {
+              OUTPUT_SEGMENTS[groupId][lang] = toSegments[groupId][lang].concat(fromSegments[targetGroupId][targetLang]);
+              OUTPUT_SEGMENTS[groupId][lang].push({ discontinuity: true });
+            }
           }
         }
-      }
-    };
-    return OUTPUT_SEGMENTS;
+      };
+      return OUTPUT_SEGMENTS;
+    } catch (err) {
+      console.error(err);
+      return toSegments;
+    }
   }
 
   _insertTimedMetadata(segments, timedMetadata) {

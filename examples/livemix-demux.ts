@@ -19,16 +19,18 @@ import { ChannelEngine, ChannelEngineOpts,
     },
     CMAF: {
       slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_FILLER_CMAF_001/master.m3u8",
-      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_CMAF_001/master_en.m3u8", // 5 min
+      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_CMAF_003/index.m3u8", // 5 min  
       trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_CMAF_001/master.m3u8",
       bumper: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_CMAF_001/master.m3u8",
-      live: null 
+      live: "https://vc-engine-alb.a2d.tv/channels/c343c7c8-49f6-4c3b-88a5-c9e24dd2ce0c/master.m3u8" 
     }
   };
   
   const HLS_CONTENT = DEMUX_CONTENT.CMAF;
 
-  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinn-guide.eyevinn-lambda-stitch.auto.prod.osaas.io/stitch/master.m3u8";
+  let FIRST_PLAYED_VOD = true;
+
+  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinnlab-v3.eyevinn-lambda-stitch.auto.prod.osaas.io/stitch/master.m3u8";
 
   class RefAssetManager implements IAssetManager {
     private assets;
@@ -74,8 +76,10 @@ import { ChannelEngine, ChannelEngineOpts,
           const vodResponse = {
             id: vod.id,
             title: vod.title,
-            uri:  STITCH_ENDPOINT + "?payload=" + encodedPayload
+            uri:  STITCH_ENDPOINT + "?payload=" + encodedPayload,
+            unixTs: FIRST_PLAYED_VOD ? Date.now() : Date.now() + 50*1000
           };
+          FIRST_PLAYED_VOD = false;
           resolve(vodResponse);
         } else {
           reject("Invalid channelId provided");

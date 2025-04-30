@@ -80,6 +80,7 @@ class SessionLive {
     this.blockGenerateManifest = false;
     this.timeOffsetVideo = 0;
     this.timeOffsetAudio = 0;
+    this.v2lHasTimelinePosition = false;
 
     if (config) {
       if (config.sessionId) {
@@ -181,6 +182,9 @@ class SessionLive {
     this.allowedToSet = false;
     this.waitForPlayhead = true;
     this.blockGenerateManifest = false;
+    this.timeOffsetVideo = 0;
+    this.timeOffsetAudio = 0;
+    this.v2lHasTimelinePosition = false;
 
     debug(`[${this.instanceId}][${this.sessionId}]: Resetting all property values in sessionLive`);
   }
@@ -304,6 +308,7 @@ class SessionLive {
     }
     // Make it possible to add & share new segments
     this.allowedToSet = true;
+    this.v2lHasTimelinePosition = false;
     const allBws = Object.keys(segments);
     if (this._isEmpty(this.vodSegments)) {
       for (let i = 0; i < allBws.length; i++) {
@@ -332,6 +337,10 @@ class SessionLive {
             // In case a vinjette is added to the beginning of the stream and V2L doesn't provide timelinePosition on it
             this.timeOffsetVideo += v2lSegment.duration * 1000;
             v2lSegment.timelinePosition = this.timeOffsetVideo;
+          }
+          if ((v2lSegment.timelinePosition && this.timeOffsetVideo != 0) ||
+            (v2lSegment.timelinePosition && this.timeOffsetAudio != 0)) {
+            this.v2lHasTimelinePosition = true;
           }
         }
 
@@ -367,6 +376,7 @@ class SessionLive {
     }
     // Make it possible to add & share new segments
     this.allowedToSet = true;
+    let hasTimelinePosition = false;
     if (this._isEmpty(this.vodSegmentsAudio)) {
       const groupIds = Object.keys(segments);
       for (let i = 0; i < groupIds.length; i++) {
@@ -394,8 +404,11 @@ class SessionLive {
             }
             this.vodSegmentsAudio[audiotrack].push(v2lSegment);
             if (v2lSegment.timelinePosition) {
+              hasTimelinePosition = true;
               this.timeOffsetAudio = v2lSegment.timelinePosition;
-            } else if (v2lSegment.duration) {
+            } 
+            // Only set timelinePosition if hasTimelinePosition is true
+            if (hasTimelinePosition && v2lSegment.duration && !v2lSegment.timelinePosition) {
               this.timeOffsetAudio += v2lSegment.duration * 1000;
               v2lSegment.timelinePosition = this.timeOffsetAudio;
             }
@@ -1988,8 +2001,14 @@ class SessionLive {
       this.timeOffsetVideo = newTimeOffsetVideo;
     }
     const newTimeOffsetAudio = this.liveSegQueueAudio[liveTargetVariant] && this.liveSegQueueAudio[liveTargetVariant].length > 0 ? this.liveSegQueueAudio[liveTargetVariant][this.liveSegQueueAudio[liveTargetVariant].length - 1].timelinePosition : null;
-    if (plType === PlaylistTypes.AUDIO && newTimeOffsetAudio) {
-      this.timeOffsetAudio = newTimeOffsetAudio;
+    if (plType === PlaylistTypes.AUDIO && newTimeOffsetAudio) { 
+      this.timeOffsetAudio = newTimeOffsetAudio;    
+    }
+    // Incase the V2L never had Program Date Time (PDT), but Live Source did. We remove the PDT from all segments.
+    // Only allow PDT on the output stream if the V2L source has it.
+    if (!this.v2lHasTimelinePosition) {
+      this.timeOffsetVideo = null;
+      this.timeOffsetAudio = null;
     }
 
     try {
@@ -2040,7 +2059,7 @@ class SessionLive {
           }
         }
         if (playlistItem.get("duration")) {
-          timelinePosition += playlistItem.get("duration") * 1000;
+          timelinePosition = playlistItem.get("duration") * 1000;
         }
         if (playlistItem.get("discontinuity") && playlistItemPrev && !playlistItemPrev.get("discontinuity")) {
           if (plType === PlaylistTypes.VIDEO) {

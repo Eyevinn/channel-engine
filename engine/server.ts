@@ -284,7 +284,8 @@ export class ChannelEngine {
         cacheTTL: options.sharedStoreCacheTTL,
         volatileKeyTTL: options.volatileKeyTTL,
       }),
-      playheadStateStore: new PlayheadStateStore({ 
+      playheadStateStore: new PlayheadStateStore({
+        averageSegmentDuration: options.averageSegmentDuration,
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
@@ -471,7 +472,7 @@ export class ChannelEngine {
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
-    debug(newChannels);
+    debug(JSON.stringify(newChannels));
     const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
@@ -507,13 +508,15 @@ export class ChannelEngine {
         useDemuxedAudio: options.useDemuxedAudio,
         dummySubtitleEndpoint: this.dummySubtitleEndpoint,
         subtitleSliceEndpoint: this.subtitleSliceEndpoint,
-        useVTTSubtitles: this.useVTTSubtitles,
+        useVTTSubtitles: false,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         profile: channel.profile,
+        audioTracks: channel.audioTracks
       }, this.sessionLiveStore);
 
       sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
         streamSwitchManager: this.streamSwitchManager ? this.streamSwitchManager : null
       });
 
@@ -787,17 +790,36 @@ export class ChannelEngine {
       throw this._gracefulErrorHandler("Could not find a valid session");
     }
   }
-
+  
   async _handleAudioManifest(request, reply) {
-    debug(`req.url=${request.url}`);
-    const session = sessions[request.params[2]];
-    if (session) {
+    debug(`x-playback-session-id=${request.headers["x-playback-session-id"]} req.url=${request.url}`);
+    debug(request.params);
+    const channelId = request.params[2] || request.query['channel'];
+    const session = sessions[channelId];
+    const sessionLive = sessionsLive[channelId];
+    if (session && sessionLive) {
       try {
-        const body = await session.getCurrentAudioManifestAsync(
-          request.params[0],
-          request.params[1],
-          request.headers["x-playback-session-id"]
-        );
+        let body = null;
+        let ts1: number = Date.now();
+        if (!this.streamSwitchManager) {
+          debug(`[${channelId}]: Responding with VOD2Live manifest`);
+          body = await session.getCurrentAudioManifestAsync(request.params[0], request.params[1], request.headers["x-playback-session-id"]);
+        } else {
+          while (switcherStatus[channelId] === null || switcherStatus[channelId] === undefined) {
+            debug(`[${channelId}]: (${switcherStatus[request.params[1]]}) Waiting for streamSwitcher to respond`);
+            await timer(500);
+          }
+          debug(`switcherStatus[${request.params[1]}]=[${switcherStatus[channelId]}]`);
+          if (switcherStatus[channelId]) {
+            debug(`[${channelId}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentAudioManifestAsync(request.params[0], request.params[1]);
+          } else {
+            debug(`[${channelId}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentAudioManifestAsync(request.params[0], request.params[1], request.headers["x-playback-session-id"]);
+          }
+          debug(`[${channelId}]: Audio Manifest Request Took (${Date.now() - ts1})ms`);
+        }
+
         const buffer = Buffer.from(body, 'utf8');
         reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
@@ -861,7 +883,7 @@ export class ChannelEngine {
       throw this._gracefulErrorHandler(err);
     }
   }
-  
+
   async _handleSubtitleSliceEndpoint(request, reply) {
     debug(`req.url=${request.url}`);
     try {
@@ -984,7 +1006,7 @@ export class ChannelEngine {
         });
       }
     }
-  
+
     const engineStatus = {
       startTime: new Date(this.serverStartTime).toISOString(),
       uptime: toHHMMSS((Date.now() - this.serverStartTime) / 1000),
