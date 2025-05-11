@@ -15,33 +15,64 @@ import {
   SubtitleTracks,
 } from "../index";
 
+
+const DEMUX_CONTENT = {
+  TS: {
+    vod_1: {
+      id: 1,
+      title: "Elephants dream (TS) - 3 audio tracks",
+      uri: "https://cdn.theoplayer.com/video/elephants-dream/playlist.m3u8",
+    },
+    vod_2: {
+      id: 2,
+      title: "DEV DEMUX ASSET (TS) - 2 audio tracks",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_010/master_720360ensp.m3u8",
+    }, 
+    vod_3: {
+      id: 3,
+      title: "DEV DEMUX ASSET (TS) - 3 audio tracks",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_011/master_720360enspde.m3u8",
+    },
+    slate: {
+      id: 4,  
+      title: "DEMO DEMUX SLATE (TS) - 1 audio track",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
+    }
+  },
+  CMAF: {
+    vod_1: {
+      id: 1,
+      title: "DEMO DEMUX VOD (CMAF) - 1 audio track",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8", // 15 min
+    },
+    vod_2: {
+      id: 2,
+      title: "DEMO DEMUX VOD (CMAF) - 1 audio tracks",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8",
+    },
+    vod_3: {
+      id: 3,
+      title: "DEMO DEMUX VOD (CMAF) - 1 audio tracks",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8",
+    },
+    slate: {
+      id: 4,
+      title: "DEMO DEMUX SLATE (CMAF) - 1 audio track",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_SLATE_CMAF_EARTH_10S/multivariant.m3u8",
+    }
+  }
+};
+
+const HLS_CONTENT = DEMUX_CONTENT.TS;
+
 class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
   constructor(opts?) {
     this.assets = {
-      1: [
-        {
-          id: 1,
-          title: "Elephants dream (TS) - 3 audio tracks",
-          uri: "https://cdn.theoplayer.com/video/elephants-dream/playlist.m3u8",
-        },
-        
-      ],
-      2: [
-        {
-          id: 2,
-          title: "DEV DEMUX ASSET (TS) - 2 audio tracks",
-          uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_010/master_720360ensp.m3u8",
-        },
-      ],
-      3: [
-        {
-          id: 3,
-          title: "DEV DEMUX ASSET (TS) - 3 audio tracks",
-          uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_011/master_720360enspde.m3u8",
-        },
-      ],
+      1: [HLS_CONTENT.vod_1],
+      2: [HLS_CONTENT.vod_2],
+      3: [HLS_CONTENT.vod_3],
     };
     this.pos = {
       1: 0,
