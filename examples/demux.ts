@@ -23,23 +23,23 @@ class RefAssetManager implements IAssetManager {
       1: [
         {
           id: 1,
-          title: "Elephants dream",
-          uri: "https://mtoczko.github.io/hls-test-streams/test-audio-pdt/playlist.m3u8",
+          title: "Elephants dream (TS) - 3 audio tracks",
+          uri: "https://cdn.theoplayer.com/video/elephants-dream/playlist.m3u8",
         },
         
       ],
       2: [
         {
           id: 2,
-          title: "DEV DEMUX ASSET ts but perfect match langs",
-          uri: "https://trailer-admin-cdn.a2d.tv/virtualchannels/dev_asset_001/demux/demux2.2.m3u8",
+          title: "DEV DEMUX ASSET (TS) - 2 audio tracks",
+          uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_010/master_720360ensp.m3u8",
         },
       ],
       3: [
         {
           id: 3,
-          title: "DEV DEMUX ASSET ts but has 3 langs not 2",
-          uri: "https://trailer-admin-cdn.a2d-dev.tv/demux/asset_001/master_720360enspde.m3u8",
+          title: "DEV DEMUX ASSET (TS) - 3 audio tracks",
+          uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_TS_011/master_720360enspde.m3u8",
         },
       ],
     };
@@ -113,8 +113,8 @@ class RefChannelManager implements IChannelManager {
   }
   _getSubtitleTracks(): SubtitleTracks[] {
     return [
-      // { language: "zh", name: "chinese", default: true },
-      // { language: "fr", name: "french", default: false }
+      // { language: "zho", name: "chinese", default: true },
+      // { language: "fra", name: "french", default: false }
     ];
   }
 }
