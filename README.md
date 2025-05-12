@@ -38,9 +38,12 @@ Please see the [Documentation](https://vod2live.docs.eyevinn.technology) for int
 - Produce a personalized 24/7 HLS live channel unique for each viewer
 - Mix VOD2Live channel with a "real" live HLS stream
 - Develop adapters to plugin with custom scheduling endpoints
-- High Availability with Redis Cache as shared state store
+- High Availability with Redis Cache or Valkey as shared state store
 - Support for WebVTT subtitles
 - Support for DRM encrypted HLS VODs (in beta)
+- Improved performance with Redis connection pooling and pipelining
+- Enhanced stability in High Availability mode
+- Support for livemix with demuxed content (TS and CMAF)
 - And much more!
 
 ## System Requirements
@@ -55,22 +58,32 @@ Supported Node.js Versions
 
 ## Supported Source Formats
 
-| HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | DRM |
-| ---------- | ----- | ------- | ----------- | --------- | --- |
-| HLS + TS   | Yes   | Yes     | Yes*        | Yes       | No  |
-| HLS + CMAF | No    | Yes     | TBD         | Yes       | TBD |
+| HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | Mix w. Live & Subtitles | DRM |
+| ---------- | ----- | ------- | ----------- | --------- | ----------------------- | --- |
+| HLS + TS   | Yes   | Yes     | Yes         | Yes       | No                      | No  |
+| HLS + CMAF | Yes   | Yes     | Yes         | Yes       | No                      | No  |
 
-*\* not supported with demuxed sources*
+NOTE: The engine does not support subtitles in the live-mix + demux setting. Furthermore, then using the live-mix + demux setting, it is most optimal to use HLS content which has the same segment durations on all variants.
+Using a mix of different segment durations may result in occasional playback/audio sync issues, but not always. Further development will be needed to resolve this and improve the robustness of the live-mix + demux experience.
 
 ## High Availability Support
 
-[High availability support](https://vod2live.docs.eyevinn.technology/usage-guide.html#high-availability) is from v3 general available in the Channel Engine and it uses Redis as the shared storage. This allows you to run a replicaset behind a round-robin load balancer. Supported Redis Engine versions:
+[High availability support](https://vod2live.docs.eyevinn.technology/usage-guide.html#high-availability) is available in the Channel Engine and it uses Redis or Valkey as the shared storage. This allows you to run a replicaset behind a round-robin load balancer. 
+
+Supported Redis/Valkey Engine versions:
 
 | Version | Supported | 
 | ------- | --------- |
 | 5.x     | Yes       |
 | 6.x     | Yes       |
-| 7.x    | No        |
+| 7.x     | No        |
+
+### Redis/Valkey Configuration
+
+You can adjust Redis/Valkey connection pool size using the environment variable:
+```
+REDIS_POOL_SIZE=15  # Default is 15
+```
 
 ## Usage (Docker)
 
@@ -117,6 +130,21 @@ Instance created:
 This will create a linear channel by looping the Open Source Cloud demo reel video. Channel is available for playback on URL https://eyevinnlab.ce.prod.osaas.io/channels/guide/master.m3u8 in this case.
 
 ## Migration
+
+### Upgrading from 4.x to >= 5.0.0
+
+Version 5.0.0 introduces several significant improvements:
+
+- **Web Framework Change**: Replaced Restify with Fastify for improved performance
+- **Redis Improvements**: Added connection pooling and pipelining for better performance
+- **Livemix Enhancements**: Support for demuxed content in both TS and CMAF formats
+- **Stability Improvements**: Better handling of alignment in High Availability mode
+- **Manifest Format Options**: Added option to disable legacy master manifest format
+
+To migrate:
+1. If you've extended the server functionality, you'll need to update your code to use Fastify instead of Restify
+2. Review the new Redis pooling configuration options
+3. Test your application thoroughly, especially if using High Availability mode
 
 ### Upgrading from 3.4.x to >= 4.0.0
 
@@ -165,7 +193,7 @@ DEBUG=engine-* npm start
 
 In addition there other reference implemetations that can be used:
 - `examples/demux.ts` : example with demuxed audio
-- `examples/livemix.ts` : example with live mimxing
+- `examples/livemix.ts` : example with live mixing
 - `examples/multicodec.ts` : example with multicodec
 - `examples/drm.ts` : example with DRM
 - `examples/autocreate.ts` : example to auto create channel on demand
@@ -197,5 +225,4 @@ Join our [community on Slack](http://slack.streamingtech.se) where you can post 
 
 [Eyevinn Technology](https://www.eyevinntechnology.se) is an independent consultant firm specialized in video and streaming. Independent in a way that we are not commercially tied to any platform or technology vendor. As our way to innovate and push the industry forward we develop proof-of-concepts and tools. The things we learn and the code we write we share with the industry in [blogs](https://dev.to/video) and by open sourcing the code we have written.
 
-Want to know more about Eyevinn and how it is to work here. Contact us at work@eyevinn.se!
-
+Want to know more about Eyevinn and how it is to work here. Contact us at work@eyevinn.se! 

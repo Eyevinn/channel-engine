@@ -29,11 +29,14 @@ class SessionLiveStateStore extends SharedStateStore {
   constructor(opts) {
     super("sessionLive", opts, {
       firstCounts: {
-        liveSourceMseqCount: null,
-        mediaSeqCount: null,
-        discSeqCount: null,
+        liveSourceMseqCountVideo: null,
+        liveSourceMseqCountAudio: null,
+        mediaSeqCountVideo: null,
+        mediaSeqCountAudio: null,
+        discSeqCountVideo: null,
+        discSeqCountAudio: null,
       },
-      lastRequestedMediaSeqRaw: null,
+      lastRequestedMediaSeqRawVideo: null,
       liveSegsForFollowers: null,
       transitSegs: null,
     });

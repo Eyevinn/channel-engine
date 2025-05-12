@@ -9,7 +9,7 @@ import { ChannelEngine, ChannelEngineOpts,
 } from "../index";
 const { v4: uuidv4 } = require('uuid');
 
-const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "http://lambda.eyevinn.technology/stitch/master.m3u8";
+const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinn-guide.eyevinn-lambda-stitch.auto.prod.osaas.io";
 class RefAssetManager implements IAssetManager {
   private assets;
   private pos;
@@ -78,7 +78,7 @@ class RefAssetManager implements IAssetManager {
         const vodResponse = {
           id: vod.id,
           title: vod.title,
-          uri: STITCH_ENDPOINT + "?payload=" + encodedPayload
+          uri: STITCH_ENDPOINT + "/stitch/master.m3u8?payload=" + encodedPayload
         };
         resolve(vodResponse);
       } else {

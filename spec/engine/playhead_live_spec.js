@@ -4,7 +4,6 @@ const nock = require("nock");
 const Readable = require('stream').Readable;
 const { v4: uuidv4 } = require('uuid');
 const { SessionLiveStateStore } = require('../../engine/session_live_state.js');
-const { ExpectationFailedError } = require('restify-errors');
 
 const mockBaseUri = "https://mock.mock.com/";
 const mockLiveUri = "https://mock.mock.com/live/master.m3u8";
@@ -358,7 +357,7 @@ describe("SessionLive-Playhead consumer", () => {
       let remain = increments;
       let lastMseqNo = 0;
       while (remain > 0) {
-        await sessionLive._loadAllMediaManifests();
+        await sessionLive._loadAllPlaylistManifests();
         let manifest = await sessionLive.getCurrentMediaManifestAsync(180000);
 
         const m = manifest.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/);

@@ -1,14 +1,14 @@
-const restify = require('restify');
-const errs = require('restify-errors');
+const fastify = require('fastify')();
 const { v4: uuidv4 } = require('uuid');
 const debug = require('debug')('engine-server');
 const verbose = require('debug')('engine-server-verbose');
+const path = require('path');
 const Session = require('./session.js');
 const SessionLive = require('./session_live.js');
 const StreamSwitcher = require('./stream_switcher.js');
 const EventStream = require('./event_stream.js');
 const SubtitleSlicer = require('./subtitle_slicer.js');
-const { timer }= require('./util.js');
+const { timer, COMMON_HEADERS }= require('./util.js');
 
 const { SessionStateStore } = require('./session_state.js');
 const { SessionLiveStateStore } = require('./session_live_state.js');
@@ -264,12 +264,14 @@ export class ChannelEngine {
     }
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
-    this.server = restify.createServer();
+    this.server = fastify;
     if (options && options.keepAliveTimeout) {
       this.server.server.keepAliveTimeout = options.keepAliveTimeout;
       this.server.server.headersTimeout = options.keepAliveTimeout + 1000;  
     }
-    this.server.use(restify.plugins.queryParser());
+
+    this.server.options('*', preflight.handler);
+
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
 
@@ -282,7 +284,8 @@ export class ChannelEngine {
         cacheTTL: options.sharedStoreCacheTTL,
         volatileKeyTTL: options.volatileKeyTTL,
       }),
-      playheadStateStore: new PlayheadStateStore({ 
+      playheadStateStore: new PlayheadStateStore({
+        averageSegmentDuration: options.averageSegmentDuration,
         redisUrl: options.redisUrl, 
         memcachedUrl: options.memcachedUrl, 
         cacheTTL: options.sharedStoreCacheTTL,
@@ -302,11 +305,12 @@ export class ChannelEngine {
     };
 
     if (options && options.staticDirectory) {
-      this.server.get('/', restify.plugins.serveStatic({
-        directory: options.staticDirectory,
-        default: 'index.html'
-      }));
+      this.server.register(require('@fastify/static'), {
+        root: path.join(__dirname, options.staticDirectory),
+        prefix: '/', 
+      });
     }
+
     this.streamerOpts = {};
     if (options && options.averageSegmentDuration) {
       this.streamerOpts.defaultAverageSegmentDuration = options.averageSegmentDuration;
@@ -333,35 +337,41 @@ export class ChannelEngine {
     if (options && options.diffCompensationRate) {
       this.streamerOpts.diffCompensationRate = options.diffCompensationRate;
     }
-    const handleMasterRoute = async (req, res, next) => {
+    const handleMasterRoute = async (req, res) => {
       debug(req.params);
       let m;
+      const session = req.params.channelId;
       if (req.params.file.match(/master.m3u8/)) {
-        await this._handleMasterManifest(req, res, next);
-      } else if (m = req.params.file.match(/master(\d+).m3u8;session=(.*)$/)) {
+        await this._handleMasterManifest(req, res);
+      } else if (m = req.params.file.match(/master(\d+).m3u8(?:;session=(.*))?$/)) {
+        req.params[0] = m[1];
+        req.params[1] = m[2] || session; 
+        await this._handleMediaManifest(req, res);
+      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8(?:;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        await this._handleMediaManifest(req, res, next);
-      } else if (m = req.params.file.match(/master-(\S+)_(\S+).m3u8;session=(.*)$/)) {
+        req.params[2] = m[3] || session;
+        await this._handleAudioManifest(req, res);
+      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8(?:;session=(.*))?$/)) {
         req.params[0] = m[1];
         req.params[1] = m[2];
-        req.params[2] = m[3];
-        await this._handleAudioManifest(req, res, next);
-      } else if (m = req.params.file.match(/subtitles-(\S+)_(\S+).m3u8;session=(.*)$/)) {
-        req.params[0] = m[1];
-        req.params[1] = m[2];
-        req.params[2] = m[3];
-        await this._handleSubtitleManifest(req, res, next);
+        req.params[2] = m[3] || session;
+        await this._handleSubtitleManifest(req, res);
+      } else {
+        res.header("X-Instance-Id", this.instanceId + `<${version}>`);
+        res.status(404).send({ 
+          message: "Manifest not found - invalid format or unsupported manifest type" 
+        });
       }
     };
-    this.server.get('/live/:file', async (req, res, next) => {
-      await handleMasterRoute(req, res, next);
+    this.server.get('/live/:file', async (req, res) => {
+      await handleMasterRoute(req, res);
     });
-    this.server.get('/channels/:channelId/:file', async (req, res, next) => {
+    this.server.get('/channels/:channelId/:file', async (req, res) => {
       req.query['channel'] = req.params.channelId;
-      await handleMasterRoute(req, res, next);
+      await handleMasterRoute(req, res);
     });
-    this.server.pre(preflight.handler);
+
     this.server.get('/eventstream/:sessionId', this._handleEventStream.bind(this));
     this.server.get('/status/:sessionId', this._handleStatus.bind(this));
     this.server.get('/health', this._handleAggregatedSessionHealth.bind(this));
@@ -371,13 +381,14 @@ export class ChannelEngine {
     this.server.get(vttBasePath + DefaultDummySubtitleEndpointPath, this._handleDummySubtitleEndpoint.bind(this));
     this.server.get(vttBasePath + DefaultSubtitleSpliceEndpointPath, this._handleSubtitleSliceEndpoint.bind(this));
 
-    this.server.on('NotFound', (req, res, err, next) => {
-      res.header("X-Instance-Id", this.instanceId + `<${version}>`);
-      return next();
+    this.server.setNotFoundHandler((request, reply) => {
+      reply.header("X-Instance-Id", this.instanceId + `<${version}>`);
+      reply.status(404).send({ message: "Not Found" });
     });
-    this.server.on('InternalServer', (req, res, err, next) => {
-      res.header("X-Instance-Id", this.instanceId + `<${version}>`);
-      return next();
+    
+    this.server.setErrorHandler((error, request, reply) => {
+      reply.header("X-Instance-Id", this.instanceId + `<${version}>`);
+      reply.status(500).send({ message: "Internal Server Error", error: error.message });
     });
 
     if (options && options.heartbeat) {
@@ -461,7 +472,7 @@ export class ChannelEngine {
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
-    debug(newChannels);
+    debug(JSON.stringify(newChannels));
     const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
@@ -497,13 +508,15 @@ export class ChannelEngine {
         useDemuxedAudio: options.useDemuxedAudio,
         dummySubtitleEndpoint: this.dummySubtitleEndpoint,
         subtitleSliceEndpoint: this.subtitleSliceEndpoint,
-        useVTTSubtitles: this.useVTTSubtitles,
+        useVTTSubtitles: false,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         profile: channel.profile,
+        audioTracks: channel.audioTracks
       }, this.sessionLiveStore);
 
       sessionSwitchers[channel.id] = new StreamSwitcher({
         sessionId: channel.id,
+        useDemuxedAudio: options.useDemuxedAudio,
         streamSwitchManager: this.streamSwitchManager ? this.streamSwitchManager : null
       });
 
@@ -565,8 +578,16 @@ export class ChannelEngine {
   }
 
   listen(port) {
-    this.server.listen(port, () => {
-      debug('%s listening at %s', this.server.name, this.server.url);
+    this.server.listen({ port: port }, (err) => {
+      if (err) {
+        console.error(err);
+        process.exit(1);
+      }
+      const addressInfo = this.server.server.address();
+      const host = addressInfo.address === '::' ? 'localhost' : addressInfo.address; 
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+      const url = `${protocol}://${host}:${addressInfo.port}`;
+      debug('%s listening at %s', this.server.name || 'Fastify', url);
     });
   }
 
@@ -618,8 +639,7 @@ export class ChannelEngine {
       const masterM3U8 = await session.getMasterManifestAsync();
       return masterM3U8;
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      return Promise.reject(err)
+      return Promise.reject({ message: 'Invalid session' })
     }
   }
 
@@ -647,8 +667,7 @@ export class ChannelEngine {
 
       return allMediaM3U8;
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      return Promise.reject(err)
+      return Promise.reject({ message: 'Invalid session' })
     }
   }
 
@@ -675,8 +694,7 @@ export class ChannelEngine {
 
       return allAudioM3U8;
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      return Promise.reject(err)
+      return Promise.reject({ message: 'Invalid session' })
     }
   }
 
@@ -703,59 +721,58 @@ export class ChannelEngine {
 
       return allSubtitleM3U8;
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      return Promise.reject(err)
+      return Promise.reject({ message: 'Invalid session' })
     }
   }
 
-  _handleHeartbeat(req, res, next) {
-    debug('req.url=' + req.url);
-    res.send(200);
-    next();
+  _handleHeartbeat(request, reply) {
+    debug('req.url=' + request.url);
+    reply.status(200).send();
   }
 
-  async _handleMasterManifest(req, res, next) {
-    debug('req.url=' + req.url);
-    debug(req.query);
+  async _handleMasterManifest(request, reply) {
+    debug('req.url=' + request.url);
+    debug(request.query);
     let session;
-    let sessionLive;
     let options: any = {};
-    if (req.query['playlist']) {
-      // Backward compatibility
-      options.category = req.query['playlist'];
+    
+    if (request.query['playlist']) {
+      options.category = request.query['playlist'];
     }
-    if (req.query['category']) {
-      options.category = req.query['category'];
+    if (request.query['category']) {
+      options.category = request.query['category'];
     }
-    if (this.autoCreateSession && req.query['channel']) {
-      debug(`Attempting to create channel with id ${req.query['channel']}`);
-      await this.createChannel(req.query['channel']);
-      debug(`Automatically created channel with id ${req.query['channel']}`);
+    if (this.autoCreateSession && request.query['channel']) {
+      debug(`Attempting to create channel with id ${request.query['channel']}`);
+      await this.createChannel(request.query['channel']);
+      debug(`Automatically created channel with id ${request.query['channel']}`);
     }
-
-    if (req.query['channel'] && sessions[req.query['channel']]) {
-      session = sessions[req.query['channel']];
-    } else if (req.query['session'] && sessions[req.query['session']]) {
-      session = sessions[req.query['session']];
+  
+    if (request.query['channel'] && sessions[request.query['channel']]) {
+      session = sessions[request.query['channel']];
+    } else if (request.query['session'] && sessions[request.query['session']]) {
+      session = sessions[request.query['session']];
     }
-    if (req.query['startWithId']) {
-      options.startWithId = req.query['startWithId'];
+    if (request.query['startWithId']) {
+      options.startWithId = request.query['startWithId'];
       debug(`New session to start with assetId=${options.startWithId}`);
     }
-
+  
     if (session) {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
-
+  
       let filter;
-      if (req.query['filter']) {
-        debug(`Applying filter on master manifest ${req.query['filter']}`);
-        filter = filterQueryParser(req.query['filter']);
+      if (request.query['filter']) {
+        debug(`Applying filter on master manifest ${request.query['filter']}`);
+        filter = filterQueryParser(request.query['filter']);
       }
-
+  
       try {
         const body = await session.getMasterManifestAsync(filter);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+        const buffer = Buffer.from(body, 'utf8');
+        
+        reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Headers": "X-Session-Id",
@@ -763,202 +780,218 @@ export class ChannelEngine {
           "Cache-Control": "max-age=300",
           "X-Session-Id": session.sessionId,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        next();
+        reply.raw.end(buffer);
       } catch (err) {
-        next(this._errorHandler(err));
+        throw this._errorHandler(err);
       }
     } else {
-      next(this._gracefulErrorHandler("Could not find a valid session"));
+      throw this._gracefulErrorHandler("Could not find a valid session");
     }
   }
-
-  async _handleAudioManifest(req, res, next) {
-    debug(`req.url=${req.url}`);
-    const session = sessions[req.params[2]];
-    if (session) {
+  
+  async _handleAudioManifest(request, reply) {
+    debug(`x-playback-session-id=${request.headers["x-playback-session-id"]} req.url=${request.url}`);
+    debug(request.params);
+    const channelId = request.params[2] || request.query['channel'];
+    const session = sessions[channelId];
+    const sessionLive = sessionsLive[channelId];
+    if (session && sessionLive) {
       try {
-        const body = await session.getCurrentAudioManifestAsync(
-          req.params[0],
-          req.params[1],
-          req.headers["x-playback-session-id"]
-        );
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+        let body = null;
+        let ts1: number = Date.now();
+        if (!this.streamSwitchManager) {
+          debug(`[${channelId}]: Responding with VOD2Live manifest`);
+          body = await session.getCurrentAudioManifestAsync(request.params[0], request.params[1], request.headers["x-playback-session-id"]);
+        } else {
+          while (switcherStatus[channelId] === null || switcherStatus[channelId] === undefined) {
+            debug(`[${channelId}]: (${switcherStatus[request.params[1]]}) Waiting for streamSwitcher to respond`);
+            await timer(500);
+          }
+          debug(`switcherStatus[${request.params[1]}]=[${switcherStatus[channelId]}]`);
+          if (switcherStatus[channelId]) {
+            debug(`[${channelId}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentAudioManifestAsync(request.params[0], request.params[1]);
+          } else {
+            debug(`[${channelId}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentAudioManifestAsync(request.params[0], request.params[1], request.headers["x-playback-session-id"]);
+          }
+          debug(`[${channelId}]: Audio Manifest Request Took (${Date.now() - ts1})ms`);
+        }
+
+        const buffer = Buffer.from(body, 'utf8');
+        reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        next();
+        reply.raw.end(buffer);
       } catch (err) {
-        next(this._gracefulErrorHandler(err));
+        throw this._gracefulErrorHandler(err);
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      next(err);
+      reply.status(404).send({ message: 'Invalid session' });
+      return;
     }
   }
 
-  async _handleSubtitleManifest(req, res, next) {
-    debug(`req.url=${req.url}`);
-    const session = sessions[req.params[2]];
+  async _handleSubtitleManifest(request, reply) {
+    debug(`req.url=${request.url}`);
+    const session = sessions[request.params[2]];
     if (session) {
       try {
         const body = await session.getCurrentSubtitleManifestAsync(
-          req.params[0],
-          req.params[1],
-          req.headers["x-playback-session-id"]
+          request.params[0],
+          request.params[1],
+          request.headers["x-playback-session-id"]
         );
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+        const buffer = Buffer.from(body, 'utf8');
+        reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        next();
+        reply.raw.end(buffer);
       } catch (err) {
-        next(this._gracefulErrorHandler(err));
+        throw this._gracefulErrorHandler(err);
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      next(err);
+      reply.status(404).send({ message: 'Invalid session' });
+      return;
     }
   }
 
-  async _handleDummySubtitleEndpoint(req,res,next) {
-    debug(`req.url=${req.url}`);
+  async _handleDummySubtitleEndpoint(request, reply) {
+    debug(`req.url=${request.url}`);
     try {
       const body = `WEBVTT\nX-TIMESTAMP-MAP=MPEGTS:0,LOCAL:00:00:00.000\n\n`;
-      res.sendRaw(200, Buffer.from(body, 'utf8'), {
+      const buffer = Buffer.from(body, 'utf8');
+      reply.raw.writeHead(200, {
         "Content-Type": "text/vtt",
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
         "X-Instance-Id": this.instanceId + `<${version}>`,
+        "Content-Length": buffer.length
       });
-      next();
+      reply.raw.end(buffer);
     } catch (err) {
-      next(this._gracefulErrorHandler(err));
+      throw this._gracefulErrorHandler(err);
     }
   }
 
-  async _handleSubtitleSliceEndpoint(req,res,next) {
-    debug(`req.url=${req.url}`);
-      try {
-        const slicer = new SubtitleSlicer();
-        const body = await slicer.generateVtt(req.query);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
-          "Content-Type": "text/vtt",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
-          "X-Instance-Id": this.instanceId + `<${version}>`,
-        });
-        next();
-      } catch (err) {
-        next(this._gracefulErrorHandler(err));
-      }
+  async _handleSubtitleSliceEndpoint(request, reply) {
+    debug(`req.url=${request.url}`);
+    try {
+      const slicer = new SubtitleSlicer();
+      const body = await slicer.generateVtt(request.query);
+      const buffer = Buffer.from(body, 'utf8');
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/vtt",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
+        "X-Instance-Id": this.instanceId + `<${version}>`,
+        "Content-Length": buffer.length
+      });
+      reply.raw.end(buffer);
+    } catch (err) {
+      throw this._gracefulErrorHandler(err);
+    }
   }
 
-  async _handleMediaManifest(req, res, next) {
-    debug(`x-playback-session-id=${req.headers["x-playback-session-id"]} req.url=${req.url}`);
-    debug(req.params);
-    const session = sessions[req.params[1]];
-    const sessionLive = sessionsLive[req.params[1]];
+  async _handleMediaManifest(request, reply) {
+    debug(`x-playback-session-id=${request.headers["x-playback-session-id"]} req.url=${request.url}`);
+    debug(request.params);
+    const session = sessions[request.params[1]];
+    const sessionLive = sessionsLive[request.params[1]];
+
     if (session && sessionLive) {
       try {
         let body = null;
         if (!this.streamSwitchManager) {
-          debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
-          body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+          debug(`[${request.params[1]}]: Responding with VOD2Live manifest`);
+          body = await session.getCurrentMediaManifestAsync(request.params[0], request.headers["x-playback-session-id"]);
         } else {
-          while (switcherStatus[req.params[1]] === null || switcherStatus[req.params[1]] === undefined) {
-            debug(`[${req.params[1]}]: (${switcherStatus[req.params[1]]}) Waiting for streamSwitcher to respond`);
+          while (switcherStatus[request.params[1]] === null || switcherStatus[request.params[1]] === undefined) {
+            debug(`[${request.params[1]}]: (${switcherStatus[request.params[1]]}) Waiting for streamSwitcher to respond`);
             await timer(500);
           }
-          debug(`switcherStatus[${req.params[1]}]=[${switcherStatus[req.params[1]]}]`);
-          if (switcherStatus[req.params[1]]) {
-            debug(`[${req.params[1]}]: Responding with Live-stream manifest`);
-            body = await sessionLive.getCurrentMediaManifestAsync(req.params[0]);
+          debug(`switcherStatus[${request.params[1]}]=[${switcherStatus[request.params[1]]}]`);
+          if (switcherStatus[request.params[1]]) {
+            debug(`[${request.params[1]}]: Responding with Live-stream manifest`);
+            body = await sessionLive.getCurrentMediaManifestAsync(request.params[0]);
           } else {
-            debug(`[${req.params[1]}]: Responding with VOD2Live manifest`);
-            body = await session.getCurrentMediaManifestAsync(req.params[0], req.headers["x-playback-session-id"]);
+            debug(`[${request.params[1]}]: Responding with VOD2Live manifest`);
+            body = await session.getCurrentMediaManifestAsync(request.params[0], request.headers["x-playback-session-id"]);
           }
         }
 
-        //verbose(`[${session.sessionId}] body=`);
-        //verbose(body);
-        res.sendRaw(200, Buffer.from(body, 'utf8'), {
+        const buffer = Buffer.from(body, 'utf8');
+        reply.raw.writeHead(200, {
           "Content-Type": "application/vnd.apple.mpegurl",
           "Access-Control-Allow-Origin": "*",
           "Cache-Control": `max-age=${this.streamerOpts.cacheTTL || '4'}`,
           "X-Instance-Id": this.instanceId + `<${version}>`,
+          "Content-Length": buffer.length
         });
-        next();
+        reply.raw.end(buffer);
       } catch (err) {
-        next(this._gracefulErrorHandler(err));
+        throw this._gracefulErrorHandler(err);
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session(s)');
-      next(err);
-    }
-  }
-
-  _handleEventStream(req, res, next) {
-    debug(`req.url=${req.url}`);
-    const eventStream = eventStreams[req.params.sessionId];
-    if (eventStream) {
-      eventStream.poll().then(body => {
-        res.sendRaw(200, body, { 
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "max-age=4",
-        });
-        next();
-      }).catch(err => {
-        next(this._errorHandler(err));
-      });
-    } else {
-      // Silent error
-      debug(`No event stream found for session=${req.params.sessionId}`);
-      res.sendRaw(200, '{}', { 
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "max-age=4",
-      });
-      next();
-    } 
-  }
-
-  async _handleStatus(req, res, next) {
-    debug(`req.url=${req.url}`);
-    const session = sessions[req.params.sessionId];
-    if (session) {
-      const body = await session.getStatusAsync();
-      res.sendRaw(200, JSON.stringify(body), {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      next();
-    } else {
-      const err = new errs.NotFoundError('Invalid session');
-      next(err);
-    }
-  }
-
-  async _handleAggregatedSessionHealth(req, res, next) {
-    debug(`req.url=${req.url}`);
-    if (this.sessionHealthKey && this.sessionHealthKey !== req.headers['x-health-key']) {
-      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Health-Key" }),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      next();
+      reply.status(404).send({ message: 'Invalid session' });
       return;
     }
+  }
+
+  async _handleEventStream(request, reply) {
+    debug(`req.url=${request.url}`);
+    const eventStream = eventStreams[request.params.sessionId];
+
+    if (eventStream) {
+      try {
+        const body = await eventStream.poll();
+        reply.status(200).send(body); 
+      } catch (err) {
+        throw this._errorHandler(err);
+      }
+    } else {
+      debug(`No event stream found for session=${request.params.sessionId}`);
+      reply.status(200).send({});
+    }
+  }
+
+  async _handleStatus(request, reply) {
+    debug(`req.url=${request.url}`);
+    const session = sessions[request.params.sessionId];
+    
+    if (session) {
+      const body = await session.getStatusAsync();
+      reply.status(200).send(body);
+    } else {
+      reply.status(404).send({ message: 'Invalid session' });
+      return;
+    }
+  }
+
+  async _handleAggregatedSessionHealth(request, reply) {
+    debug(`req.url=${request.url}`);
+    
+    if (this.sessionHealthKey && this.sessionHealthKey !== request.headers['x-health-key']) {
+      reply
+.headers(COMMON_HEADERS)
+        .status(403)
+        .send({ "message": "Invalid Session-Health-Key" });
+      return;
+    }
+  
     let failingSessions = [];
     let endpoints = [];
+    
     for (const sessionId of Object.keys(sessions)) {
       const session = sessions[sessionId];
       if (session && session.hasPlayhead()) {
@@ -973,151 +1006,167 @@ export class ChannelEngine {
         });
       }
     }
+
     const engineStatus = {
       startTime: new Date(this.serverStartTime).toISOString(),
       uptime: toHHMMSS((Date.now() - this.serverStartTime) / 1000),
       version: version,
       instanceId: this.instanceId,
     };
+  
     if (failingSessions.length === 0) {
-      res.sendRaw(200, 
-        JSON.stringify({ "health": "ok", "engine": engineStatus, "count": endpoints.length, "sessionEndpoints": endpoints }),
-        {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",  
+      reply
+.headers(COMMON_HEADERS)
+        .status(200)
+        .send({
+          "health": "ok",
+          "engine": engineStatus,
+          "count": endpoints.length,
+          "sessionEndpoints": endpoints
         });
     } else {
-      res.sendRaw(503, JSON.stringify({ "health": "unhealthy", "engine": engineStatus, "failed": failingSessions }),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
+      reply
+.headers(COMMON_HEADERS)
+        .status(503)
+        .send({
+          "health": "unhealthy",
+          "engine": engineStatus,
+          "failed": failingSessions
+        });
     }
   }
 
-  async _handleSessionHealth(req, res, next) {
-    debug(`req.url=${req.url}`);
-    const session = sessions[req.params.sessionId];
+  async _handleSessionHealth(request, reply) {
+    debug(`req.url=${request.url}`);
+    const session = sessions[request.params.sessionId];
+    
     if (session) {
       const status = await session.getStatusAsync();
+      
       if (status.playhead && status.playhead.state === "running") {
-        res.sendRaw(200, JSON.stringify({ "health": "ok", "tick": status.playhead.tickMs, "mediaSeq": status.playhead.mediaSeq }),
-        {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",  
-        });
+        reply
+          .headers(COMMON_HEADERS)
+          .status(200)
+          .send(JSON.stringify({ 
+            "health": "ok", 
+            "tick": status.playhead.tickMs, 
+            "mediaSeq": status.playhead.mediaSeq 
+          }));
       } else {
-        res.sendRaw(503, JSON.stringify({ "health": "unhealthy" }),
-        {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",
-        });
+        reply
+          .header("Content-Type", "application/json")
+          .header("Access-Control-Allow-Origin", "*")
+          .header("Cache-Control", "no-cache")
+          .status(503)
+          .send({ 
+            "health": "unhealthy" 
+          });
       }
     } else {
-      const err = new errs.NotFoundError('Invalid session');
-      next(err);
+      reply.status(404).send({ message: 'Invalid session' });
+      return;
     }
   }
 
-  async _handleSessionsReset(req, res, next) {
-    debug(`req.url=${req.url}`);
-    if (this.sessionResetKey && req.query.key !== this.sessionResetKey) {
-      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Reset-Key" }),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      next();
+  async _handleSessionsReset(request, reply) {
+    debug(`req.url=${request.url}`);
+    
+    if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
+      reply
+.headers(COMMON_HEADERS)
+        .status(403)
+        .send({ "message": "Invalid Session-Reset-Key" });
       return;
     }
+  
     let sessionResets = [];
+    
     for (const sessionId of Object.keys(sessions)) {
       const session = sessions[sessionId];
       const sessionLive = sessionsLive[sessionId];
+      
       if (session && sessionLive) {
         await session.resetAsync(); 
         sessionResets.push(sessionId);
       } else {
-        const err = new errs.NotFoundError('Invalid session');
-        next(err);
+        reply.status(404).send({ message: 'Invalid session' });
+        return;
       }
     }
-    res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
-    {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "no-cache",
-    });
+  
+    reply
+      .header("Content-Type", "application/json")
+      .header("Access-Control-Allow-Origin", "*")
+      .header("Cache-Control", "no-cache")
+      .status(200)
+      .send(JSON.stringify({ 
+        "status": "ok", 
+        "instanceId": this.instanceId, 
+        "resets": sessionResets 
+      }));
   }
 
-  async _handleSessionReset(req, res, next) {
-    debug(`req.url=${req.url}`);
-    if (this.sessionResetKey && req.query.key !== this.sessionResetKey) {
-      res.sendRaw(403, JSON.stringify({ "message": "Invalid Session-Reset-Key" }),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      next();
+  async _handleSessionReset(request, reply) {
+    debug(`req.url=${request.url}`);
+
+    if (this.sessionResetKey && request.query.key !== this.sessionResetKey) {
+      reply
+.headers(COMMON_HEADERS)
+        .status(403)
+        .send({ "message": "Invalid Session-Reset-Key" });
       return;
     }
+
     try {
       let sessionId;
-      if (req.params && req.params.sessionId) {
-        sessionId = req.params.sessionId;
+      if (request.params && request.params.sessionId) {
+        sessionId = request.params.sessionId;
       }
+
       let sessionResets = [];
       const session = sessions[sessionId];
       const sessionLive = sessionsLive[sessionId];
+
       if (session && sessionLive) {
-        await session.resetAsync(sessionId); 
+        await session.resetAsync(sessionId);
         sessionResets.push(sessionId);
       } else {
-        res.sendRaw(400, JSON.stringify({ "message": "Invalid Session ID" }),
-        {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "no-cache",
-        });
-        next();
+        reply
+          .header("Content-Type", "application/json")
+          .header("Access-Control-Allow-Origin", "*")
+          .header("Cache-Control", "no-cache")
+          .status(400)
+          .send({ "message": "Invalid Session ID" });
         return;
       }
-      
-      res.sendRaw(200, JSON.stringify({ "status": "ok", "instanceId": this.instanceId, "resets": sessionResets }),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      next();
+
+      reply
+.headers(COMMON_HEADERS)
+        .status(200)
+        .send({
+          "status": "ok",
+          "instanceId": this.instanceId,
+          "resets": sessionResets
+        });
     } catch (e) {
-      res.sendRaw(500, JSON.stringify({ "error": e}),
-      {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-cache",
-      });
-      const err = new errs.NotFoundError('Session Reset Failed');
-      next(err);
+      reply
+.headers(COMMON_HEADERS)
+        .status(500)
+        .send({ "error": e });
+      return;
     }
   }
 
 
   _gracefulErrorHandler(errMsg) {
     console.error(errMsg);
-    const err = new errs.NotFoundError(errMsg);
+    const err = new Error(errMsg);
     return err;
   }
 
   _errorHandler(errMsg) {
     console.error(errMsg);
-    const err = new errs.InternalServerError(errMsg);
+    const err = new Error(errMsg);
     return err;
   }
 }

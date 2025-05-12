@@ -9,11 +9,10 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString } = require('./util.js');
+const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString, roundToThreeDecimals } = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
-const AVERAGE_SEGMENT_DURATION = 3000;
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
 const DEFAULT_DIFF_COMPENSATION_RATE = 0.5;
@@ -39,7 +38,7 @@ class Session {
     //this.currentVod;
     this.currentMetadata = {};
     this._events = [];
-    this.averageSegmentDuration = AVERAGE_SEGMENT_DURATION;
+    this.averageSegmentDuration = null;
     this.use_demuxed_audio = false;
     this.use_vtt_subtitles = false;
     this.dummySubtitleEndpoint = "";
@@ -69,6 +68,10 @@ class Session {
       discSeq: null,
       mediaSeqOffset: null,
       transitionSegments: null,
+      audioSeq: null,
+      discAudioSeq: null,
+      audioSeqOffset: null,
+      transitionAudioSegments: null,
       reloadBehind: null,
     }
     this.isAllowedToClearVodCache = null;
@@ -76,11 +79,14 @@ class Session {
     this.alwaysMapBandwidthByNearest = null;
     this.partialStoreHLSVod = null;
     this.currentPlayheadRef = null;
+    this.disableLegacyMasterManifestFormat = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
       }
-
+      if (config.disableLegacyMasterManifestFormat) {
+        this.disableLegacyMasterManifestFormat = config.disableLegacyMasterManifestFormat;
+      }
       if (config.partialStoreHLSVod) {
         this.partialStoreHLSVod = config.partialStoreHLSVod;
       }
@@ -237,12 +243,12 @@ class Session {
           if (this.timePositionOffset && this.diffCompensation <= 0 && this.alwaysNewSegments) {
             timePosition -= this.timePositionOffset;
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-              { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset });
+              { event: 'applyTimePositionOffset', channel: this._sessionId, offsetMs: this.timePositionOffset }); // why does this trigger and timeposoff is large? TODO
           }
           const diff = position - timePosition;
-          debug(`[${this._sessionId}]: ${timePosition}:${position}:${diff > 0 ? '+' : ''}${diff}ms`);
+          debug(`[${this._sessionId}]: ${timePosition}:${roundToThreeDecimals(position) }:${diff > 0 ? '+' : ''}${roundToThreeDecimals(diff) }ms`);
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
-            { event: 'playheadDiff', channel: this._sessionId, diffMs: diff });
+            { event: 'playheadDiff', channel: this._sessionId, diffMs: roundToThreeDecimals(diff) });
           if (this.alwaysNewSegments) {
             // Apply Playhead diff compensation, only after external diff compensation has concluded.
             if (this.diffCompensation <= 0) {
@@ -370,8 +376,19 @@ class Session {
       return null;
     }
   }
+  async getTruncatedVodAudioSegments(vodUri, duration) {
+    try {
+      const hlsVod = await this._truncateSlate(null, duration, vodUri);
+      let vodSegments = hlsVod.getAudioSegments();
+      Object.keys(vodSegments).forEach((bw) => vodSegments[bw].unshift({ discontinuity: true, cue: { in: true } }));
+      return vodSegments;
+    } catch (exc) {
+      debug(`[${this._sessionId}]: Failed to generate truncated VOD!`);
+      return null;
+    }
+  }
 
-  async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind) {
+  async setCurrentMediaSequenceSegments(segments, mSeqOffset, reloadBehind, audioSegments, aSeqOffset) {
     if (!this._sessionState) {
       throw new Error("Session not ready");
     }
@@ -380,6 +397,8 @@ class Session {
     this.switchDataForSession.reloadBehind = reloadBehind;
     this.switchDataForSession.transitionSegments = segments;
     this.switchDataForSession.mediaSeqOffset = mSeqOffset;
+    this.switchDataForSession.transitionAudioSegments = audioSegments;
+    this.switchDataForSession.audioSeqOffset = aSeqOffset;
 
     let waitTimeMs = 2000;
     for (let i = segments[Object.keys(segments)[0]].length - 1; 0 < i; i--) {
@@ -387,6 +406,20 @@ class Session {
         waitTimeMs = parseInt(1000 * (segments[Object.keys(segments)[0]][i].duration / 3), 10);
         break;
       }
+    }
+
+    if (this.use_demuxed_audio && audioSegments) {
+      let waitTimeMsAudio = 2000;
+      let groupId = Object.keys(audioSegments)[0];
+      let lang = Object.keys(audioSegments[groupId])[0]
+      for (let i = audioSegments[groupId][lang].length - 1; 0 < i; i--) {
+        const segment = audioSegments[groupId][lang][i];
+        if (segment.duration) {
+          waitTimeMsAudio = parseInt(1000 * (segment.duration / 3), 10);
+          break;
+        }
+      }
+      waitTimeMs = waitTimeMs > waitTimeMsAudio ? waitTimeMs : waitTimeMsAudio;
     }
 
     let isLeader = await this._sessionStateStore.isLeader(this._instanceId);
@@ -472,7 +505,7 @@ class Session {
         let mediaSequenceValue = 0;
         if (currentVod.sequenceAlwaysContainNewSegments) {
           mediaSequenceValue = currentVod.mediaSequenceValues[playheadState.vodMediaSeqVideo];
-          debug(`[${this._sessionId}]: {${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
+          debug(`[${this._sessionId}]: V{${mediaSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValue()}}`);
         } else {
           mediaSequenceValue = playheadState.vodMediaSeqVideo;
         }
@@ -489,7 +522,61 @@ class Session {
     }
   }
 
-  async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq) {
+  async getCurrentAudioSequenceSegments(opts) {
+    if (!this._sessionState) {
+      throw new Error('Session not ready');
+    }
+    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    if (isLeader) {
+      await this._sessionState.set("vodReloaded", 0);
+    }
+
+    // Only read data from store if state is VOD_PLAYING
+    let state = await this.getSessionState();
+    let tries = 12;
+    while (state !== SessionState.VOD_PLAYING && tries > 0) {
+      const waitTimeMs = 500;
+      debug(`[${this._sessionId}]: state=${state} - Waiting ${waitTimeMs}ms_${tries} until Leader has finished loading next vod.`);
+      await timer(waitTimeMs);
+      tries--;
+      state = await this.getSessionState();
+    }
+
+    const playheadState = {
+      vodMediaSeqAudio: null
+    }
+    if (opts && opts.targetMseq !== undefined) {
+      playheadState.vodMediaSeqAudio = opts.targetMseq;
+    } else {
+      playheadState.vodMediaSeqAudio = await this._playheadState.get("vodMediaSeqAudio");
+    }
+
+    // NOTE: Assume that VOD cache was already cleared in 'getCurrentMediaAndDiscSequenceCount()'
+    // and that we now have access to the correct vod cache
+    const currentVod = await this._sessionState.getCurrentVod();
+    if (currentVod) {
+      try {
+        const audioSegments = currentVod.getLiveAudioSequenceSegments(playheadState.vodMediaSeqAudio);
+        let audioSequenceValue = 0;
+        if (currentVod.sequenceAlwaysContainNewSegments) {
+          audioSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+          debug(`[${this._sessionId}]: A{${audioSequenceValue}}_{${currentVod.getLastSequenceMediaSequenceValueAudio()}}`);
+        } else {
+          audioSequenceValue = playheadState.vodMediaSeqAudio;
+        }
+        debug(`[${this._sessionId}]: Requesting all audio segments from Media Sequence: ${playheadState.vodMediaSeqAudio}(${audioSequenceValue})_${currentVod.getLiveMediaSequencesCount("audio")}`);
+        return audioSegments;
+      } catch (err) {
+        logerror(this._sessionId, err);
+        await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
+        throw new Error("Failed to get all current audio segments: " + JSON.stringify(playheadState));
+      }
+    } else {
+      throw new Error("Engine not ready");
+    }
+  }
+
+  async setCurrentMediaAndDiscSequenceCount(_mediaSeq, _discSeq, _audioSeq, _discAudioSeq) {
     if (!this._sessionState) {
       throw new Error("Session not ready");
     }
@@ -498,6 +585,8 @@ class Session {
 
     this.switchDataForSession.mediaSeq = _mediaSeq;
     this.switchDataForSession.discSeq = _discSeq;
+    this.switchDataForSession.audioSeq = _audioSeq;
+    this.switchDataForSession.discAudioSeq = _discAudioSeq;
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
@@ -516,9 +605,10 @@ class Session {
       state = await this.getSessionState();
     }
 
-    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo"]);
+    const playheadState = await this._playheadState.getValues(["mediaSeq", "vodMediaSeqVideo", "mediaSeqAudio", "vodMediaSeqAudio"]);
     const discSeqOffset = await this._sessionState.get("discSeq");
-    // TODO: support Audio too ^
+    const discAudioSeqOffset = await this._sessionState.get("discSeqAudio");
+
 
     // Clear Vod Cache here when Switching to Live just to be safe...
     if (playheadState.vodMediaSeqVideo === 0) {
@@ -530,6 +620,7 @@ class Session {
     }
     const currentVod = await this._sessionState.getCurrentVod();
     if (currentVod) {
+      let countsData;
       try {
         let mediaSequenceValue = 0;
         if (currentVod.sequenceAlwaysContainNewSegments) {
@@ -539,13 +630,30 @@ class Session {
           mediaSequenceValue = playheadState.vodMediaSeqVideo;
         }
         const discSeqCount = discSeqOffset + currentVod.discontinuities[playheadState.vodMediaSeqVideo];
-
         debug(`[${this._sessionId}]: MediaSeq: (${playheadState.mediaSeq}+${mediaSequenceValue}=${(playheadState.mediaSeq + mediaSequenceValue)}) and DiscSeq: (${discSeqCount}) requested `);
-        return {
+
+        countsData = {
           'mediaSeq': (playheadState.mediaSeq + mediaSequenceValue),
           'discSeq': discSeqCount,
           'vodMediaSeqVideo': playheadState.vodMediaSeqVideo,
         };
+
+        let discSeqCountAudio;
+        let audioSequenceValue;
+        if (this.use_demuxed_audio) {
+          discSeqCountAudio = discAudioSeqOffset + currentVod.discontinuitiesAudio[playheadState.vodMediaSeqAudio];
+          if (currentVod.sequenceAlwaysContainNewSegments) {
+            audioSequenceValue = currentVod.mediaSequenceValuesAudio[playheadState.vodMediaSeqAudio];
+            debug(`[${this._sessionId}]: seqIndex=${playheadState.vodMediaSeqAudio}_seqValue=${audioSequenceValue}`)
+          } else {
+            audioSequenceValue = playheadState.vodMediaSeqAudio;
+          }
+          debug(`[${this._sessionId}]: AudioSeq: (${playheadState.mediaSeqAudio}+${audioSequenceValue}=${(playheadState.mediaSeqAudio + audioSequenceValue)}) and DiscSeq: (${discSeqCountAudio}) requested `);
+          countsData['audioSeq'] = (playheadState.mediaSeqAudio + audioSequenceValue);
+          countsData['discSeqAudio'] = discSeqCountAudio;
+          countsData['vodMediaSeqAudio'] = playheadState.vodMediaSeqAudio;
+        }
+        return countsData;
       } catch (err) {
         logerror(this._sessionId, err);
         await this._sessionState.clearCurrentVodCache(); // force reading up from shared store
@@ -560,7 +668,7 @@ class Session {
     if (!this._sessionState) {
       throw new Error('Session not ready');
     }
-    const m3u8 = this._getM3u8File("video", bw, playbackSessionId);
+    const m3u8 = await this._getM3u8File("video", bw, playbackSessionId);
     return m3u8;
   }
 
@@ -569,7 +677,7 @@ class Session {
       throw new Error('Session not ready');
     }
     const variantKey = JSON.stringify({groupId: audioGroupId, lang: audioLanguage});
-    const m3u8 = this._getM3u8File("audio", variantKey, playbackSessionId);
+    const m3u8 = await this._getM3u8File("audio", variantKey, playbackSessionId);
     return m3u8;
   }
   
@@ -578,7 +686,7 @@ class Session {
       throw new Error('Session not ready');
     }
     const variantKey = JSON.stringify({groupId: subtitleGroupId, lang: subtitleLanguage});
-    const m3u8 = this._getM3u8File("subtitle", variantKey, playbackSessionId);
+    const m3u8 = await this._getM3u8File("subtitle", variantKey, playbackSessionId);
     return m3u8;
   }
 
@@ -632,9 +740,8 @@ class Session {
       let playheadPosVideoMs;
       let playheadAudio;
       let playheadSubtitle;
-      if (this.use_demuxed_audio || this.use_vtt_subtitles) {
-        playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
-      }
+      
+      playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
 
       if (this.use_demuxed_audio) {
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
@@ -665,15 +772,7 @@ class Session {
         debug(`[${this._sessionId}]: Will increment subtitle with ${playheadSubtitle.increment}`);
         sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", playheadSubtitle.increment);
       }
-      debug(`[${this._sessionId}]: Current VOD Playhead Positions are to be V[${(playheadPosVideoMs/1000).toFixed(3)}]${
-        playheadAudio ? `A[${(playheadAudio.position).toFixed(3)}]` : ""
-      }${
-        playheadSubtitle ? `S[${(playheadSubtitle.position).toFixed(3)})]` : ""
-      }${
-        playheadAudio ? ` (${playheadAudio.diff})` : ""
-      }${
-        playheadSubtitle ? ` (${playheadSubtitle.diff})` : ""
-      }`);
+      this._logCurrentPlayheadPositions(playheadPosVideoMs, playheadAudio, playheadSubtitle);
     }
 
     let newSessionState = {};
@@ -929,7 +1028,7 @@ class Session {
               `,NAME="${audioTrack.name}"` +
               `,AUTOSELECT=YES,DEFAULT=${audioTrack.default ? 'YES' : 'NO'}` +
               `,CHANNELS="${channels ? channels : 2}"` +
-              `,URI="master-${audioGroupIdFileName}_${audioTrack.language}.m3u8%3Bsession=${this._sessionId}"` +
+              `,URI="master-${audioGroupIdFileName}_${audioTrack.language}.m3u8${!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : ""}"` +
               "\n";
           }
         }
@@ -951,7 +1050,7 @@ class Session {
               `,LANGUAGE="${subtitleTrack.language}"` +
               `,NAME="${subtitleTrack.name}"` +
               `,AUTOSELECT=YES,DEFAULT=${subtitleTrack.default ? 'YES' : 'NO'}` +
-              `,URI="subtitles-${subtitleGroupId}_${subtitleTrack.language}.m3u8%3Bsession=${this._sessionId}"` +
+              `,URI="subtitles-${subtitleGroupId}_${subtitleTrack.language}.m3u8${!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : ""}"` +
               "\n";
           }
         }
@@ -970,7 +1069,7 @@ class Session {
             const profileChannels = profile.channels ? profile.channels : "2";
             audioGroupIdToUse = currentVod.getAudioGroupIdForCodecs(audioCodec, profileChannels);
             if (!audioGroupIds.includes(audioGroupIdToUse)) {
-              audioGroupIdToUse = defaultAudioGroupId; 
+              audioGroupIdToUse = defaultAudioGroupId;
             }
           }
 
@@ -978,33 +1077,33 @@ class Session {
 
           // skip stream if no corresponding audio group can be found
           if (audioGroupIdToUse) {
-            m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + 
-              ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + 
-              ',CODECS="' + profile.codecs + '"' + 
-              `,AUDIO="${audioGroupIdToUse}"` + 
-              (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') + 
+            m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw +
+              ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] +
+              ',CODECS="' + profile.codecs + '"' +
+              `,AUDIO="${audioGroupIdToUse}"` +
+              (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
               (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-            m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+            m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
           }
         } else {
-          m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + 
-            ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] + 
-            ',CODECS="' + profile.codecs + '"' + 
-            (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + 
-            (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') + 
+          m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw +
+            ',RESOLUTION=' + profile.resolution[0] + 'x' + profile.resolution[1] +
+            ',CODECS="' + profile.codecs + '"' +
+            (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') +
+            (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
             (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-          m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+          m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
         }
       });
     } else {
       currentVod.getUsageProfiles().forEach(profile => {
-        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw + 
-          ',RESOLUTION=' + profile.resolution + 
-          ',CODECS="' + profile.codecs + '"' + 
-          (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') + 
+        m3u8 += '#EXT-X-STREAM-INF:BANDWIDTH=' + profile.bw +
+          ',RESOLUTION=' + profile.resolution +
+          ',CODECS="' + profile.codecs + '"' +
+          (defaultAudioGroupId ? `,AUDIO="${defaultAudioGroupId}"` : '') +
           (defaultSubtitleGroupId ? `,SUBTITLES="${defaultSubtitleGroupId}"` : '') +
           (hasClosedCaptions ? ',CLOSED-CAPTIONS="cc"' : '') + '\n';
-        m3u8 += "master" + profile.bw + ".m3u8%3Bsession=" + this._sessionId + "\n";
+        m3u8 += "master" + profile.bw + ".m3u8" + (!this.disableLegacyMasterManifestFormat ? `%3Bsession=${this._sessionId}` : "") + "\n";
       });
     }
 
@@ -1159,8 +1258,9 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got first VOD uri=${vodResponse.uri}:${vodResponse.offset || 0}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
-                forcedDemuxMode: this.use_demuxed_audio, 
+              const hlsOpts = {
+                sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+                forcedDemuxMode: this.use_demuxed_audio,
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1176,8 +1276,13 @@ class Session {
               }
               currentVod = newVod;
               if (vodResponse.desiredDuration) {
-                const { mediaManifestLoader, audioManifestLoader} = await this._truncateVod(vodResponse);
-                loadPromise = currentVod.load(null, mediaManifestLoader, audioManifestLoader);
+                try {
+                  const { mediaManifestLoader, audioManifestLoader, subtitleManifestLoader } = await this._truncateVod(vodResponse);
+                  loadPromise = currentVod.load(null, mediaManifestLoader, audioManifestLoader, subtitleManifestLoader);
+                } catch (e) {
+                  console.error(`[${this._sessionId}]: Failed to truncate VOD: ${e}`);
+                  loadPromise = currentVod.load();
+                }
               } else {
                 loadPromise = currentVod.load();
               }
@@ -1341,8 +1446,9 @@ class Session {
             let loadPromise;
             if (!vodResponse.type) {
               debug(`[${this._sessionId}]: got next VOD uri=${vodResponse.uri}:${vodResponse.offset}`);
-              const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
-                forcedDemuxMode: this.use_demuxed_audio, 
+              const hlsOpts = {
+                sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+                forcedDemuxMode: this.use_demuxed_audio,
                 dummySubtitleEndpoint: this.dummySubtitleEndpoint,
                 subtitleSliceEndpoint: this.subtitleSliceEndpoint,
                 shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1365,8 +1471,13 @@ class Session {
                 }
               });
               if (vodResponse.desiredDuration) {
-                const { mediaManifestLoader, audioManifestLoader} = await this._truncateVod(vodResponse);
-                loadPromise = newVod.loadAfter(currentVod, null, mediaManifestLoader, audioManifestLoader);
+                try {
+                  const { mediaManifestLoader, audioManifestLoader, subtitleManifestLoader } = await this._truncateVod(vodResponse);
+                  loadPromise = newVod.loadAfter(currentVod, null, mediaManifestLoader, audioManifestLoader, subtitleManifestLoader);
+                } catch (e) {
+                  console.error(`[${this._sessionId}]: Failed to truncate VOD: ${e}`);
+                  loadPromise = newVod.loadAfter(currentVod);
+                }
               } else {
                 loadPromise = newVod.loadAfter(currentVod);
               }
@@ -1418,7 +1529,7 @@ class Session {
             await this._sessionState.remove("nextVod");
             this.leaderIsSettingNextVod = false;
             await this._playheadState.set("diffCompensation", this.diffCompensation, isLeader);
-            debug(`[${this._sessionId}]: sharing durrent vods diffCompensation=${this.diffCompensation}`);
+            debug(`[${this._sessionId}]: sharing current vods diffCompensation=${this.diffCompensation}`);
             this.produceEvent({
               type: 'NOW_PLAYING',
               data: {
@@ -1468,36 +1579,85 @@ class Session {
       case SessionState.VOD_RELOAD_INIT:
         try {
           debug(`[${this._sessionId}]: state=VOD_RELOAD_INIT`);
+          if (this.diffCompensation <= 0) {
+            this.diffCompensation = 0.1;
+          }
           if (isLeader) {
             const startTS = Date.now();
             // 1) To tell Follower that, Leader is working on it!
             sessionState.state = await this._sessionState.set("state", SessionState.VOD_RELOAD_INITIATING);
-            // 2) Set new 'offset' sequences, to carry on the continuity from session-live 
-            let mSeq = this.switchDataForSession.mediaSeq;
-            // TODO: support demux^
+            // 2) Set new 'offset' sequences, to carry on the continuity from session-live
+            let mseqV = this.switchDataForSession.mediaSeq;
+            let mseqA = this.switchDataForSession.audioSeq;
+            let discSeqV = this.switchDataForSession.discSeq;
+            let discSeqA = this.switchDataForSession.discAudioSeq;
             let currentVod = await this._sessionState.getCurrentVod();
             if (currentVod.sequenceAlwaysContainNewSegments) {
               // (!) will need to compensate if using this setting on HLSVod Object.
-              Object.keys(this.switchDataForSession.transitionSegments).forEach(bw => {
+              Object.keys(this.switchDataForSession.transitionSegments).forEach((bw, i) => {
                 let shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
                 if (shiftedSeg && shiftedSeg.discontinuity) {
                   shiftedSeg = this.switchDataForSession.transitionSegments[bw].shift();
+                  if (i == 0) {
+                    discSeqV++;
+                  }
+                }
+                if (shiftedSeg && shiftedSeg.duration) {
+                  if (i == 0) {
+                    mseqV++;
+                  }
                 }
               });
+              if (this.use_demuxed_audio) {
+                const groupIds = Object.keys(this.switchDataForSession.transitionAudioSegments);
+                for (let i = 0; i < groupIds.length; i++) {
+                  const groupId = groupIds[i];
+                  const langs = Object.keys(this.switchDataForSession.transitionAudioSegments[groupId]);
+                  for (let j = 0; j < langs.length; j++) {
+                    const lang = langs[j];
+                    let shiftedSeg = this.switchDataForSession.transitionAudioSegments[groupId][lang].shift();
+                    if (shiftedSeg && shiftedSeg.discontinuity) {
+                      shiftedSeg = this.switchDataForSession.transitionAudioSegments[groupId][lang].shift();
+                      if (i == 0 && j == 0) {
+                        discSeqA++;
+                      }
+                    }
+                    if (shiftedSeg && shiftedSeg.duration) {
+                      if (i == 0 && j == 0) {
+                        mseqA++;
+                      }
+                    }
+                  }
+                }
+              }
             }
-            const dSeq = this.switchDataForSession.discSeq;
-            const mSeqOffset = this.switchDataForSession.mediaSeqOffset;
             const reloadBehind = this.switchDataForSession.reloadBehind;
+            const mseqOffsetV = this.switchDataForSession.mediaSeqOffset;
+            const mseqOffsetA = this.switchDataForSession.audioSeqOffset;
             const segments = this.switchDataForSession.transitionSegments;
-            if ([mSeq, dSeq, mSeqOffset, reloadBehind, segments].includes(null)) {
+            const audioSegments = this.switchDataForSession.transitionAudioSegments;
+
+            if ([mseqV, discSeqV, mseqOffsetV, reloadBehind, segments].includes(null)) {
               debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
               return;
             }
-            await this._sessionState.set("mediaSeq", mSeq);
-            await this._playheadState.set("mediaSeq", mSeq, isLeader);
-            await this._sessionState.set("discSeq", dSeq);
+
+            if (this.use_demuxed_audio && [mseqA, discSeqA, mseqOffsetA, audioSegments].includes(null)) {
+              debug(`[${this._sessionId}]: LEADER: Cannot Reload VOD, missing switch-back data`);
+              return;
+            }
+            await this._sessionState.set("mediaSeq", mseqV);
+            await this._playheadState.set("mediaSeq", mseqV, isLeader);
+            await this._sessionState.set("discSeq", discSeqV);
             // TODO: support demux^
-            debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mSeq}]:[${dSeq}]`);
+            debug(`[${this._sessionId}]: Setting current media and discontinuity count -> [${mseqV}]:[${discSeqV}]`);
+
+            if (this.use_demuxed_audio) {
+              await this._sessionState.set("mediaSeqAudio", mseqA);
+              await this._playheadState.set("mediaSeqAudio", mseqA, isLeader);
+              await this._sessionState.set("discSeqAudio", discSeqA);
+              debug(`[${this._sessionId}]: Setting current audio media and discontinuity count -> [${mseqA}]:[${discSeqA}]`);
+            }
             // 3) Set new media segments/currentVod, to carry on the continuity from session-live
             debug(`[${this._sessionId}]: LEADER: making changes to current VOD. I will also update currentVod in store.`);
             const playheadState = await this._playheadState.getValues(["vodMediaSeqVideo"]);
@@ -1506,26 +1666,44 @@ class Session {
               nextMseq = currentVod.getLiveMediaSequencesCount() - 1;
             }
 
+            if (this.use_demuxed_audio) {
+              const playheadStateAudio = await this._playheadState.getValues(["vodMediaSeqAudio"]);
+              let nextAudioMseq = playheadStateAudio.vodMediaSeqAudio + 1;
+              if (nextAudioMseq > currentVod.getLiveMediaSequencesCount("audio") - 1) {
+                nextAudioMseq = currentVod.getLiveMediaSequencesCount("audio") - 1;
+              }
+            }
+
             // ---------------------------------------------------.
-            // TODO: Support reloading with audioSegments and SubtitleSegments as well |
+            // TODO: Support reloading with SubtitleSegments as well |
             // ---------------------------------------------------'
 
-            await currentVod.reload(nextMseq, segments, null, reloadBehind);
+            await currentVod.reload(nextMseq, segments, audioSegments, reloadBehind);
             await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
             await this._sessionState.set("vodReloaded", 1);
             await this._sessionState.set("vodMediaSeqVideo", 0);
-            await this._sessionState.set("vodMediaSeqAudio", 0);
-            await this._sessionState.set("vodMediaSeqSubtitle", 0);
             await this._playheadState.set("vodMediaSeqVideo", 0, isLeader);
-            await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
-            await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
+            if (this.use_demuxed_audio) {
+              await this._sessionState.set("vodMediaSeqAudio", 0);
+              await this._playheadState.set("vodMediaSeqAudio", 0, isLeader);
+              await this._sessionState.set("vodMediaSeqSubtitle", 0);
+              await this._playheadState.set("vodMediaSeqSubtitle", 0, isLeader);
+            }
             this.currentPlayheadRef = await this._playheadState.set("playheadRef", Date.now(), isLeader);
             // 4) Log to debug and cloudwatch
             debug(`[${this._sessionId}]: LEADER: Set new Reloaded VOD and vodMediaSeq counts in store.`);
             debug(`[${this._sessionId}]: next VOD Reloaded (${currentVod.getDeltaTimes()})`);
             debug(`[${this._sessionId}]: ${currentVod.getPlayheadPositions()}`);
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}`);
-            cloudWatchLog(!this.cloudWatchLogging, "engine-session", { event: "switchback", channel: this._sessionId, reqTimeMs: Date.now() - startTS });
+            if (this.use_demuxed_audio) {
+              debug(`[${this._sessionId}]: audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}`);
+              debug(`[${this._sessionId}]: subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
+            }
+            cloudWatchLog(!this.cloudWatchLogging, "engine-session", {
+              event: "switchback",
+              channel: this._sessionId,
+              reqTimeMs: Date.now() - startTS,
+            });
             return;
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_RELOAD_INITIATING`);
@@ -1594,8 +1772,9 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
-              forcedDemuxMode: this.use_demuxed_audio, 
+            const hlsOpts = {
+              sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+              forcedDemuxMode: this.use_demuxed_audio,
               dummySubtitleEndpoint: this.dummySubtitleEndpoint,
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
@@ -1621,10 +1800,19 @@ class Session {
                 mediaManifestStream.push(null);
                 return mediaManifestStream;
               };
+              let subtitleManifestLoader;
+              if (this.use_vtt_subtitles && this._subtitleTracks) {    
+                subtitleManifestLoader = (groupId, language) => {
+                  let mediaManifestStream = new Readable();
+                  mediaManifestStream.push(slateVod.getSubtitleManifest(groupId, language));
+                  mediaManifestStream.push(null);
+                  return mediaManifestStream;
+                };
+              }
               if (afterVod) {
-                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               } else {
-                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               }
             } else {
               if (afterVod) {
@@ -1633,7 +1821,6 @@ class Session {
                 return hlsVod.load(null, slateMediaManifestLoader);
               }
             }
-
           })
           .then(() => {
             resolve(hlsVod);
@@ -1659,6 +1846,7 @@ class Session {
         truncatedVod.load()
           .then(() => {
             let audioManifestLoader;
+            let subtitleManifestLoader;
             const mediaManifestLoader = (bw) => {
               let mediaManifestStream = new Readable();
               mediaManifestStream.push(truncatedVod.getMediaManifest(bw));
@@ -1673,7 +1861,15 @@ class Session {
                 return mediaManifestStream;
               };
             }
-            resolve({ mediaManifestLoader, audioManifestLoader });
+            if (this.use_vtt_subtitles && this._subtitleTracks) {
+              subtitleManifestLoader = (groupId, language) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(truncatedVod.getSubtitleManifest(groupId, language));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+            }
+            resolve({ mediaManifestLoader, audioManifestLoader, subtitleManifestLoader });
           }).catch(err => {
             debug(err);
             reject(err);
@@ -1698,10 +1894,10 @@ class Session {
 
         slateVod.load()
           .then(() => {
-            const hlsOpts = { 
-              sequenceAlwaysContainNewSegments: this.alwaysNewSegments, 
-              forcedDemuxMode: this.use_demuxed_audio, 
-              dummySubtitleEndpoint: this.dummySubtitleEndpoint, 
+            const hlsOpts = {
+              sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+              forcedDemuxMode: this.use_demuxed_audio,
+              dummySubtitleEndpoint: this.dummySubtitleEndpoint,
               subtitleSliceEndpoint: this.subtitleSliceEndpoint,
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
@@ -1720,16 +1916,26 @@ class Session {
               return mediaManifestStream;
             };
             if (this.use_demuxed_audio) {
-              const slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
+              let slateAudioManifestLoader;
+              let subtitleManifestLoader;
+              slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
                 let mediaManifestStream = new Readable();
                 mediaManifestStream.push(slateVod.getAudioManifest(audioGroupId, audioLanguage));
                 mediaManifestStream.push(null);
                 return mediaManifestStream;
               };
+              if (this.use_vtt_subtitles && this._subtitleTracks) {    
+                subtitleManifestLoader = (groupId, language) => {
+                  let mediaManifestStream = new Readable();
+                  mediaManifestStream.push(slateVod.getSubtitleManifest(groupId, language));
+                  mediaManifestStream.push(null);
+                  return mediaManifestStream;
+                };
+              }
               if (afterVod) {
-                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               } else {
-                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               }
             } else {
               if (afterVod) {
@@ -1829,7 +2035,7 @@ class Session {
     const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo"]);
     const currentVod = await this._sessionState.getCurrentVod();
     const playheadPositions = currentVod.getPlayheadPositions();
-    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${playheadPositions[sessionState.vodMediaSeqVideo]}`);
+    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${roundToThreeDecimals(playheadPositions[sessionState.vodMediaSeqVideo])}`);
     return playheadPositions[sessionState.vodMediaSeqVideo];
   }
 
@@ -1839,7 +2045,7 @@ class Session {
     if (seqIdx >= playheadPositions.length - 1) {
       seqIdx = playheadPositions.length - 1
     }
-    debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${playheadPositions[seqIdx]}`);
+    debug(`[${this._sessionId}]: Current audio playhead position (${seqIdx}): ${roundToThreeDecimals(playheadPositions[seqIdx])}`);
     return playheadPositions[seqIdx];
   }
 
@@ -1849,7 +2055,7 @@ class Session {
     if (seqIdx >= playheadPositions.length - 1) {
       seqIdx = playheadPositions.length - 1
     }
-    debug(`[${this._sessionId}]: Current subtitle playhead position (${seqIdx}): ${playheadPositions[seqIdx]}`);
+    debug(`[${this._sessionId}]: Current subtitle playhead position (${seqIdx}): ${roundToThreeDecimals(playheadPositions[seqIdx])}`);
     return playheadPositions[seqIdx];
   }
 
@@ -1915,7 +2121,7 @@ class Session {
      const currentPosExtraMedia = (await _getExtraPlayheadPositionAsyncFn(_vodMediaSeqExtra + extraMediaIncrement)) * 1000;
      positionX = currentPosExtraMedia ? currentPosExtraMedia / 1000 : 0;
      posDiff = (positionV - positionX).toFixed(3);
-     debug(`[${this._sessionId}]: positionV=${positionV};position${_extraType === "audio" ? "A" : "S"}=${positionX};posDiff=${posDiff}`);
+     debug(`[${this._sessionId}]: positionV=${roundToThreeDecimals(positionV)};position${_extraType === "audio" ? "A" : "S"}=${roundToThreeDecimals(positionX)};posDiff=${posDiff}`);
      if (isNaN(posDiff)) {
       break;
      }
@@ -2133,6 +2339,37 @@ class Session {
         if (variantType === "subtitle") return vod.getLiveMediaSequencesCount("subtitle");
       default:
         console.log(`WARNING! dataName:${dataName} is not valid`);
+    }
+  }
+
+  _logCurrentPlayheadPositions(playheadPosVideoMs, playheadAudio, playheadSubtitle) {
+    try {
+      let videoPositionValue = "";
+      let audioPositionValue = "";
+      let subtitlePositionValue = "";
+      if (playheadPosVideoMs != null || playheadPosVideoMs != undefined) {
+        videoPositionValue = (playheadPosVideoMs / 1000).toFixed(3);
+      } else {
+        videoPositionValue = "null";
+      }
+      if ((playheadAudio && playheadAudio.position != null) || (playheadAudio && playheadAudio.position != undefined)) {
+        audioPositionValue = playheadAudio.position.toFixed(3);
+      } else {
+        audioPositionValue = "null";
+      }
+      if ((playheadSubtitle && playheadSubtitle.position != null) || (playheadSubtitle && playheadSubtitle.position != undefined)) {
+        subtitlePositionValue = playheadSubtitle.position.toFixed(3);
+      } else {
+        subtitlePositionValue = "null";
+      }
+  
+      debug(
+        `[${this._sessionId}]: Current VOD Playhead Positions are to be V[${videoPositionValue}]${playheadAudio ? `A[${audioPositionValue}]` : ""}${
+          playheadSubtitle ? `S[${subtitlePositionValue})]` : ""
+        }${playheadAudio ? ` (${playheadAudio.diff})` : ""}${playheadSubtitle ? ` (${playheadSubtitle.diff})` : ""}`
+      );
+    } catch (err) {
+      logerror(this._sessionId, err);
     }
   }
 }

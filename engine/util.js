@@ -2,6 +2,12 @@ const { version } = require("../package.json");
 const fetch = require("node-fetch");
 const { AbortController } = require("abort-controller");
 
+const COMMON_HEADERS = {
+  "Content-Type": "application/json",
+  "Access-Control-Allow-Origin": "*",
+  "Cache-Control": "no-cache"
+}
+
 const filterQueryParser = (filterQuery) => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
@@ -158,6 +164,14 @@ const findNearestValue = (val, array) => {
     return Math.abs(b - val) < Math.abs(a - val) ? b : a;
   });
 };
+const findAudioGroupOrLang = (val, array) => {
+  for(let  i = 0; i < array.length; i++) {
+    if (array[i] === val) {
+      return val
+    }
+  }
+  return array[0];
+};
 
 const isValidUrl = (url) => {
   try {
@@ -242,6 +256,11 @@ const timeLeft = (endTimestamp, currentTimestamp) => {
   return msg;
 };
 
+const roundToThreeDecimals = (number) => {
+  const r = Math.round(number * 1000) / 1000;
+  return r
+}
+
 module.exports = {
   filterQueryParser,
   applyFilter,
@@ -251,9 +270,13 @@ module.exports = {
   logerror,
   timer,
   WaitTimeGenerator,
+  ItemIsEmpty,
   findNearestValue,
   isValidUrl,
   fetchWithRetry,
   codecsFromString,
   timeLeft,
+  findAudioGroupOrLang,
+  roundToThreeDecimals,
+  COMMON_HEADERS
 };
