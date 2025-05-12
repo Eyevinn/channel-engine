@@ -1276,8 +1276,13 @@ class Session {
               }
               currentVod = newVod;
               if (vodResponse.desiredDuration) {
-                const { mediaManifestLoader, audioManifestLoader } = await this._truncateVod(vodResponse);
-                loadPromise = currentVod.load(null, mediaManifestLoader, audioManifestLoader);
+                try {
+                  const { mediaManifestLoader, audioManifestLoader, subtitleManifestLoader } = await this._truncateVod(vodResponse);
+                  loadPromise = currentVod.load(null, mediaManifestLoader, audioManifestLoader, subtitleManifestLoader);
+                } catch (e) {
+                  console.error(`[${this._sessionId}]: Failed to truncate VOD: ${e}`);
+                  loadPromise = currentVod.load();
+                }
               } else {
                 loadPromise = currentVod.load();
               }
@@ -1466,8 +1471,13 @@ class Session {
                 }
               });
               if (vodResponse.desiredDuration) {
-                const { mediaManifestLoader, audioManifestLoader } = await this._truncateVod(vodResponse);
-                loadPromise = newVod.loadAfter(currentVod, null, mediaManifestLoader, audioManifestLoader);
+                try {
+                  const { mediaManifestLoader, audioManifestLoader, subtitleManifestLoader } = await this._truncateVod(vodResponse);
+                  loadPromise = newVod.loadAfter(currentVod, null, mediaManifestLoader, audioManifestLoader, subtitleManifestLoader);
+                } catch (e) {
+                  console.error(`[${this._sessionId}]: Failed to truncate VOD: ${e}`);
+                  loadPromise = newVod.loadAfter(currentVod);
+                }
               } else {
                 loadPromise = newVod.loadAfter(currentVod);
               }
@@ -1790,10 +1800,19 @@ class Session {
                 mediaManifestStream.push(null);
                 return mediaManifestStream;
               };
+              let subtitleManifestLoader;
+              if (this.use_vtt_subtitles && this._subtitleTracks) {    
+                subtitleManifestLoader = (groupId, language) => {
+                  let mediaManifestStream = new Readable();
+                  mediaManifestStream.push(slateVod.getSubtitleManifest(groupId, language));
+                  mediaManifestStream.push(null);
+                  return mediaManifestStream;
+                };
+              }
               if (afterVod) {
-                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               } else {
-                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               }
             } else {
               if (afterVod) {
@@ -1802,7 +1821,6 @@ class Session {
                 return hlsVod.load(null, slateMediaManifestLoader);
               }
             }
-
           })
           .then(() => {
             resolve(hlsVod);
@@ -1828,6 +1846,7 @@ class Session {
         truncatedVod.load()
           .then(() => {
             let audioManifestLoader;
+            let subtitleManifestLoader;
             const mediaManifestLoader = (bw) => {
               let mediaManifestStream = new Readable();
               mediaManifestStream.push(truncatedVod.getMediaManifest(bw));
@@ -1842,7 +1861,15 @@ class Session {
                 return mediaManifestStream;
               };
             }
-            resolve({ mediaManifestLoader, audioManifestLoader });
+            if (this.use_vtt_subtitles && this._subtitleTracks) {
+              subtitleManifestLoader = (groupId, language) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(truncatedVod.getSubtitleManifest(groupId, language));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+            }
+            resolve({ mediaManifestLoader, audioManifestLoader, subtitleManifestLoader });
           }).catch(err => {
             debug(err);
             reject(err);
@@ -1889,16 +1916,26 @@ class Session {
               return mediaManifestStream;
             };
             if (this.use_demuxed_audio) {
-              const slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
+              let slateAudioManifestLoader;
+              let subtitleManifestLoader;
+              slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
                 let mediaManifestStream = new Readable();
                 mediaManifestStream.push(slateVod.getAudioManifest(audioGroupId, audioLanguage));
                 mediaManifestStream.push(null);
                 return mediaManifestStream;
               };
+              if (this.use_vtt_subtitles && this._subtitleTracks) {    
+                subtitleManifestLoader = (groupId, language) => {
+                  let mediaManifestStream = new Readable();
+                  mediaManifestStream.push(slateVod.getSubtitleManifest(groupId, language));
+                  mediaManifestStream.push(null);
+                  return mediaManifestStream;
+                };
+              }
               if (afterVod) {
-                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.loadAfter(afterVod, null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               } else {
-                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader);
+                return hlsVod.load(null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
               }
             } else {
               if (afterVod) {
