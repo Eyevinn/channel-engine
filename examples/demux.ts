@@ -43,17 +43,17 @@ const DEMUX_CONTENT = {
     vod_1: {
       id: 1,
       title: "DEMO DEMUX VOD (CMAF) - 1 audio track",
-      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8", // 15 min
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_STSWE_10M/multivariant.m3u8", // 10 min
     },
     vod_2: {
       id: 2,
       title: "DEMO DEMUX VOD (CMAF) - 1 audio tracks",
-      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_STSWE_10M/multivariant.m3u8",
     },
     vod_3: {
       id: 3,
       title: "DEMO DEMUX VOD (CMAF) - 1 audio tracks",
-      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8",
+      uri: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_STSWE_10M/multivariant.m3u8",
     },
     slate: {
       id: 4,

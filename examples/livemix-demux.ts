@@ -5,33 +5,41 @@
 import { ChannelEngine, ChannelEngineOpts, 
     IAssetManager, IChannelManager, IStreamSwitchManager,
     VodRequest, VodResponse, Channel, ChannelProfile,
-    Schedule, AudioTracks
+    Schedule, AudioTracks, SubtitleTracks
   } from "../index";
   const { v4: uuidv4 } = require('uuid');
   
   const DEMUX_CONTENT = {
     TS: {
       slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
-      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VOD_TS_001/master.m3u8",
-      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_TS_001/master.m3u8",
+      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VOD_TS_001/master.m3u8", // Elephant's Dream 11 min 
+      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_TS_001/index.m3u8",
       bumper:  "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
-      live: null // If you do not have a demux live stream available, you can always use a local CE V2L stream (ex: demux.ts) 
+      // If you do not have a demux live stream available, you can always use a local CE V2L stream (ex: demux.ts) 
+      live: null
     },
     CMAF: {
-      slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_FILLER_CMAF_001/master.m3u8",
-      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_DEMO_VOD_CMAF_003/index.m3u8", // 5 min  
-      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_CMAF_001/master.m3u8",
-      bumper: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_CMAF_001/master.m3u8",
-      live: "https://vc-engine-alb.a2d.tv/channels/c343c7c8-49f6-4c3b-88a5-c9e24dd2ce0c/master.m3u8" 
+      slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_SLATE_CMAF_EARTH_10S/multivariant.m3u8",
+      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VOD_CMAF_SP_EP51_PREVIEW_15M/multivariant.m3u8", // 15 min  
+      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_TRAILER_CMAF_MORBIUS_40S/multivariant.m3u8",
+      bumper: "https://testcontent.eyevinn.technology/ce_test_content/DEMO_DEMUX_VINJETTE_CMAF_STSWE_5S/index.m3u8",
+      // If you do not have a demux live stream available, you can always use a local CE V2L stream (ex: demux.ts) 
+      live: null
     }
   };
   
   const HLS_CONTENT = DEMUX_CONTENT.CMAF;
 
   let FIRST_PLAYED_VOD = true;
+  
+  const CONFIGS = {
+    USE_STITCHER: 0,        // Use stitching service to stitch ads to the VODs.
+    USE_PDT: 0,             // Add Program Date Time in HLS playlist. 
+    USE_VTT_SUBTITLES: 0,   // NOTE: The engine does not properly support subtitles in the live-mix + demux setting.
+  }
 
-  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinnlab-v3.eyevinn-lambda-stitch.auto.prod.osaas.io/stitch/master.m3u8";
-
+  const STITCH_ENDPOINT = process.env.STITCH_ENDPOINT || "https://eyevinnlab-v3.eyevinn-lambda-stitch.auto.prod.osaas.io"; // This default stitch endpoint does not support subtitles.
+ 
   class RefAssetManager implements IAssetManager {
     private assets;
     private pos;
@@ -66,21 +74,39 @@ import { ChannelEngine, ChannelEngineOpts,
             breaks: [
               {
                 pos: 0,
-                duration: 30 * 1000,
+                duration: 40 * 1000,
                 url: HLS_CONTENT.trailer
               }
             ]
           };
           const buff = Buffer.from(JSON.stringify(payload));
           const encodedPayload = buff.toString("base64");
-          const vodResponse = {
-            id: vod.id,
-            title: vod.title,
-            uri:  STITCH_ENDPOINT + "?payload=" + encodedPayload,
-            unixTs: FIRST_PLAYED_VOD ? Date.now() : Date.now() + 50*1000
-          };
-          FIRST_PLAYED_VOD = false;
-          resolve(vodResponse);
+          
+          let unixTs = null;
+          if (CONFIGS.USE_PDT) {
+            unixTs = FIRST_PLAYED_VOD ? Date.now() : Date.now() + 50*1000;
+            // NOTE: In this example, we use a 50 seconds offset since playback usually starts 50 seconds in.
+            // With a more complete scheduler logic, you wont need such an offset.
+          }
+          
+          if (CONFIGS.USE_STITCHER) {
+            const vodResponse = {
+              id: vod.id,
+              title: vod.title,
+              uri:  STITCH_ENDPOINT + "/stitch/master.m3u8?payload=" + encodedPayload,
+              unixTs: unixTs
+            };
+            resolve(vodResponse);
+          } else {
+            FIRST_PLAYED_VOD = false;
+            const vodResponse = {
+              id: vod.id,
+              title: vod.title,
+              uri:  vod.uri,
+              unixTs: unixTs
+            };
+            resolve(vodResponse);
+          }
         } else {
           reject("Invalid channelId provided");
         }
@@ -102,7 +128,7 @@ import { ChannelEngine, ChannelEngineOpts,
           this.channels.push({ id: `${i + 1}`, profile: this._getProfile(), audioTracks: this._getAudioTracks() });
         }
       } else {
-        this.channels = [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks() }];
+        this.channels = [{ id: "1", profile: this._getProfile(), audioTracks: this._getAudioTracks(), subtitleTracks: CONFIGS.USE_VTT_SUBTITLES ? this._getSubtitleTracks() : null }];
       }
     }
   
@@ -119,6 +145,12 @@ import { ChannelEngine, ChannelEngineOpts,
     }
   
     _getAudioTracks(): AudioTracks[] {
+      return [
+        { language: "en", name: "English", default: true },
+      ];
+    }
+
+    _getSubtitleTracks(): SubtitleTracks[] {
       return [
         { language: "en", name: "English", default: true },
       ];
@@ -159,6 +191,8 @@ import { ChannelEngine, ChannelEngineOpts,
       return new Promise((resolve, reject) => {
         if (this.schedule[channelId]) {
           const tsNow = Date.now();
+           // For every 2mins of the Vod2Live stream we stream-switch to the LIVE source
+           // and broadcast that for 2mins before switching back to the Vod2Live stream.
           const streamDuration = 2 * 60 * 1000;
           const startOffset = tsNow + streamDuration;
           const endTime = startOffset + streamDuration;
@@ -174,6 +208,7 @@ import { ChannelEngine, ChannelEngineOpts,
               uri: HLS_CONTENT.live,
             }
             /*,
+            NOTE: Stream-switching to a VOD source only works on muxed content in this version of the engine.
             {
               eventId: this.generateID(),
               assetId: this.generateID(),
@@ -208,6 +243,7 @@ import { ChannelEngine, ChannelEngineOpts,
     slateDuration: 3000,
     redisUrl: process.env.REDIS_URL,
     useDemuxedAudio: true,
+    useVTTSubtitles: CONFIGS.USE_VTT_SUBTITLES ? true : false,
     playheadDiffThreshold: 500,
     alwaysNewSegments: true,
     maxTickInterval: 8000,
