@@ -2020,7 +2020,6 @@ class SessionLive {
       for (let i = startIdx; i < playlistItems.length; i++) {
         let seg = {};
         const playlistItem = playlistItems[i];
-        const playlistItemPrev = playlistItems[i - 1] ? playlistItems[i - 1] : null;
         let segmentUri;
         let byteRange = undefined;
 
@@ -2061,7 +2060,7 @@ class SessionLive {
         if (playlistItem.get("duration")) {
           timelinePosition = playlistItem.get("duration") * 1000;
         }
-        if (playlistItem.get("discontinuity") && playlistItemPrev && !playlistItemPrev.get("discontinuity")) {
+        if (playlistItem.get("discontinuity")) {
           if (plType === PlaylistTypes.VIDEO) {
             this.liveSegQueue[liveTargetVariant].push({ discontinuity: true });
             this.liveSegsForFollowers[liveTargetVariant].push({ discontinuity: true });
@@ -2179,6 +2178,11 @@ class SessionLive {
     const liveSegURIs = this.liveSegQueue[liveTargetBandwidth].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);
     if (seg.uri && liveSegURIs.includes(seg.uri)) {
       debug(`[${this.sessionId}]: ${logName}: Found duplicate live segment. Skip push! (${liveTargetBandwidth})`);
+      if (this.liveSegQueue[liveTargetBandwidth].length > 0 && this.liveSegQueue[liveTargetBandwidth][this.liveSegQueue[liveTargetBandwidth].length - 1].discontinuity) {
+        // pop the last segment
+        this.liveSegQueue[liveTargetBandwidth].pop();
+        this.liveSegsForFollowers[liveTargetBandwidth].pop();
+      }
     } else {
       this.liveSegQueue[liveTargetBandwidth].push(seg);
       this.liveSegsForFollowers[liveTargetBandwidth].push(seg);
@@ -2190,6 +2194,11 @@ class SessionLive {
     const liveSegURIs = this.liveSegQueueAudio[liveTargetAudiotrack].filter((seg) => seg.uri).map((seg) => seg.uri).slice(-2);
     if (seg.uri && liveSegURIs.includes(seg.uri)) {
       debug(`[${this.sessionId}]: ${logName}: Found duplicate live segment. Skip push! track -> (${liveTargetAudiotrack})`);
+      if (this.liveSegQueueAudio[liveTargetAudiotrack].length > 0 && this.liveSegQueueAudio[liveTargetAudiotrack][this.liveSegQueueAudio[liveTargetAudiotrack].length - 1].discontinuity) {
+        // pop the last segment
+        this.liveSegQueueAudio[liveTargetAudiotrack].pop();
+        this.liveSegsForFollowersAudio[liveTargetAudiotrack].pop();
+      }
     } else {
       this.liveSegQueueAudio[liveTargetAudiotrack].push(seg);
       this.liveSegsForFollowersAudio[liveTargetAudiotrack].push(seg);
@@ -2374,7 +2383,7 @@ class SessionLive {
       const seg = segments[variantKey][i];
       const nextSeg = segments[variantKey][i + 1] ? segments[variantKey][i + 1] : {};
       if (seg.discontinuity) {
-        m3u8 += "#EXT-X-DISCONTINUITY\n";
+       m3u8 += "#EXT-X-DISCONTINUITY\n";
       }
       if (seg.cue && seg.cue.in) {
         m3u8 += "#EXT-X-CUE-IN\n";
@@ -2386,8 +2395,12 @@ class SessionLive {
         m3u8 = m3u8.replace("#EXT-X-DISCONTINUITY\n#EXT-X-DISCONTINUITY\n", "#EXT-X-DISCONTINUITY\n");
       }
       if (m3u8.includes("#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n")) {
-        debug(`[${this.sessionId}]: Removing Duplicate Disc-tag from output M3u8`);
+        debug(`[${this.sessionId}]: Removing Duplicate Disc+CueIn-tag from output M3u8`);
         m3u8 = m3u8.replace("#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n", "#EXT-X-DISCONTINUITY\n#EXT-X-CUE-IN\n");
+      }
+      if (m3u8.includes("#EXT-X-CUE-IN\n#EXT-X-CUE-IN\n")) {
+        debug(`[${this.sessionId}]: Removing Duplicate CueIn-tag from output M3u8`);
+        m3u8 = m3u8.replace("#EXT-X-CUE-IN\n#EXT-X-CUE-IN\n", "#EXT-X-CUE-IN\n");
       }
       previousSeg = seg;
     }
