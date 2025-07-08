@@ -9,7 +9,14 @@ const Readable = require('stream').Readable;
 const { SessionState } = require('./session_state.js');
 const { PlayheadState } = require('./playhead_state.js');
 
-const { applyFilter, cloudWatchLog, m3u8Header, logerror, codecsFromString, roundToThreeDecimals } = require('./util.js');
+const {
+  applyFilter,
+  cloudWatchLog,
+  m3u8Header,
+  logerror,
+  codecsFromString,
+  roundToThreeDecimals
+} = require('./util.js');
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
@@ -281,7 +288,7 @@ class Session {
                 numberOfLargeTicks++;
               }
             } else {
-              console.warn(`[${this._sessionId}]: Playhead tick interval went over Max tick interval by ${changeMaxTick}ms.
+              debug(`[${this._sessionId}]: Playhead tick interval went over Max tick interval by ${changeMaxTick}ms.
               If the value keeps increasing, consider increasing the 'maxTickInterval' in engineOptions`);
             }
             tickInterval = this.maxTickInterval / 1000;
@@ -1301,11 +1308,8 @@ class Session {
             await loadPromise;
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
-            debug(`[${this._sessionId}]: first VOD loaded`);
-            debug(`[${this._sessionId}]: ${currentVod.getDeltaTimes()}`);
-            debug(`[${this._sessionId}]: playhead positions [V]=${currentVod.getPlayheadPositions("video")}`);
-            debug(`[${this._sessionId}]: playhead positions [A]=${currentVod.getPlayheadPositions("audio")}`);
-            debug(`[${this._sessionId}]: playhead positions [S]=${currentVod.getPlayheadPositions("subtitle")}`);
+            debug(`[${this._sessionId}]: first VOD loaded. DeltaTimes ${currentVod.getDeltaTimes().map(roundToThreeDecimals).join(",")}`);
+            this._logAllPlayheadPositions(this._sessionId, currentVod);
             //debug(newVod);
             const updatedSessionState = await this._sessionState.setValues({
               "mediaSeq": 0,
@@ -1505,10 +1509,8 @@ class Session {
             cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
               { event: 'loadVod', channel: this._sessionId, loadTimeMs: Date.now() - loadStart });
             this.leaderIsSettingNextVod = true;
-            debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes()})`);
-            debug(`[${this._sessionId}]: playhead positions [V]=${newVod.getPlayheadPositions("video")}`);
-            debug(`[${this._sessionId}]: playhead positions [A]=${newVod.getPlayheadPositions("audio")}`);
-            debug(`[${this._sessionId}]: playhead positions [S]=${newVod.getPlayheadPositions("subtitle")}`);
+            debug(`[${this._sessionId}]: next VOD loaded (${newVod.getDeltaTimes().map(roundToThreeDecimals).join(",")})`);
+            this._logAllPlayheadPositions(this._sessionId, newVod);
             currentVod = newVod;
             debug(`[${this._sessionId}]: msequences=${currentVod.getLiveMediaSequencesCount()}; audio msequences=${currentVod.getLiveMediaSequencesCount("audio")}; subtitle msequences=${currentVod.getLiveMediaSequencesCount("subtitle")}`);
             sessionState.currentVod = await this._sessionState.setCurrentVod(currentVod, { ttl: currentVod.getDuration() * 1000 });
@@ -2372,6 +2374,24 @@ class Session {
       logerror(this._sessionId, err);
     }
   }
+
+  _logAllPlayheadPositions = (sessionId, vod) => {
+  if (!vod) {
+    return;
+  }
+  if (!vod.getPlayheadPositions) {
+    return;
+  }
+  if (vod.getPlayheadPositions("video")) {
+    debug(`[${sessionId}]: playhead positions [V]=${vod.getPlayheadPositions("video").map(roundToThreeDecimals).join(",")}`);
+  }
+  if (vod.getPlayheadPositions("audio")) {
+    debug(`[${sessionId}]: playhead positions [A]=${vod.getPlayheadPositions("audio").map(roundToThreeDecimals).join(",")}`);
+  }
+  if (vod.getPlayheadPositions("subtitle")) {
+    debug(`[${sessionId}]: playhead positions [S]=${vod.getPlayheadPositions("subtitle").map(roundToThreeDecimals).join(",")}`);
+  }
+  };
 }
 
 module.exports = Session;
