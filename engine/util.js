@@ -257,6 +257,14 @@ const timeLeft = (endTimestamp, currentTimestamp) => {
 };
 
 const roundToThreeDecimals = (number) => {
+  if (typeof number !== "number") {
+    try {
+      number = parseFloat(number);
+    } catch (e) {
+      console.error("Could not convert to number:", number);
+      return number;
+    }
+  }
   const r = Math.round(number * 1000) / 1000;
   return r
 }
