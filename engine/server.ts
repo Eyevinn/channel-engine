@@ -472,7 +472,6 @@ export class ChannelEngine {
   async updateChannelsAsync(channelMgr, options) {
     debug(`Do we have any new channels?`);
     const newChannels = channelMgr.getChannels().filter(channel => !sessions[channel.id]);
-    debug(JSON.stringify(newChannels));
     const addAsync = async (channel) => {
       debug(`Adding channel with ID ${channel.id}`);
       sessions[channel.id] = new Session(this.assetMgr, {
