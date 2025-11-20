@@ -12,9 +12,9 @@ import { ChannelEngine, ChannelEngineOpts,
   const DEMUX_CONTENT = {
     TS: {
       slate: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
-      vod: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VOD_TS_001/master.m3u8", // Elephant's Dream 11 min 
-      trailer: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_TRAILER_TS_001/index.m3u8",
-      bumper:  "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
+      vod: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master_demux.m3u8",
+      trailer: "https://maitv-vod.lab.eyevinn.technology/ads/apotea-15s.mp4/master_demux.m3u8",
+      bumper: "https://testcontent.eyevinn.technology/ce_test_content/DEMUX_VINJETTE_TS_001/master.m3u8",
       // If you do not have a demux live stream available, you can always use a local CE V2L stream (ex: demux.ts) 
       live: null
     },
@@ -28,7 +28,7 @@ import { ChannelEngine, ChannelEngineOpts,
     }
   };
   
-  const HLS_CONTENT = DEMUX_CONTENT.CMAF;
+  const HLS_CONTENT = DEMUX_CONTENT.TS;
 
   let FIRST_PLAYED_VOD = true;
   
@@ -98,13 +98,13 @@ import { ChannelEngine, ChannelEngineOpts,
             };
             resolve(vodResponse);
           } else {
-            FIRST_PLAYED_VOD = false;
             const vodResponse = {
               id: vod.id,
               title: vod.title,
               uri:  vod.uri,
               unixTs: unixTs
             };
+            FIRST_PLAYED_VOD = false;
             resolve(vodResponse);
           }
         } else {
