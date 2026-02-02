@@ -500,7 +500,8 @@ export class ChannelEngine {
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
-        sessionEventStream: options.sessionEventStream
+        sessionEventStream: options.sessionEventStream,
+        rollingPDT: options.rollingPDT
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
