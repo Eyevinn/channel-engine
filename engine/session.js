@@ -87,6 +87,7 @@ class Session {
     this.partialStoreHLSVod = null;
     this.currentPlayheadRef = null;
     this.disableLegacyMasterManifestFormat = null;
+    this.rollingPDT = null;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
@@ -97,7 +98,9 @@ class Session {
       if (config.partialStoreHLSVod) {
         this.partialStoreHLSVod = config.partialStoreHLSVod;
       }
-
+      if (config.rollingPDT) {
+        this.rollingPDT = config.rollingPDT;
+      }
       if (config.alwaysMapBandwidthByNearest) {
         this.alwaysMapBandwidthByNearest = config.alwaysMapBandwidthByNearest;
       }
@@ -1273,7 +1276,8 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-                skipSerializeMediaSequences: this.partialStoreHLSVod
+                skipSerializeMediaSequences: this.partialStoreHLSVod,
+                calculatePDT: this.rollingPDT
               };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1458,7 +1462,8 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-                skipSerializeMediaSequences: this.partialStoreHLSVod
+                skipSerializeMediaSequences: this.partialStoreHLSVod,
+                calculatePDT: this.rollingPDT
               };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1771,7 +1776,6 @@ class Session {
       try {
         const slateVod = new HLSRepeatVod(this.slateUri, reps || this.slateRepetitions);
         let hlsVod;
-
         slateVod.load()
           .then(() => {
             const hlsOpts = {
@@ -1782,7 +1786,8 @@ class Session {
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
               alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-              skipSerializeMediaSequences: this.partialStoreHLSVod
+              skipSerializeMediaSequences: this.partialStoreHLSVod,
+              calculatePDT: this.rollingPDT
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
@@ -1896,6 +1901,7 @@ class Session {
 
         slateVod.load()
           .then(() => {
+            
             const hlsOpts = {
               sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
               forcedDemuxMode: this.use_demuxed_audio,
@@ -1904,7 +1910,8 @@ class Session {
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
               alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-              skipSerializeMediaSequences: this.partialStoreHLSVod
+              skipSerializeMediaSequences: this.partialStoreHLSVod,
+              calculatePDT: this.rollingPDT
             };
             const timestamp = Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
