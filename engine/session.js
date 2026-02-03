@@ -1276,7 +1276,8 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-                skipSerializeMediaSequences: this.partialStoreHLSVod
+                skipSerializeMediaSequences: this.partialStoreHLSVod,
+                calculatePDT: this.rollingPDT
               };
               newVod = new HLSVod(vodResponse.uri, [], vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1461,7 +1462,8 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
-                skipSerializeMediaSequences: this.partialStoreHLSVod
+                skipSerializeMediaSequences: this.partialStoreHLSVod,
+                calculatePDT: this.rollingPDT
               };
               newVod = new HLSVod(vodResponse.uri, null, vodResponse.unixTs, vodResponse.offset * 1000, m3u8Header(this._instanceId), hlsOpts);
               if (vodResponse.timedMetadata) {
@@ -1774,7 +1776,6 @@ class Session {
       try {
         const slateVod = new HLSRepeatVod(this.slateUri, reps || this.slateRepetitions);
         let hlsVod;
-
         slateVod.load()
           .then(() => {
             const hlsOpts = {
@@ -1900,6 +1901,7 @@ class Session {
 
         slateVod.load()
           .then(() => {
+            
             const hlsOpts = {
               sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
               forcedDemuxMode: this.use_demuxed_audio,

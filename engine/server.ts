@@ -65,7 +65,7 @@ export interface ChannelEngineOpts {
   keepAliveTimeout?: number;
   sessionEventStream?: boolean;
   sessionHealthKey?: string;
-  rollingPDT?: string;
+  rollingPDT?: boolean;
 }
 
 interface StreamerOpts {
