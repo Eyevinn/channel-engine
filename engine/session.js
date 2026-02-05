@@ -1300,7 +1300,7 @@ class Session {
             } else {
               if (vodResponse.type === 'gap') {
                 loadPromise = new Promise((resolve, reject) => {
-                  this._fillGap(null, vodResponse.desiredDuration)
+                  this._fillGap(null, vodResponse.desiredDuration, vodResponse.unixTs)
                     .then(gapVod => {
                       currentVod = gapVod;
                       resolve(gapVod);
@@ -1502,7 +1502,7 @@ class Session {
               }
             } else {
               loadPromise = new Promise((resolve, reject) => {
-                this._fillGap(currentVod, vodResponse.desiredDuration)
+                this._fillGap(currentVod, vodResponse.desiredDuration, vodResponse.unixTs)
                   .then(gapVod => {
                     newVod = gapVod;
                     resolve(newVod);
@@ -1771,7 +1771,7 @@ class Session {
     });
   }
 
-  _loadSlate(afterVod, reps) {
+  _loadSlate(afterVod, reps, unixTs) {
     return new Promise((resolve, reject) => {
       try {
         const slateVod = new HLSRepeatVod(this.slateUri, reps || this.slateRepetitions);
@@ -1789,7 +1789,7 @@ class Session {
               skipSerializeMediaSequences: this.partialStoreHLSVod,
               calculatePDT: this.rollingPDT
             };
-            const timestamp = Date.now();
+            const timestamp = unixTs ? unixTs : Date.now();
             hlsVod = new HLSVod(this.slateUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
             hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
@@ -1887,7 +1887,7 @@ class Session {
     });
   }
 
-  _truncateSlate(afterVod, requestedDuration, vodUri) {
+  _truncateSlate(afterVod, requestedDuration, vodUri, unixTs) {
     return new Promise((resolve, reject) => {
       let nexVodUri = null;
       try {
@@ -1913,7 +1913,7 @@ class Session {
               skipSerializeMediaSequences: this.partialStoreHLSVod,
               calculatePDT: this.rollingPDT
             };
-            const timestamp = Date.now();
+            const timestamp = unixTs ? unixTs : Date.now();
             hlsVod = new HLSVod(nexVodUri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             hlsVod.addMetadata('id', `slate-${timestamp}`);
             hlsVod.addMetadata('start-date', new Date(timestamp).toISOString());
@@ -1967,18 +1967,18 @@ class Session {
     });
   }
 
-  _fillGap(afterVod, desiredDuration) {
+  _fillGap(afterVod, desiredDuration, unixTs) {
     return new Promise((resolve, reject) => {
       let loadSlatePromise;
       let durationMs;
       if (desiredDuration > this.slateDuration) {
         const reps = Math.floor(desiredDuration / this.slateDuration);
         debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds (${reps} repetitions)`);
-        loadSlatePromise = this._loadSlate(afterVod, reps);
+        loadSlatePromise = this._loadSlate(afterVod, reps, unixTs);
         durationMs = (reps || this.slateRepetitions) * this.slateDuration;
       } else {
         debug(`[${this._sessionId}]: Trying to fill a gap of ${desiredDuration} milliseconds by truncating filler slate (${this.slateDuration})`);
-        loadSlatePromise = this._truncateSlate(afterVod, desiredDuration / 1000);
+        loadSlatePromise = this._truncateSlate(afterVod, desiredDuration / 1000, null, unixTs);
         durationMs = desiredDuration;
       }
       loadSlatePromise.then(hlsVod => {
