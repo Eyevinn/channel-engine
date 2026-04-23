@@ -44,7 +44,7 @@
     "promise.allsettled": "^1.0.4",
     "redis": "3.1.0",
     "request": ">=2.88.0",
-    "uuid": "^8.3.2"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@types/node": "^18.11.9",
