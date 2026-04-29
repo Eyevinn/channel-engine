@@ -2,7 +2,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "allowJs": true,
-    "target": "es5",
+    "target": "es2022",
+    "module": "node16",
+    "moduleResolution": "node16",
     "esModuleInterop": true,
     "declaration": true
   },
