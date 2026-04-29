@@ -702,12 +702,12 @@ class Session {
 
   async incrementAsync() {
     await this._tickAsync();
-    const isLeader = await this._sessionStateStore.isLeader(this._instanceId);
+    // Reuse state from _tickAsync instead of re-reading from Redis
+    const { sessionState: tickSessionState, isLeader, currentVod: tickCurrentVod } = this._lastTickState;
+    let sessionState = tickSessionState;
+    let currentVod = tickCurrentVod;
 
-    let sessionState = await this._sessionState.getValues(
-      ["state", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle"]);
     let playheadState = await this._playheadState.getValues(["mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSubtitle", "playheadRef"]);
-    let currentVod = await this._sessionState.getCurrentVod();
     if (!currentVod ||
       sessionState.vodMediaSeqVideo === null ||
       sessionState.vodMediaSeqAudio === null ||
@@ -724,6 +724,7 @@ class Session {
       }
       return null;
     }
+    let newSessionState = {};
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING || sessionState.state === SessionState.VOD_RELOAD_INITIATING) {
       if (isLeader) {
         const isOldVod = this._isOldVod(playheadState.playheadRef, currentVod.getDuration());
@@ -746,46 +747,54 @@ class Session {
         this.isAllowedToClearVodCache = true;
       }
     } else {
-      sessionState.vodMediaSeqVideo = await this._sessionState.increment("vodMediaSeqVideo", 1);
+      // Compute increments locally instead of individual Redis round-trips
+      if (isLeader) {
+        debug(`[${this._sessionId}]: I am incrementing key vodMediaSeqVideo with 1`);
+        sessionState.vodMediaSeqVideo += 1;
+      }
       let playheadPosVideoMs;
       let playheadAudio;
       let playheadSubtitle;
-      
+
       playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
 
       if (this.use_demuxed_audio) {
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
-        const sessionStateObj = await this._sessionState.getValues(["vodMediaSeqAudio"]);
         playheadAudio = await this._determineExtraMediaIncrement(
           "audio",
           playheadPosVideoMs,
           audioSeqLastIdx,
-          sessionStateObj.vodMediaSeqAudio,
+          sessionState.vodMediaSeqAudio,
           this._getAudioPlayheadPosition.bind(this)
         );
-        // Perform the Increment
         debug(`[${this._sessionId}]: Will increment audio with ${playheadAudio.increment}`);
-        sessionState.vodMediaSeqAudio = await this._sessionState.increment("vodMediaSeqAudio", playheadAudio.increment);
+        if (isLeader) {
+          debug(`[${this._sessionId}]: I am incrementing key vodMediaSeqAudio with ${playheadAudio.increment}`);
+          sessionState.vodMediaSeqAudio += (playheadAudio.increment === 0 ? 0 : playheadAudio.increment || 1);
+        }
       }
       if (this.use_vtt_subtitles) {
-        const playheadPosVideo = playheadPosVideo || (await this._getCurrentPlayheadPosition()) * 1000;
         const subtitleSeqLastIdx = currentVod.getLiveMediaSequencesCount("subtitle") - 1;
-        const sessionStateObj = await this._sessionState.getValues(["vodMediaSeqSubtitle"]);
         playheadSubtitle = await this._determineExtraMediaIncrement(
           "subtitle",
           playheadPosVideoMs,
           subtitleSeqLastIdx,
-          sessionStateObj.vodMediaSeqSubtitle,
+          sessionState.vodMediaSeqSubtitle,
           this._getSubtitlePlayheadPosition.bind(this)
         );
-        // Perform the Increment
         debug(`[${this._sessionId}]: Will increment subtitle with ${playheadSubtitle.increment}`);
-        sessionState.vodMediaSeqSubtitle = await this._sessionState.increment("vodMediaSeqSubtitle", playheadSubtitle.increment);
+        if (isLeader) {
+          debug(`[${this._sessionId}]: I am incrementing key vodMediaSeqSubtitle with ${playheadSubtitle.increment}`);
+          sessionState.vodMediaSeqSubtitle += (playheadSubtitle.increment === 0 ? 0 : playheadSubtitle.increment || 1);
+        }
       }
       this._logCurrentPlayheadPositions(playheadPosVideoMs, playheadAudio, playheadSubtitle);
-    }
 
-    let newSessionState = {};
+      // Include locally-computed increments in the batch write
+      newSessionState.vodMediaSeqVideo = sessionState.vodMediaSeqVideo;
+      newSessionState.vodMediaSeqAudio = sessionState.vodMediaSeqAudio;
+      newSessionState.vodMediaSeqSubtitle = sessionState.vodMediaSeqSubtitle;
+    }
     if (sessionState.vodMediaSeqVideo >= currentVod.getLiveMediaSequencesCount() - 1) {
       newSessionState.vodMediaSeqVideo = currentVod.getLiveMediaSequencesCount() - 1;
       newSessionState.state = SessionState.VOD_NEXT_INIT;
@@ -804,20 +813,25 @@ class Session {
       this.isSwitchingBackToV2L = false;
     }
 
-    const updatedValues = await this._sessionState.setValues(newSessionState);
-    sessionState = { ...sessionState, ...updatedValues };
-
     if (isLeader) {
       debug(`[${this._sessionId}]: I am the leader, updating PlayheadState values`);
     }
-    const updatedPlayhead = await this._playheadState.setValues({
+
+    // Playhead values are derived from local sessionState — no read-after-write dependency
+    // on the session setValues result, so we can run both writes in parallel
+    const playheadData = {
       "mediaSeq": sessionState.mediaSeq,
       "mediaSeqAudio": sessionState.mediaSeqAudio,
       "mediaSeqSubtitle": sessionState.mediaSeqSubtitle,
       "vodMediaSeqVideo": sessionState.vodMediaSeqVideo,
       "vodMediaSeqAudio": sessionState.vodMediaSeqAudio,
       "vodMediaSeqSubtitle": sessionState.vodMediaSeqSubtitle
-    }, isLeader);
+    };
+    const [updatedValues, updatedPlayhead] = await Promise.all([
+      this._sessionState.setValues(newSessionState),
+      this._playheadState.setValues(playheadData, isLeader)
+    ]);
+    sessionState = { ...sessionState, ...updatedValues };
     playheadState = { ...playheadState, ...updatedPlayhead };
 
     if (currentVod.sequenceAlwaysContainNewSegments) {
@@ -1243,6 +1257,7 @@ class Session {
       sessionState.state = SessionState.VOD_INIT;
     }
 
+    try {
     switch (sessionState.state) {
       case SessionState.VOD_INIT:
       case SessionState.VOD_INIT_BY_ID:
@@ -1359,6 +1374,9 @@ class Session {
             debug("No slate to load");
             throw err;
           }
+          // Re-read sessionState after _insertSlate modified it in Redis
+          sessionState = await this._sessionState.getValues(
+            ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "nextVod"]);
         }
       case SessionState.VOD_PLAYING:
         if (isLeader) {
@@ -1579,6 +1597,9 @@ class Session {
             debug("No slate to load");
             throw err;
           }
+          // Re-read sessionState after _insertSlate modified it in Redis
+          sessionState = await this._sessionState.getValues(
+            ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "nextVod"]);
           // Allow Leader|Follower to clear vodCache...
           this.isAllowedToClearVodCache = true;
         }
@@ -1711,6 +1732,9 @@ class Session {
               channel: this._sessionId,
               reqTimeMs: Date.now() - startTS,
             });
+            // Re-read sessionState after individual set() calls modified it in Redis
+            sessionState = await this._sessionState.getValues(
+              ["state", "assetId", "vodMediaSeqVideo", "vodMediaSeqAudio", "vodMediaSeqSubtitle", "mediaSeq", "mediaSeqAudio", "mediaSeqSubtitle", "discSeq", "discSeqAudio", "discSeqSubtitle", "nextVod"]);
             return;
           } else {
             debug(`[${this._sessionId}]: not a leader so will go directly to state VOD_RELOAD_INITIATING`);
@@ -1736,6 +1760,10 @@ class Session {
         return;
       default:
         throw new Error("Invalid state: " + sessionState.state);
+    }
+    } finally {
+      // Store tick state for incrementAsync to reuse, avoiding redundant Redis reads
+      this._lastTickState = { sessionState, isLeader, currentVod };
     }
   }
 
