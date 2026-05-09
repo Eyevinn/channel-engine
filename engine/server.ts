@@ -579,7 +579,7 @@ export class ChannelEngine {
   }
 
   listen(port) {
-    this.server.listen({ port: port }, (err) => {
+    this.server.listen({ port: port, host: '0.0.0.0' }, (err) => {
       if (err) {
         console.error(err);
         process.exit(1);
