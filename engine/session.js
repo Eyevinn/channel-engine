@@ -756,7 +756,11 @@ class Session {
       let playheadAudio;
       let playheadSubtitle;
 
-      playheadPosVideoMs = (await this._getCurrentPlayheadPosition()) * 1000;
+      // Pass the locally-updated vodMediaSeqVideo (leader incremented above) so
+      // playhead position reflects this tick's video segment, not the stale
+      // value still in Redis. Without this, audio/subtitle stay 1 segment
+      // behind video for the entire VOD lifetime.
+      playheadPosVideoMs = (await this._getCurrentPlayheadPosition(sessionState.vodMediaSeqVideo)) * 1000;
 
       if (this.use_demuxed_audio) {
         const audioSeqLastIdx = currentVod.getLiveMediaSequencesCount("audio") - 1;
@@ -2068,12 +2072,21 @@ class Session {
     return 0;
   }
 
-  async _getCurrentPlayheadPosition() {
-    const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo"]);
+  async _getCurrentPlayheadPosition(overrideVodMediaSeqVideo) {
+    // Caller can pass the in-progress local vodMediaSeqVideo to avoid the Redis
+    // round-trip and the race where the leader has incremented its local value
+    // but hasn't written it to Redis yet (incrementAsync writes happen later via
+    // a parallel Promise.all). Falling back to Redis preserves the old behavior
+    // for callers like startPlayheadAsync that run after incrementAsync.
+    let vodMediaSeqVideo = overrideVodMediaSeqVideo;
+    if (vodMediaSeqVideo === undefined) {
+      const sessionState = await this._sessionState.getValues(["vodMediaSeqVideo"]);
+      vodMediaSeqVideo = sessionState.vodMediaSeqVideo;
+    }
     const currentVod = await this._sessionState.getCurrentVod();
     const playheadPositions = currentVod.getPlayheadPositions();
-    debug(`[${this._sessionId}]: Current playhead position (${sessionState.vodMediaSeqVideo}): ${roundToThreeDecimals(playheadPositions[sessionState.vodMediaSeqVideo])}`);
-    return playheadPositions[sessionState.vodMediaSeqVideo];
+    debug(`[${this._sessionId}]: Current playhead position (${vodMediaSeqVideo}): ${roundToThreeDecimals(playheadPositions[vodMediaSeqVideo])}`);
+    return playheadPositions[vodMediaSeqVideo];
   }
 
   async _getAudioPlayheadPosition(seqIdx) {
