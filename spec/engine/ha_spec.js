@@ -179,6 +179,47 @@ describe("High Availability", () => {
       expect(lastLeaderMseq).toBeGreaterThan(0);
       expect(lastFollowerMseq).toBeGreaterThan(0);
     });
+
+    it("follower's currentVod tracks leader across VOD transitions (regression: stale cache after redis-roundtrip optimization)", async () => {
+      // Two VODs with different segment counts so a stale-cache regression is observable
+      // as a mismatch between leader.getLiveMediaSequencesCount() and follower.getLiveMediaSequencesCount()
+      const assetMgr = new TestAssetManager(null, [
+        { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
+        { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
+      ]);
+      const leaderStore = {
+        sessionStateStore,
+        playheadStateStore,
+        instanceId: "leader-instance",
+      };
+      const followerStore = {
+        sessionStateStore,
+        playheadStateStore,
+        instanceId: "follower-instance",
+      };
+
+      const leaderSession = new Session(assetMgr, { sessionId: 'vod-swap' }, leaderStore);
+      await leaderSession.initAsync();
+      const followerSession = new Session(assetMgr, { sessionId: 'vod-swap' }, followerStore);
+      await followerSession.initAsync();
+
+      // Drive both through enough ticks to cross a VOD boundary.
+      // After each tick, the follower's local currentVod must report the same
+      // total as the leader's — if it diverges, _tickAsync stored a stale
+      // currentVod in _lastTickState and the next manifest would have wrong totals.
+      for (let i = 0; i < 30; i++) {
+        await leaderSession.incrementAsync();
+        await followerSession.incrementAsync();
+
+        const leaderVod = leaderSession._lastTickState && leaderSession._lastTickState.currentVod;
+        const followerVod = followerSession._lastTickState && followerSession._lastTickState.currentVod;
+        if (!leaderVod || !followerVod) continue;
+
+        const leaderTotal = leaderVod.getLiveMediaSequencesCount();
+        const followerTotal = followerVod.getLiveMediaSequencesCount();
+        expect(followerTotal).toEqual(leaderTotal);
+      }
+    });
   });
 
   describe("_lastTickState consistency", () => {

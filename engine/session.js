@@ -1414,11 +1414,17 @@ class Session {
           }
         } else {
           // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
-          if ((this.prevMediaSeqOffset.video !== null) & (sessionState.mediaSeq !== this.prevMediaSeqOffset.video)) {
+          if ((this.prevMediaSeqOffset.video !== null) && (sessionState.mediaSeq !== this.prevMediaSeqOffset.video)) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             debug(`[${this._sessionId}]: mediaSeq offsets -> current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}]`);
-            // Allow Follower to clear VodCache...
-            this.isAllowedToClearVodCache = true;
+            // Eagerly refresh currentVod so _lastTickState and subsequent INCREMENT log see the new VOD.
+            // Without this, the follower's currentVod stays stale for one tick after a VOD swap.
+            await this._sessionState.clearCurrentVodCache();
+            currentVod = await this._sessionState.getCurrentVod();
+            this.prevVodMediaSeq.video = sessionState.vodMediaSeqVideo;
+            this.prevVodMediaSeq.audio = sessionState.vodMediaSeqAudio;
+            this.prevVodMediaSeq.subtitle = sessionState.vodMediaSeqSubtitle;
+            this.prevMediaSeqOffset.video = sessionState.mediaSeq;
           }
         }
         debug(`[${this._sessionId}]: state=VOD_PLAYING (${sessionState.vodMediaSeqVideo}_${sessionState.vodMediaSeqAudio}_${sessionState.vodMediaSeqSubtitle}, ${currentVod.getLiveMediaSequencesCount()}_${currentVod.getLiveMediaSequencesCount("audio")}_${currentVod.getLiveMediaSequencesCount("subtitle")})`);
