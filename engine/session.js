@@ -88,6 +88,7 @@ class Session {
     this.currentPlayheadRef = null;
     this.disableLegacyMasterManifestFormat = null;
     this.rollingPDT = null;
+    this.event = false;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
@@ -100,6 +101,9 @@ class Session {
       }
       if (config.rollingPDT) {
         this.rollingPDT = config.rollingPDT;
+      }
+      if (config.event) {
+        this.event = config.event;
       }
       if (config.alwaysMapBandwidthByNearest) {
         this.alwaysMapBandwidthByNearest = config.alwaysMapBandwidthByNearest;

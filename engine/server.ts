@@ -66,6 +66,7 @@ export interface ChannelEngineOpts {
   sessionEventStream?: boolean;
   sessionHealthKey?: string;
   rollingPDT?: boolean;
+  event?: boolean;
 }
 
 interface StreamerOpts {
@@ -501,7 +502,8 @@ export class ChannelEngine {
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         sessionEventStream: options.sessionEventStream,
-        rollingPDT: options.rollingPDT
+        rollingPDT: options.rollingPDT,
+        event: options.event
       }, this.sessionStore);
 
       sessionsLive[channel.id] = new SessionLive({
