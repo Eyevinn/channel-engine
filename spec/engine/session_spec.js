@@ -18,6 +18,18 @@ describe("Session", () => {
     expect(id1).not.toEqual(id2);
   });
 
+  it("sets the event flag when configured with { event: true }", () => {
+    const session = new Session("dummy", { event: true }, sessionLiveStore);
+    expect(session.event).toEqual(true);
+  });
+
+  it("defaults the event flag to false when not configured", () => {
+    const sessionNoConfig = new Session("dummy", null, sessionLiveStore);
+    const sessionEmptyConfig = new Session("dummy", {}, sessionLiveStore);
+    expect(sessionNoConfig.event).toEqual(false);
+    expect(sessionEmptyConfig.event).toEqual(false);
+  });
+
   it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case I", async () => {
     const session = new Session("dummy", null, sessionLiveStore);
     const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.
