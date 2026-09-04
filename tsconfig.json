@@ -1,7 +1,13 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
+    // Mixed JS/TS tree during the incremental migration (see CONTRIBUTING.md).
+    // `allowJs` lets legacy `.js` modules coexist with converted `.ts` ones.
+    // `checkJs` and `strict` are intentionally NOT enabled globally yet — they
+    // are turned on per-file (via `// @ts-check` or by converting to `.ts`) and
+    // flipped on globally only in the final migration slice (#376).
     "allowJs": true,
+    "forceConsistentCasingInFileNames": true,
     "target": "es2022",
     "module": "node16",
     "moduleResolution": "node16",
