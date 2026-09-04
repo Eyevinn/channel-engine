@@ -122,6 +122,73 @@ describe("Session", () => {
     });
   });
 
+  describe("post-ENDLIST session behaviour (event mode, issue #364)", () => {
+    // A served media playlist ends its last line with a newline, so ENDLIST is
+    // appended on its own line (same fixture shape as the #363 specs above).
+    const mediaPlaylist =
+      "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nseg0.ts\n";
+
+    // (a) flag off = no ENDLIST and normal looping.
+    it("keeps looping (no end state, no ENDLIST) when event mode is off", async () => {
+      let calls = 0;
+      const session = new Session(
+        { getNextVod: async () => { calls++; return null; } },
+        null,
+        sessionLiveStore
+      );
+      expect(session.event).toEqual(false);
+      // Off-mode rejects but never records an end-of-schedule state, so the
+      // normal slate/retry looping is preserved and each request re-queries.
+      await expectAsync(session._getNextVod()).toBeRejected();
+      await expectAsync(session._getNextVod()).toBeRejected();
+      expect(session.isEndOfSchedule).toEqual(false);
+      expect(calls).toEqual(2);
+      // No ENDLIST is ever appended when event mode is off.
+      expect(/#EXT-X-ENDLIST/.test(session._appendEndlistIfEnded(mediaPlaylist))).toEqual(false);
+    });
+
+    // (b) flag on + schedule ends = single ENDLIST appended and stable playlist
+    // on repeat requests.
+    it("appends a single ENDLIST and serves a stable playlist on repeat requests once ended", async () => {
+      const session = new Session(
+        { getNextVod: async () => null },
+        { event: true },
+        sessionLiveStore
+      );
+      await expectAsync(session._getNextVod()).toBeRejectedWith("END_OF_SCHEDULE");
+      expect(session.isEndOfSchedule).toEqual(true);
+
+      // Repeated manifest requests after end return the same ENDLIST-terminated
+      // playlist, with exactly one ENDLIST tag each time.
+      const first = session._appendEndlistIfEnded(mediaPlaylist);
+      const second = session._appendEndlistIfEnded(mediaPlaylist);
+      expect(first.endsWith("#EXT-X-ENDLIST\n")).toEqual(true);
+      expect(second).toEqual(first);
+      expect((second.match(/#EXT-X-ENDLIST/g) || []).length).toEqual(1);
+    });
+
+    // (c) session does not attempt further nextVod() calls after ending.
+    it("does not request another VOD from the asset manager after the schedule has ended", async () => {
+      let calls = 0;
+      const session = new Session(
+        { getNextVod: async () => { calls++; return null; } },
+        { event: true },
+        sessionLiveStore
+      );
+      // First call reaches the asset manager and records the ended state.
+      await expectAsync(session._getNextVod()).toBeRejectedWith("END_OF_SCHEDULE");
+      expect(calls).toEqual(1);
+      expect(session.isEndOfSchedule).toEqual(true);
+
+      // Subsequent calls short-circuit: they still reject with the end marker but
+      // never query the asset manager again (no runaway advance loop).
+      await expectAsync(session._getNextVod()).toBeRejectedWith("END_OF_SCHEDULE");
+      await expectAsync(session._getNextVod()).toBeRejectedWith("END_OF_SCHEDULE");
+      expect(calls).toEqual(1);
+      expect(session.isEndOfSchedule).toEqual(true);
+    });
+  });
+
   it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case I", async () => {
     const session = new Session("dummy", null, sessionLiveStore);
     const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.

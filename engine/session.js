@@ -1839,6 +1839,15 @@ class Session {
 
   _getNextVod() {
     return new Promise((resolve, reject) => {
+      // Post-end lock-down (issue #364): once the schedule has ended in event
+      // mode, never ask the asset manager for another VOD. The session keeps
+      // serving its final, ENDLIST-terminated playlist, so re-querying would be
+      // wasteful and could reset the ended state on a late/looping asset manager.
+      if (this.event && this.isEndOfSchedule) {
+        debug(`[${this._sessionId}]: schedule already ended (event mode), not requesting a new VOD`);
+        return reject(END_OF_SCHEDULE);
+      }
+
       let nextVodPromise;
 
       nextVodPromise = this._assetManager.getNextVod({
