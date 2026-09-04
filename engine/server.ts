@@ -67,6 +67,27 @@ export interface ChannelEngineOpts {
   sessionHealthKey?: string;
   rollingPDT?: boolean;
   event?: boolean;
+  // Base stream-switch polling interval in milliseconds (default 3000).
+  // This is the cadence at which the global StreamSwitchLoop calls
+  // updateStreamSwitchAsync() to evaluate live-schedule switches.
+  streamSwitchTimeIntervalMs?: number;
+  // Polling interval in milliseconds used while an event is ongoing (default 3000).
+  // "Ongoing event": the switcher is on a live stream (stream_switcher.js
+  // `this.streamTypeLive === true`) and the current scheduleObj is within its
+  // window, i.e. now >= scheduleObj.start_time && now < scheduleObj.end_time.
+  // A slower/less-frequent poll is acceptable in this steady state.
+  // NOTE: config surface only for now; the polling cadence still uses the base
+  // interval. Wire-up lands in the follow-up (#366).
+  streamSwitchOngoingEventIntervalMs?: number;
+  // Polling interval in milliseconds used when an event is near its end (default 1000).
+  // "Near end of event": an ongoing event whose remaining time is within the
+  // end-of-event guard window used by the switcher, i.e.
+  // scheduleObj.end_time - now <= 10000 (the 10000ms guard in
+  // stream_switcher.js ~L200). A faster poll here reduces switch latency at the
+  // boundary. Derived from that guard rather than a new unrelated constant.
+  // NOTE: config surface only for now; the polling cadence still uses the base
+  // interval. Wire-up lands in the follow-up (#366).
+  streamSwitchNearEndEventIntervalMs?: number;
 }
 
 interface StreamerOpts {
@@ -205,6 +226,8 @@ export class ChannelEngine {
   private serverStartTime: number;
   private instanceId: string;
   private streamSwitchTimeIntervalMs: number;
+  private streamSwitchOngoingEventIntervalMs: number;
+  private streamSwitchNearEndEventIntervalMs: number;
   private sessionStore: any;
   private sessionLiveStore: any;
   private streamerOpts: StreamerOpts;
@@ -277,7 +300,27 @@ export class ChannelEngine {
     this.serverStartTime = Date.now();
     this.instanceId = uuidv4();
 
-    this.streamSwitchTimeIntervalMs = 3000;
+    // Base stream-switch polling interval (ms). Configurable via options,
+    // defaults to the previously-hardcoded 3000ms. See ChannelEngineOpts.
+    this.streamSwitchTimeIntervalMs =
+      options && options.streamSwitchTimeIntervalMs !== undefined
+        ? options.streamSwitchTimeIntervalMs
+        : 3000;
+    // Polling interval (ms) while an event is ongoing. See "ongoing event"
+    // definition in ChannelEngineOpts. Defaults to the base interval (3000ms).
+    // Config surface only for now — not yet applied to the loop cadence (#366).
+    this.streamSwitchOngoingEventIntervalMs =
+      options && options.streamSwitchOngoingEventIntervalMs !== undefined
+        ? options.streamSwitchOngoingEventIntervalMs
+        : 3000;
+    // Polling interval (ms) when an event is near its end. See "near end of
+    // event" definition in ChannelEngineOpts, derived from the 10000ms
+    // end-of-event guard in stream_switcher.js. Defaults to a faster 1000ms.
+    // Config surface only for now — not yet applied to the loop cadence (#366).
+    this.streamSwitchNearEndEventIntervalMs =
+      options && options.streamSwitchNearEndEventIntervalMs !== undefined
+        ? options.streamSwitchNearEndEventIntervalMs
+        : 1000;
 
     this.sessionStore = {
       sessionStateStore: new SessionStateStore({
