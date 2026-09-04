@@ -84,6 +84,44 @@ describe("Session", () => {
     });
   });
 
+  describe("EXT-X-ENDLIST on served media playlists (event mode, issue #363)", () => {
+    // A served media playlist ends its last line with a newline (segment lines are
+    // "\n"-terminated by the vod lib), so ENDLIST is appended on its own line.
+    const mediaPlaylist =
+      "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nseg0.ts\n";
+
+    it("appends #EXT-X-ENDLIST once the schedule has ended in event mode", () => {
+      const session = new Session("dummy", { event: true }, sessionLiveStore);
+      session.isEndOfSchedule = true;
+      const out = session._appendEndlistIfEnded(mediaPlaylist);
+      expect(out.endsWith("#EXT-X-ENDLIST\n")).toEqual(true);
+    });
+
+    it("does not append #EXT-X-ENDLIST while content is still playing in event mode", () => {
+      const session = new Session("dummy", { event: true }, sessionLiveStore);
+      expect(session.isEndOfSchedule).toEqual(false);
+      const out = session._appendEndlistIfEnded(mediaPlaylist);
+      expect(out).toEqual(mediaPlaylist);
+      expect(/#EXT-X-ENDLIST/.test(out)).toEqual(false);
+    });
+
+    it("never appends #EXT-X-ENDLIST when event mode is off, even at end of schedule", () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      session.isEndOfSchedule = true; // even if forced, off-mode never emits the tag
+      const out = session._appendEndlistIfEnded(mediaPlaylist);
+      expect(/#EXT-X-ENDLIST/.test(out)).toEqual(false);
+    });
+
+    it("is idempotent and does not add a second #EXT-X-ENDLIST", () => {
+      const session = new Session("dummy", { event: true }, sessionLiveStore);
+      session.isEndOfSchedule = true;
+      const once = session._appendEndlistIfEnded(mediaPlaylist);
+      const twice = session._appendEndlistIfEnded(once);
+      expect(twice).toEqual(once);
+      expect((twice.match(/#EXT-X-ENDLIST/g) || []).length).toEqual(1);
+    });
+  });
+
   it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case I", async () => {
     const session = new Session("dummy", null, sessionLiveStore);
     const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.

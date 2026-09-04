@@ -1807,6 +1807,23 @@ class Session {
    * This is detection only — deciding what the session does with the signal is
    * handled by the caller (and, later, ENDLIST emission by #363).
    */
+  /**
+   * Append #EXT-X-ENDLIST to a served media playlist when, in event mode, the
+   * schedule has ended (issue #363). Returns the manifest unchanged otherwise, so
+   * the tag never appears while content is still playing or when event mode is off.
+   * Idempotent: never adds a second ENDLIST if one is already present.
+   */
+  _appendEndlistIfEnded(m3u8) {
+    if (!m3u8 || !this.event || !this.isEndOfSchedule) {
+      return m3u8;
+    }
+    if (/#EXT-X-ENDLIST/.test(m3u8)) {
+      return m3u8;
+    }
+    const separator = m3u8.endsWith("\n") ? "" : "\n";
+    return m3u8 + separator + "#EXT-X-ENDLIST\n";
+  }
+
   _isEndOfScheduleSignal(nextVod) {
     if (!nextVod) {
       return true;
@@ -2424,6 +2441,11 @@ class Session {
         );
         this.prevVodMediaSeq[variantType] = playheadState[MSDKeys.vodMediaSeq];
         this.prevMediaSeqOffset[variantType] = playheadState[MSDKeys.mediaSeq];
+        // In event mode, once the schedule has ended (issue #363) terminate the
+        // served media playlist with #EXT-X-ENDLIST so players stop reloading.
+        // Applied uniformly to video, demuxed-audio and subtitle variants. The tag
+        // is never appended while content is still playing (isEndOfSchedule=false).
+        m3u8 = this._appendEndlistIfEnded(m3u8);
         return m3u8;
       } catch (err) {
         logerror(this._sessionId, err);
