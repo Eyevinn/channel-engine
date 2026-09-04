@@ -291,6 +291,199 @@ describe("Session", () => {
     });
   });
 
+  describe("ad-serving endpoint asset resolution (issue #370)", () => {
+    const SLATE_TV = "spec/testvectors/slate/";
+    const slateMaster = () => fs.createReadStream(SLATE_TV + "master.m3u8");
+    const slateMedia = () => fs.createReadStream(SLATE_TV + "media.m3u8");
+    const FIXED_TS = Date.UTC(2026, 8, 4, 0, 0, 0);
+    const AD_ENDPOINT = "https://ads.example.com/decision";
+
+    // Builds a stub matching the subset of the node-fetch Response API the
+    // resolver uses (ok/status/json). No real network is ever contacted.
+    function fetchStub(behaviour) {
+      const calls = [];
+      const stub = async (uri, opts) => {
+        calls.push({ uri, opts });
+        return behaviour(uri, opts);
+      };
+      stub.calls = calls;
+      return stub;
+    }
+    const okResponse = (body) => ({ ok: true, status: 200, json: async () => body });
+    const errResponse = (status) => ({ ok: false, status, json: async () => ({}) });
+
+    function endpointSession(extra) {
+      return new Session("dummy", {
+        adBreak: Object.assign(
+          { enabled: true, adServerUri: AD_ENDPOINT },
+          extra
+        )
+      }, sessionLiveStore);
+    }
+
+    it("resolves a single asset URI from the endpoint response ({ assetUri })", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => okResponse({ assetUri: "https://cdn.example.com/ad-a.m3u8" }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toEqual({ assetUri: "https://cdn.example.com/ad-a.m3u8" });
+      // The configured endpoint was queried exactly once.
+      expect(stub.calls.length).toEqual(1);
+      expect(stub.calls[0].uri).toEqual(AD_ENDPOINT);
+    });
+
+    it("resolves an asset-list URI from the endpoint response ({ assetList })", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => okResponse({ assetList: "https://cdn.example.com/ads.json" }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toEqual({ assetList: "https://cdn.example.com/ads.json" });
+    });
+
+    it("resolves the first entry of an { assets: [...] } response as the asset URI", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => okResponse({ assets: ["https://cdn.example.com/first.m3u8", "https://cdn.example.com/second.m3u8"] }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toEqual({ assetUri: "https://cdn.example.com/first.m3u8" });
+    });
+
+    it("does not fetch and returns null when ad breaks are disabled", async () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      const stub = fetchStub(() => okResponse({ assetUri: "https://cdn.example.com/ad.m3u8" }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+      expect(stub.calls.length).toEqual(0);
+    });
+
+    it("does not fetch and returns null when enabled but no adServerUri is configured", async () => {
+      const session = new Session("dummy", {
+        adBreak: { enabled: true, slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 } }
+      }, sessionLiveStore);
+      const stub = fetchStub(() => okResponse({ assetUri: "x" }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+      expect(stub.calls.length).toEqual(0);
+    });
+
+    it("falls back to null (slate) on an endpoint timeout without throwing", async () => {
+      const session = endpointSession();
+      // Emulate node-fetch aborting on the timeout: reject with an AbortError.
+      const stub = fetchStub(() => {
+        const err = new Error("The operation was aborted");
+        err.name = "AbortError";
+        return Promise.reject(err);
+      });
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+    });
+
+    it("falls back to null (slate) on a non-2xx HTTP status", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => errResponse(503));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+    });
+
+    it("falls back to null (slate) on a malformed JSON body", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("Unexpected token < in JSON"); } }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+    });
+
+    it("falls back to null (slate) when the response has no usable asset field", async () => {
+      const session = endpointSession();
+      const stub = fetchStub(() => okResponse({ foo: "bar" }));
+      const resolved = await session._resolveAdBreakAsset(stub);
+      expect(resolved).toBeNull();
+    });
+
+    it("feeds a resolved endpoint asset into the interstitial X-ASSET-URI over the slate", async () => {
+      const session = new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: AD_ENDPOINT,
+          slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 }
+        }
+      }, sessionLiveStore);
+      const stub = fetchStub(() => okResponse({ assetUri: "https://cdn.example.com/resolved-ad.m3u8" }));
+
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia,
+        fetch: stub
+      });
+      const bw = slateVod.getBandwidths()[0];
+      const m3u8 = slateVod.getLiveMediaSequences(0, bw, 0, 0);
+      const daterange = m3u8.split("\n").find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      // The endpoint-resolved asset wins over the configured slate.uri.
+      expect(daterange).toContain('X-ASSET-URI="https://cdn.example.com/resolved-ad.m3u8"');
+      expect(daterange).not.toContain('X-ASSET-URI="https://slate.example.com/master.m3u8"');
+      // Slate still fills the break window (PLANNED-DURATION spans the slate run).
+      expect(daterange).toContain("PLANNED-DURATION=8.000");
+    });
+
+    it("maps a resolved asset-list to X-ASSET-LIST on the interstitial tag", async () => {
+      const session = new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: AD_ENDPOINT,
+          slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 }
+        }
+      }, sessionLiveStore);
+      const stub = fetchStub(() => okResponse({ assetList: "https://cdn.example.com/ads.json" }));
+
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia,
+        fetch: stub
+      });
+      const bw = slateVod.getBandwidths()[0];
+      const m3u8 = slateVod.getLiveMediaSequences(0, bw, 0, 0);
+      const daterange = m3u8.split("\n").find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      expect(daterange).toContain('X-ASSET-LIST="https://cdn.example.com/ads.json"');
+      expect(daterange).not.toContain("X-ASSET-URI");
+    });
+
+    it("falls back to the slate asset in the interstitial tag when the endpoint fails", async () => {
+      const session = new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: AD_ENDPOINT,
+          slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 }
+        }
+      }, sessionLiveStore);
+      const stub = fetchStub(() => errResponse(500));
+
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia,
+        fetch: stub
+      });
+      const bw = slateVod.getBandwidths()[0];
+      const m3u8 = slateVod.getLiveMediaSequences(0, bw, 0, 0);
+      const daterange = m3u8.split("\n").find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      // Endpoint failure => slate reference is used, break still renders.
+      expect(daterange).toContain('X-ASSET-URI="https://slate.example.com/master.m3u8"');
+      expect(daterange).toContain("PLANNED-DURATION=8.000");
+    });
+
+    it("_addInterstitialMetadata prefers a resolved asset over the slate/adServer fallback", () => {
+      const session = endpointSession({
+        slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 }
+      });
+      const calls = [];
+      const fakeVod = { addMetadata: (k, v) => calls.push([k, v]) };
+      session._addInterstitialMetadata(fakeVod, FIXED_TS, { assetUri: "https://cdn.example.com/resolved.m3u8" });
+      const assetUri = calls.find((c) => c[0] === "x-asset-uri");
+      expect(assetUri[1]).toEqual("https://cdn.example.com/resolved.m3u8");
+    });
+  });
+
   it("sets the event flag when configured with { event: true }", () => {
     const session = new Session("dummy", { event: true }, sessionLiveStore);
     expect(session.event).toEqual(true);

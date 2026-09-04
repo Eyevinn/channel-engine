@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const debug = require('debug')('engine-session');
+const fetch = require('node-fetch');
 const HLSVod = require('@eyevinn/hls-vodtolive');
 const m3u8 = require('@eyevinn/m3u8');
 const HLSRepeatVod = require('@eyevinn/hls-repeat');
@@ -26,6 +27,10 @@ const END_OF_SCHEDULE = "END_OF_SCHEDULE";
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
 const DEFAULT_DIFF_COMPENSATION_RATE = 0.5;
+// Max time (ms) to wait for the configured ad-serving endpoint (#370) before
+// giving up and falling back to the slate-only break. Kept short so a slow or
+// unreachable endpoint never stalls a session tick.
+const AD_SERVER_TIMEOUT_MS = 2000;
 
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
@@ -1327,7 +1332,8 @@ class Session {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
                 })
               }
-              this._addInterstitialMetadata(newVod, vodResponse.unixTs);
+              const firstVodAdAsset = await this._resolveAdBreakAsset();
+              this._addInterstitialMetadata(newVod, vodResponse.unixTs, firstVodAdAsset);
               currentVod = newVod;
               if (vodResponse.desiredDuration) {
                 try {
@@ -1517,7 +1523,8 @@ class Session {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
                 })
               }
-              this._addInterstitialMetadata(newVod, vodResponse.unixTs);
+              const nextVodAdAsset = await this._resolveAdBreakAsset();
+              this._addInterstitialMetadata(newVod, vodResponse.unixTs, nextVodAdAsset);
               this.produceEvent({
                 type: 'NEXT_VOD_SELECTED',
                 data: {
@@ -1843,16 +1850,24 @@ class Session {
   //
   // Strictly gated on `this.adBreak.enabled`: when ad breaks are disabled (the
   // default) this is a no-op and the served manifest is byte-identical to the
-  // pre-#368 output. The asset reference is sourced from the #367 config
-  // (slate.uri preferred, falling back to adServerUri); resolving the real ad
-  // asset from the ad endpoint is out of scope here (#370).
-  _addInterstitialMetadata(vod, timestamp) {
+  // pre-#368 output.
+  //
+  // Asset-source precedence (#370): when the caller has resolved a real ad
+  // asset from the configured ad-serving endpoint (`_resolveAdBreakAsset()`),
+  // it is passed in as `resolvedAsset` and its `assetUri`/`assetList` becomes
+  // the interstitial `X-ASSET-URI`/`X-ASSET-LIST`. When no endpoint asset was
+  // resolved (endpoint unconfigured, or a timeout/HTTP-error/malformed response
+  // that made the resolver fall back), we degrade to the #367 config reference
+  // (slate.uri preferred, then adServerUri) so the break still renders.
+  _addInterstitialMetadata(vod, timestamp, resolvedAsset) {
     if (!vod || !this.adBreak || !this.adBreak.enabled) {
       return;
     }
-    const assetUri =
+    const fallbackUri =
       (this.adBreak.slate && this.adBreak.slate.uri) || this.adBreak.adServerUri;
-    if (!assetUri) {
+    const assetList = resolvedAsset && resolvedAsset.assetList;
+    const assetUri = (resolvedAsset && resolvedAsset.assetUri) || fallbackUri;
+    if (!assetList && !assetUri) {
       return;
     }
     const startDate = new Date(
@@ -1869,7 +1884,76 @@ class Session {
     if (plannedDuration > 0) {
       vod.addMetadata("planned-duration", plannedDuration);
     }
-    vod.addMetadata("x-asset-uri", assetUri);
+    // A resolved asset-list (multiple ads) takes precedence over a single URI
+    // and maps to X-ASSET-LIST; otherwise a single X-ASSET-URI is emitted.
+    if (assetList) {
+      vod.addMetadata("x-asset-list", assetList);
+    } else {
+      vod.addMetadata("x-asset-uri", assetUri);
+    }
+  }
+
+  // Ad-serving endpoint client (issue #370).
+  //
+  // When an ad break is enabled and an `adBreak.adServerUri` is configured,
+  // query that endpoint and map its JSON response to the interstitial asset
+  // reference consumed by `_addInterstitialMetadata`.
+  //
+  // Response contract (kept deliberately generic — no ad-product specifics):
+  //   { "assetUri": "<uri>" }                     -> single X-ASSET-URI
+  //   { "assetList": "<uri>" }                    -> an X-ASSET-LIST endpoint
+  //   { "assets": ["<uri>", ...] }                -> first entry -> X-ASSET-URI
+  // Returns `{ assetUri }` or `{ assetList }` on success, or `null` when there
+  // is nothing to resolve or on ANY failure.
+  //
+  // Log-and-continue (per CLAUDE.md): a timeout, non-2xx HTTP status, network
+  // error, or malformed/empty JSON body all resolve to `null` (never throw), so
+  // the caller falls back to the slate-only break and the session tick is never
+  // interrupted. Returns `null` immediately (no fetch) when the feature is
+  // disabled or no `adServerUri` is configured.
+  async _resolveAdBreakAsset(fetchImpl) {
+    if (!this.adBreak || !this.adBreak.enabled || !this.adBreak.adServerUri) {
+      return null;
+    }
+    const doFetch = fetchImpl || fetch;
+    const uri = this.adBreak.adServerUri;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), AD_SERVER_TIMEOUT_MS);
+    try {
+      const response = await doFetch(uri, {
+        signal: controller.signal,
+        headers: { accept: "application/json" }
+      });
+      if (!response || !response.ok) {
+        debug(
+          `[${this._sessionId}]: ad-server endpoint ${uri} returned ` +
+          `${response ? response.status : "no response"}, falling back to slate`
+        );
+        return null;
+      }
+      const body = await response.json();
+      if (!body || typeof body !== "object") {
+        debug(`[${this._sessionId}]: ad-server endpoint ${uri} returned a non-object body, falling back to slate`);
+        return null;
+      }
+      if (typeof body.assetList === "string" && body.assetList) {
+        return { assetList: body.assetList };
+      }
+      if (typeof body.assetUri === "string" && body.assetUri) {
+        return { assetUri: body.assetUri };
+      }
+      if (Array.isArray(body.assets) && typeof body.assets[0] === "string" && body.assets[0]) {
+        return { assetUri: body.assets[0] };
+      }
+      debug(`[${this._sessionId}]: ad-server endpoint ${uri} response had no usable asset, falling back to slate`);
+      return null;
+    } catch (err) {
+      // Covers AbortError (timeout), network errors, and JSON parse errors.
+      debug(`[${this._sessionId}]: ad-server endpoint ${uri} request failed (${err && err.message ? err.message : err}), falling back to slate`);
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   // Ad-break slate coordination (issue #369).
@@ -1903,9 +1987,13 @@ class Session {
     const timestamp = typeof unixTs === "number" ? unixTs : Date.now();
     // `injectSlateLoaders` lets callers (tests) feed the repeated slate asset
     // from fixtures instead of the network; production passes nothing so the
-    // slate is fetched from `slate.uri` as usual.
-    const { master, media } = injectSlateLoaders || {};
-    return new Promise((resolve, reject) => {
+    // slate is fetched from `slate.uri` as usual. It may also carry a `fetch`
+    // stub used to resolve the ad-break asset (#370) without real network.
+    const { master, media, fetch: fetchImpl } = injectSlateLoaders || {};
+    // Resolve the real ad asset from the configured endpoint before rendering
+    // the slate so the interstitial DATERANGE can reference it; on any failure
+    // this yields null and the tag degrades to the slate reference.
+    return this._resolveAdBreakAsset(fetchImpl).then((resolvedAsset) => new Promise((resolve, reject) => {
       try {
         const slateVod = new HLSRepeatVod(slate.uri, reps);
         let hlsVod;
@@ -1926,8 +2014,9 @@ class Session {
             hlsVod = new HLSVod(slate.uri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
             // Bracket exactly the slate: the interstitial DATERANGE lands on the
             // slate's first segment (START-DATE = break boundary) and its
-            // PLANNED-DURATION equals the slate run length.
-            this._addInterstitialMetadata(hlsVod, timestamp);
+            // PLANNED-DURATION equals the slate run length. The asset reference
+            // is the endpoint-resolved ad (or the slate fallback) from #370.
+            this._addInterstitialMetadata(hlsVod, timestamp, resolvedAsset);
             const slateMediaManifestLoader = (bw) => {
               let mediaManifestStream = new Readable();
               // `HLSRepeatVod` prepends an EXT-X-DISCONTINUITY before the first
@@ -1980,7 +2069,7 @@ class Session {
       } catch (err) {
         reject(err);
       }
-    });
+    }));
   }
 
   _isEndOfScheduleSignal(nextVod) {
