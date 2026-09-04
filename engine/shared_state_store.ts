@@ -3,9 +3,21 @@ const debug = require("debug")("engine-state-store");
 const RedisStateStore = require("./redis_state_store.js");
 const MemcachedStateStore = require("./memcached_state_store.js");
 const MemoryStateStore = require("./memory_state_store.js");
+import type { IStateStore, ISharedStateStoreOpts } from "./state_store_types";
+
+// Type-only migration (#373): a faithful port of the original JS. The public
+// API (constructor + methods) and runtime behavior are unchanged.
 
 class SharedStateStore {
-  constructor(type, opts, initData) {
+  initData: Record<string, any> | undefined;
+  type: string;
+  cache: Record<string, any>;
+  cacheTTL: number;
+  shared: boolean;
+  hasPipeline: boolean;
+  store: IStateStore;
+
+  constructor(type: string, opts: ISharedStateStoreOpts | undefined, initData?: Record<string, any>) {
     this.initData = initData;
     this.type = type;
     this.cache = {};
@@ -28,48 +40,48 @@ class SharedStateStore {
     }
   }
 
-  isShared() {
+  isShared(): boolean {
     return this.shared;
   }
 
-  canPipeline() {
+  canPipeline(): boolean {
     return this.hasPipeline;
   }
 
-  async init(id) {
-    await this.store.initAsync(id, this.initData);
+  async init(id: string): Promise<void> {
+    await this.store.initAsync(id, this.initData as Record<string, any>);
   }
 
-  async reset(id) {
-    await this.store.resetAsync(id, this.initData);
+  async reset(id: string): Promise<void> {
+    await this.store.resetAsync(id, this.initData as Record<string, any>);
   }
 
-  async resetAll() {
+  async resetAll(): Promise<void> {
     await this.store.resetAllAsync();
   }
 
-  async get(id, key) {
+  async get(id: string, key: string): Promise<any> {
     //debug(`${this.type}:${id}:${key} Reading from shared store`);
     let data = await this.store.getAsync(id, key);
     //debug(key !== "currentVod" ? data : (data ? "not null" : "null" ));
     return data;
   }
 
-  async set(id, key, value) {
+  async set(id: string, key: string, value: any): Promise<any> {
     //debug(`${this.type}:${id}:${key} Writing to shared store`);
     const data = await this.store.setAsync(id, key, value);
     return data;
   }
 
-  async setVolatile(id, key, value) {
+  async setVolatile(id: string, key: string, value: any): Promise<any> {
     const data = await this.store.setVolatileAsync(id, key, value);
     return data;
   }
 
-  async getValues(id, keys) {
-    let data = {};
+  async getValues(id: string, keys: string[]): Promise<Record<string, any>> {
+    let data: Record<string, any> = {};
     if (this.hasPipeline) {
-      data = await this.store.getValues(id, keys);
+      data = await (this.store.getValues as NonNullable<IStateStore["getValues"]>)(id, keys);
     } else {
       for(const key of keys) {
         data[key] = await this.get(id, key);
@@ -78,10 +90,10 @@ class SharedStateStore {
     return data;
   }
 
-  async setValues(id, data) {
-    let returnData = {};
+  async setValues(id: string, data: Record<string, any>): Promise<Record<string, any>> {
+    let returnData: Record<string, any> = {};
     if (this.hasPipeline) {
-      returnData = await this.store.setValues(id, data);
+      returnData = await (this.store.setValues as NonNullable<IStateStore["setValues"]>)(id, data);
     } else {
       for (const key of Object.keys(data)) {
         returnData[key] = await this.set(id, key, data[key]);
@@ -90,7 +102,7 @@ class SharedStateStore {
     return returnData;
   }
 
-  async remove(id, key) {
+  async remove(id: string, key: string): Promise<void> {
     await this.store.removeAsync(id, key);
   }
 }
