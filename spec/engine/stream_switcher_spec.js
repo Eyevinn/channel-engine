@@ -565,3 +565,94 @@ describe("The Stream Switcher", () => {
     expect(newList).toEqual(result);
   });
 });
+
+describe("The Stream Switcher adaptive poll cadence (#366)", () => {
+  const tsNow2 = Date.now();
+  // Mirror of Server.computeStreamSwitchIntervalMs(): pick the MINIMUM interval any
+  // channel requires from each switcher's getEventPollingState(). Kept here so the
+  // aggregation rule is exercised against real StreamSwitcher instances without
+  // standing up a full Server/TypeScript build in the jasmine specs.
+  const computeInterval = (switchers, cfg) => {
+    let desiredMs = cfg.base;
+    for (const s of switchers) {
+      const state = s.getEventPollingState();
+      let channelMs;
+      if (state.nearEnd) {
+        channelMs = cfg.nearEnd;
+      } else if (state.midEvent) {
+        channelMs = cfg.ongoing;
+      } else {
+        channelMs = cfg.base;
+      }
+      if (channelMs < desiredMs) {
+        desiredMs = channelMs;
+      }
+    }
+    return desiredMs;
+  };
+  const CFG = { base: 3000, ongoing: 3000, nearEnd: 1000 };
+
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(tsNow2));
+  });
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
+  const midEventSwitcher = () => {
+    const s = new StreamSwitcher({ streamSwitchManager: new TestSwitchManager(0) });
+    s.streamTypeLive = true;
+    s.timeDiff = { start_time: tsNow2 - 30 * 1000, end_time: tsNow2 + 60 * 1000 };
+    return s;
+  };
+  const nearEndSwitcher = () => {
+    const s = new StreamSwitcher({ streamSwitchManager: new TestSwitchManager(0) });
+    s.streamTypeLive = true;
+    s.timeDiff = { start_time: tsNow2 - 60 * 1000, end_time: tsNow2 + 5 * 1000 };
+    return s;
+  };
+
+  it("reports no ongoing event when there is no schedule / not live => base interval", () => {
+    const s = new StreamSwitcher({ streamSwitchManager: new TestSwitchManager(0) });
+    // Not live, no scheduleObj tracked yet.
+    const state = s.getEventPollingState();
+    expect(state.midEvent).toBe(false);
+    expect(state.nearEnd).toBe(false);
+    expect(state.msUntilEnd).toBe(null);
+    expect(computeInterval([s], CFG)).toBe(CFG.base);
+  });
+
+  it("backs off to the ongoing interval while mid-event and not near end", () => {
+    const s = midEventSwitcher();
+    const state = s.getEventPollingState();
+    expect(state.midEvent).toBe(true);
+    expect(state.nearEnd).toBe(false);
+    expect(state.msUntilEnd).toBe(60 * 1000);
+    expect(computeInterval([s], CFG)).toBe(CFG.ongoing);
+  });
+
+  it("speeds up to the near-end interval as end_time comes within the 10000ms guard", () => {
+    const s = midEventSwitcher();
+    expect(s.getEventPollingState().nearEnd).toBe(false);
+    // Advance until only 5s remain of the event => within the 10000ms near-end guard.
+    jasmine.clock().tick(55 * 1000);
+    const state = s.getEventPollingState();
+    expect(state.midEvent).toBe(true);
+    expect(state.nearEnd).toBe(true);
+    expect(state.msUntilEnd).toBe(5 * 1000);
+    expect(computeInterval([s], CFG)).toBe(CFG.nearEnd);
+  });
+
+  it("takes the minimum interval across channels (one near-end pulls the loop fast)", () => {
+    const ongoing = midEventSwitcher();
+    const nearEnd = nearEndSwitcher();
+    // All-ongoing => back off.
+    expect(computeInterval([ongoing, midEventSwitcher()], CFG)).toBe(CFG.ongoing);
+    // Any near-end => the whole loop drops to the fast near-end interval.
+    expect(computeInterval([ongoing, nearEnd], CFG)).toBe(CFG.nearEnd);
+    // Any channel with no ongoing event keeps the base/fast interval too.
+    const idle = new StreamSwitcher({ streamSwitchManager: new TestSwitchManager(0) });
+    expect(computeInterval([ongoing, idle], CFG)).toBe(CFG.base);
+  });
+});
