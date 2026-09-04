@@ -22,8 +22,16 @@ const StreamType = Object.freeze({
 const FAIL_TIMEOUT = 3000;
 const MAX_FAILS = 3;
 
+// Implicit global assigned to (without a var/let/const declaration) inside
+// _createCustomSimpleSegmentList; declared ambiently here so the type-checker
+// knows the name. `declare` emits no JavaScript, preserving the original
+// (undeclared-assignment) runtime behavior exactly.
+declare let byteRangeOffset: any;
+
 class StreamSwitcher {
-  constructor(config) {
+  [key: string]: any;
+
+  constructor(config?: any) {
     this.sessionId = crypto.randomBytes(20).toString("hex");
     this.useDemuxedAudio = false;
     this.cloudWatchLogging = false;
@@ -260,16 +268,16 @@ class StreamSwitcher {
   async _initSwitching(state, session, sessionLive, scheduleObj) {
     this.working = true;
     const RESET_DELAY = 5000;
-    let liveCounts = 0;
-    let liveSegments = null;
-    let currVodCounts = 0;
-    let currLiveCounts = 0;
-    let currVodSegments = null;
-    let eventSegments = null;
+    let liveCounts: any = 0;
+    let liveSegments: any = null;
+    let currVodCounts: any = 0;
+    let currLiveCounts: any = 0;
+    let currVodSegments: any = null;
+    let eventSegments: any = null;
 
-    let liveAudioSegments = null;
-    let currVodAudioSegments = null;
-    let eventAudioSegments = null;
+    let liveAudioSegments: any = null;
+    let currVodAudioSegments: any = null;
+    let eventAudioSegments: any = null;
 
 
     let liveUri = null;
@@ -572,7 +580,7 @@ class StreamSwitcher {
     const audioURIs = {};
     const audioM3UPlaylists = {};
     try {
-      const m3u = await this._fetchParseM3u8(uri);
+      const m3u: any = await this._fetchParseM3u8(uri);
       debug(`[${this.sessionId}]: ...Fetched a New Preroll Slate Master Manifest from:\n${uri}`);
       // Is the first URI an actual Multivariant manifest
       if (m3u.items.StreamItem.length > 0) {
@@ -644,7 +652,7 @@ class StreamSwitcher {
         const results = await Promise.allSettled(loadMediaPromises);
         const resultsAudio = await Promise.allSettled(loadAudioPromises);
         // Process...
-        results.forEach((item, idx) => {
+        results.forEach((item: any, idx) => {
           if (item.status === "fulfilled" && item.value) {
             const resultM3U = item.value;
             const bw = bandwidths[idx];
@@ -653,7 +661,7 @@ class StreamSwitcher {
         });
 
         if (resultsAudio) {
-          resultsAudio.forEach((item, idx) => {
+          resultsAudio.forEach((item: any, idx) => {
             const resultM3U = item.value;
             const indexes = this._getGroupAndLangIdxFromIdx(idx, audioURIs)
             if (!audioM3UPlaylists[indexes.groupId]) {
@@ -709,7 +717,7 @@ class StreamSwitcher {
     let segments = [];
     for (let k = 0; k < segmentList.length; k++) {
       try {
-        let seg = {};
+        let seg: any = {};
         const playlistItem = segmentList[k];
         let segmentUri;
         let byteRange = undefined;
@@ -832,9 +840,14 @@ class StreamSwitcher {
         answerFound = true
       } else {
         storedLength = langs.length;
+        // @ts-ignore -- pre-existing behavior: `startIdx` is `const`; this path
+        // throws at runtime if ever reached. Preserved byte-for-byte in the TS
+        // port (type-only migration, #374) rather than "fixed" here.
         startIdx++;
       }
     }
+    // @ts-ignore -- pre-existing behavior: `groupIds`/`langs` are block-scoped to
+    // the while body above and are not in scope here. Preserved as-is.
     return { groupId: groupIds[startIdx], lang: langs[idx - storedLength] }
   }
 

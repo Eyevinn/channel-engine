@@ -35,6 +35,8 @@ const AD_SERVER_TIMEOUT_MS = 2000;
 const timer = ms => new Promise(res => setTimeout(res, ms));
 
 class Session {
+  [key: string]: any;
+
   /**
    *
    * config: {
@@ -42,7 +44,7 @@ class Session {
    * }
    *
    */
-  constructor(assetManager, config, sessionStore) {
+  constructor(assetManager: any, config: any, sessionStore: any) {
     this._assetManager = assetManager;
     this._sessionId = crypto.randomBytes(20).toString('hex');
 
@@ -296,7 +298,7 @@ class Session {
           }
           // Apply external diff compensation if available.
           if (this.diffCompensation && this.diffCompensation > 0) {
-            const DIFF_COMPENSATION = (reqTickInterval * this.diffCompensationRate).toFixed(2) * 1000;
+            const DIFF_COMPENSATION = ((reqTickInterval * this.diffCompensationRate).toFixed(2) as any) * 1000;
             debug(`[${this._sessionId}]: Adding ${DIFF_COMPENSATION}msec to tickInterval to compensate for schedule diff (current=${this.diffCompensation}msec)`);
             tickInterval += (DIFF_COMPENSATION / 1000);
             this.diffCompensation -= DIFF_COMPENSATION;
@@ -371,7 +373,7 @@ class Session {
       playheadStateMap[PlayheadState.CRASHED] = 'crashed';
       playheadStateMap[PlayheadState.STOPPED] = 'stopped';
 
-      const status = {
+      const status: any = {
         sessionId: this._sessionId,
         playhead: {
           state: playheadStateMap[state],
@@ -441,7 +443,7 @@ class Session {
     let waitTimeMs = 2000;
     for (let i = segments[Object.keys(segments)[0]].length - 1; 0 < i; i--) {
       if (segments[Object.keys(segments)[0]][i].duration) {
-        waitTimeMs = parseInt(1000 * (segments[Object.keys(segments)[0]][i].duration / 3), 10);
+        waitTimeMs = parseInt((1000 * (segments[Object.keys(segments)[0]][i].duration / 3)) as any, 10);
         break;
       }
     }
@@ -453,7 +455,7 @@ class Session {
       for (let i = audioSegments[groupId][lang].length - 1; 0 < i; i--) {
         const segment = audioSegments[groupId][lang][i];
         if (segment.duration) {
-          waitTimeMsAudio = parseInt(1000 * (segment.duration / 3), 10);
+          waitTimeMsAudio = parseInt((1000 * (segment.duration / 3)) as any, 10);
           break;
         }
       }
@@ -752,7 +754,7 @@ class Session {
       }
       return null;
     }
-    let newSessionState = {};
+    let newSessionState: any = {};
     if (sessionState.state === SessionState.VOD_NEXT_INITIATING || sessionState.state === SessionState.VOD_RELOAD_INITIATING) {
       if (isLeader) {
         const isOldVod = this._isOldVod(playheadState.playheadRef, currentVod.getDuration());
@@ -1448,7 +1450,7 @@ class Session {
           }
         } else {
           // Handle edge case where Leader loaded next vod but Follower remained in state=VOD_PLAYING
-          if ((this.prevMediaSeqOffset.video !== null) & (sessionState.mediaSeq !== this.prevMediaSeqOffset.video)) {
+          if (((this.prevMediaSeqOffset.video !== null) as any) & ((sessionState.mediaSeq !== this.prevMediaSeqOffset.video) as any)) {
             debug(`[${this._sessionId}]: state=VOD_PLAYING, current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}], total[${currentVod.getLiveMediaSequencesCount()}]`);
             debug(`[${this._sessionId}]: mediaSeq offsets -> current[${sessionState.vodMediaSeqVideo}], prev[${this.prevVodMediaSeq.video}]`);
             // Allow Follower to clear VodCache...
@@ -1911,7 +1913,7 @@ class Session {
   // the caller falls back to the slate-only break and the session tick is never
   // interrupted. Returns `null` immediately (no fetch) when the feature is
   // disabled or no `adServerUri` is configured.
-  async _resolveAdBreakAsset(fetchImpl) {
+  async _resolveAdBreakAsset(fetchImpl?: any) {
     if (!this.adBreak || !this.adBreak.enabled || !this.adBreak.adServerUri) {
       return null;
     }
@@ -2143,7 +2145,7 @@ class Session {
     });
   }
 
-  _loadSlate(afterVod, reps, unixTs) {
+  _loadSlate(afterVod: any, reps?: any, unixTs?: any) {
     return new Promise((resolve, reject) => {
       try {
         const slateVod = new HLSRepeatVod(this.slateUri, reps || this.slateRepetitions);
@@ -2214,10 +2216,10 @@ class Session {
     });
   }
 
-  _truncateVod(vodResponse) {
+  _truncateVod(vodResponse: any): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
-        const options = {};
+        const options: any = {};
         if (vodResponse.startOffset) {
           options.offset = vodResponse.startOffset / 1000;
         }
@@ -2259,7 +2261,7 @@ class Session {
     });
   }
 
-  _truncateSlate(afterVod, requestedDuration, vodUri, unixTs) {
+  _truncateSlate(afterVod: any, requestedDuration: any, vodUri: any, unixTs?: any): Promise<any> {
     return new Promise((resolve, reject) => {
       let nexVodUri = null;
       try {
@@ -2376,7 +2378,7 @@ class Session {
     });
   }
 
-  _getFirstDuration(manifest) {
+  _getFirstDuration(manifest: any): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
         const parser = m3u8.createStream();
@@ -2412,7 +2414,7 @@ class Session {
     return 0;
   }
 
-  async _getCurrentPlayheadPosition(overrideVodMediaSeqVideo) {
+  async _getCurrentPlayheadPosition(overrideVodMediaSeqVideo?: any) {
     // Caller can pass the in-progress local vodMediaSeqVideo to avoid the Redis
     // round-trip and the race where the leader has incremented its local value
     // but hasn't written it to Redis yet (incrementAsync writes happen later via
@@ -2449,7 +2451,7 @@ class Session {
     return playheadPositions[seqIdx];
   }
 
-  _getLastDuration(manifest) {
+  _getLastDuration(manifest: any): Promise<any> {
     return new Promise((resolve, reject) => {
       try {
         const parser = m3u8.createStream();

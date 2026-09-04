@@ -8,8 +8,8 @@ const fetch = require("node-fetch");
 const { m3u8Header, roundToThreeDecimals } = require("./util.js");
 const { AbortController } = require("abort-controller");
 
-const timer = (ms) => new Promise((res) => setTimeout(res, ms));
-const daterangeAttribute = (key, attr) => {
+const timer = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const daterangeAttribute = (key: string, attr: any) => {
   if (key === "planned-duration" || key === "duration") {
     return key.toUpperCase() + "=" + `${attr.toFixed(3)}`;
   } else {
@@ -33,13 +33,22 @@ const PlaylistTypes = Object.freeze({
   SUBTITLE: 3,
 });
 
+// Implicit globals assigned to (without a var/let/const declaration) inside
+// class methods; declared ambiently here so the type-checker knows the names.
+// `declare` emits no JavaScript, preserving the original runtime behavior
+// (undeclared assignment / cross-call global) exactly.
+declare let byteRangeOffset: any;
+declare let list: any;
+
 /**
  * When we implement subtitle support in live-mix we should place it in its own file/or share it with audio
  * we should also remove audio implementation when we implement subtitles from this file so we don't get at 4000 line long file.
  */
 
 class SessionLive {
-  constructor(config, sessionLiveStore) {
+  [key: string]: any;
+
+  constructor(config: any, sessionLiveStore: any) {
     this.sessionId = crypto.randomBytes(20).toString("hex");
     this.sessionLiveStateStore = sessionLiveStore.sessionLiveStateStore;
     this.instanceId = sessionLiveStore.instanceId;
@@ -624,7 +633,7 @@ class SessionLive {
   }
 
   async getCurrentMediaAndDiscSequenceCount() {
-    const counts = {
+    const counts: any = {
       mediaSeq: this.mediaSeqCountVideo,
       discSeq: this.discSeqCountVideo,
     };
@@ -747,7 +756,7 @@ class SessionLive {
       clearTimeout(timeout);
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       parser.on("m3u", (m3u) => {
         debug(`[${this.sessionId}]: ...Fetched a New Live Master Manifest from:\n${masterManifestURI}`);
         let baseUrl = "";
@@ -928,7 +937,7 @@ class SessionLive {
             break;
           }
           const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
-          const waitTimeMs = parseInt(segDur / 3, 10);
+          const waitTimeMs = parseInt((segDur / 3) as any, 10);
           debug(
             `[${this.sessionId}]: FOLLOWER: Leader has not put anything in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`
           );
@@ -953,7 +962,7 @@ class SessionLive {
               break;
             }
             const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
-            const waitTimeMs = parseInt(segDur / 3, 10);
+            const waitTimeMs = parseInt((segDur / 3) as any, 10);
             debug(
               `[${this.sessionId}]: FOLLOWER: Leader has not put anything audio in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`
             );
@@ -999,7 +1008,7 @@ class SessionLive {
             );
           }
           const segDur = this._getAnyFirstSegmentDurationMs() || DEFAULT_PLAYHEAD_INTERVAL_MS;
-          const waitTimeMs = parseInt(segDur / 3, 10);
+          const waitTimeMs = parseInt((segDur / 3) as any, 10);
           debug(`[${this.sessionId}]: FOLLOWER: Cannot find anything NEW in store... Will check again in ${waitTimeMs}ms (Tries left=[${attempts}])`);
           await timer(waitTimeMs);
           this.timerCompensation = false;
@@ -1171,6 +1180,9 @@ class SessionLive {
           audiotracksToSkipOnRetry = [];
           debug(`[${this.sessionId}]: Live Mseq counts=[${allStoredMediaSeqCountsVideo}]`);
           // Figure out what variants's are behind.
+          // @ts-ignore -- pre-existing behavior: `HIGHEST_MEDIA_SEQUENCE_COUNT`
+          // is a module-level `const`; this assignment throws at runtime if ever
+          // reached. Preserved byte-for-byte (type-only migration, #374).
           HIGHEST_MEDIA_SEQUENCE_COUNT = Math.max(...allStoredMediaSeqCountsVideo);
           Object.keys(this.liveSourceM3Us).map((variantKey) => {
             if (this.liveSourceM3Us[variantKey].mediaSeq === HIGHEST_MEDIA_SEQUENCE_COUNT) {
@@ -1197,14 +1209,14 @@ class SessionLive {
             // Find Highest MSEQ
             let [ahead, behind] = Object.keys(this.liveSourceM3Us).map((v) => {
               const c = this.liveSourceM3Us[v].mediaSeq;
-              const a = [];
-              const b = [];
+              const a: any[] = [];
+              const b: any[] = [];
               if (c === HIGHEST_MEDIA_SEQUENCE_COUNT) {
                 a.push({ c, v });
               } else {
                 b.push({ c, v });
               }
-            });
+            }) as any;
             // Find lowest bitrate with that highest MSEQ
             const variantToPaste = ahead.reduce((min, item) => (item.v < min.v ? item : min), list[0]);
             // Reassign that bitrate onto the one's originally planned for retry
@@ -1896,8 +1908,8 @@ class SessionLive {
     return null;
   }
 
-  _parseMediaManifest(m3u, mediaManifestUri, liveTargetBandwidth, isFirstBW, isLeader) {
-    return new Promise(async (resolve, reject) => {
+  _parseMediaManifest(m3u: any, mediaManifestUri: any, liveTargetBandwidth: any, isFirstBW: any, isLeader: any) {
+    return new Promise<void>(async (resolve, reject) => {
       try {
         if (!this.liveSegQueue[liveTargetBandwidth]) {
           this.liveSegQueue[liveTargetBandwidth] = [];
@@ -1940,8 +1952,8 @@ class SessionLive {
     });
   }
 
-  _parseAudioManifest(m3u, audioPlaylistUri, liveTargetAudiotrack, isFirstAT, isLeader) {
-    return new Promise(async (resolve, reject) => {
+  _parseAudioManifest(m3u: any, audioPlaylistUri: any, liveTargetAudiotrack: any, isFirstAT: any, isLeader: any) {
+    return new Promise<void>(async (resolve, reject) => {
       try {
         if (!this.liveSegQueueAudio[liveTargetAudiotrack]) {
           this.liveSegQueueAudio[liveTargetAudiotrack] = [];
@@ -2018,7 +2030,7 @@ class SessionLive {
       let timelinePosition = 0;
 
       for (let i = startIdx; i < playlistItems.length; i++) {
-        let seg = {};
+        let seg: any = {};
         const playlistItem = playlistItems[i];
         let segmentUri;
         let byteRange = undefined;
@@ -2338,6 +2350,9 @@ class SessionLive {
     }
 
     if (!segAmounts.every((val, i, arr) => val === arr[0])) {
+      // @ts-ignore -- pre-existing behavior: `console` is called as a function
+      // here (not `console.log`), which throws at runtime if this path is hit.
+      // Preserved byte-for-byte (type-only migration, #374).
       console(`[${this.sessionId}]: Cannot Generate audio Manifest! <${this.instanceId}> Not yet collected ALL segments from Live Source...`);
       return null;
     }
@@ -2505,8 +2520,8 @@ class SessionLive {
   // To only use profiles that the channel will actually need.
   _filterLiveProfiles() {
     const profiles = this.sessionLiveProfile;
-    const toKeep = new Set();
-    let newItem = {};
+    const toKeep = new Set<any>();
+    let newItem: any = {};
     profiles.forEach((profile) => {
       let bwToKeep = this._getNearestBandwidth(profile.bw, Object.keys(this.mediaManifestURIs));
       toKeep.add(bwToKeep);
@@ -2517,11 +2532,11 @@ class SessionLive {
     this.mediaManifestURIs = newItem;
   }
   _filterLiveProfilesAudio() {
-    const tracks = this.sessionAudioTracks.map((trackItem) => {
+    const tracks = this.sessionAudioTracks.map((trackItem: any) => {
       return this._getTrackFromGroupAndLang(trackItem.groupId, trackItem.language);
     });
-    const toKeep = new Set();
-    let newItem = {};
+    const toKeep = new Set<any>();
+    let newItem: any = {};
     tracks.forEach((t) => {
       let atToKeep = this._findNearestAudiotrack(t, Object.keys(this.audioManifestURIs));
       toKeep.add(atToKeep);
@@ -2534,12 +2549,14 @@ class SessionLive {
 
   _filterLiveAudioTracks() {
     let audioTracks = this.sessionAudioTracks;
-    const toKeep = new Set();
+    const toKeep = new Set<any>();
 
-    let newItemsAudio = {};
-    audioTracks.forEach((audioTrack) => {
+    let newItemsAudio: any = {};
+    audioTracks.forEach((audioTrack: any) => {
       let groupAndLangToKeep = this._findAudioGroupsForLang(audioTrack.language, this.audioManifestURIs);
-      toKeep.add(...groupAndLangToKeep);
+      // Cast to a 1-tuple so the (behavior-preserving) spread type-checks against
+      // Set.add's single parameter; runtime is unchanged (extra elements ignored).
+      toKeep.add(...(groupAndLangToKeep as [any]));
     });
 
     toKeep.forEach((trackInfo) => {
@@ -2608,8 +2625,8 @@ class SessionLive {
     return false;
   }
 
-  _getGroupAndLangFromTrack(track) {
-    const GLItem = {
+  _getGroupAndLangFromTrack(track: any) {
+    const GLItem: any = {
       groupId: null,
       language: null,
     };
@@ -2623,11 +2640,13 @@ class SessionLive {
         return GLItem;
       }
     }
+    // @ts-ignore -- pre-existing behavior: `g`/`l` are block-scoped to the
+    // `if (match)` block above and are not in scope here. Preserved as-is.
     console.error(`Failed to extract GroupID and Language g=${g};l=${l}`);
     return GLItem;
   }
 
-  _getLangFromTrack(track) {
+  _getLangFromTrack(track: any) {
     const match = track.match(/g:(.*?);l:(.*)/);
     if (match) {
       const g = match[1];
@@ -2636,11 +2655,13 @@ class SessionLive {
         return l;
       }
     }
+    // @ts-ignore -- pre-existing behavior: `g`/`l` are block-scoped to the
+    // `if (match)` block above and are not in scope here. Preserved as-is.
     console.error(`Failed to extract Language g=${g};l=${l}`);
     return null;
   }
 
-  _getGroupFromTrack(track) {
+  _getGroupFromTrack(track: any) {
     const match = track.match(/g:(.*?);l:(.*)/);
     if (match) {
       const g = match[1];
@@ -2649,11 +2670,13 @@ class SessionLive {
         return g;
       }
     }
+    // @ts-ignore -- pre-existing behavior: `g`/`l` are block-scoped to the
+    // `if (match)` block above and are not in scope here. Preserved as-is.
     console.error(`Failed to extract Group ID g=${g};l=${l}`);
     return null;
   }
 
-  _getTrackFromGroupAndLang(g, l) {
+  _getTrackFromGroupAndLang(g: any, l: any) {
     return `g:${g};l:${l}`;
   }
 
