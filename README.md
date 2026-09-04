@@ -44,7 +44,18 @@ Please see the [Documentation](https://vod2live.docs.eyevinn.technology) for int
 - Improved performance with Redis connection pooling and pipelining
 - Enhanced stability in High Availability mode
 - Support for livemix with demuxed content (TS and CMAF)
+- Support for SGAI HLS-interstitial ad breaks with client-side ad replacement
 - And much more!
+
+### Ad breaks (HLS interstitials)
+
+A channel can be configured to open SGAI HLS-interstitial ad breaks. When
+enabled, the engine emits EXT-X-DATERANGE interstitial metadata on the
+manifest and resolves the ad asset from a configured ad-serving endpoint, with
+a slate fallback if that endpoint cannot be reached. Configure it through the
+`adBreak` option (engine-level default or per channel); see
+[docs/reference.md](docs/reference.md#ad-break-configuration-hls-interstitials)
+for the full field reference and `examples/adbreak.ts` for a runnable example.
 
 ## System Requirements
 
@@ -198,6 +209,7 @@ In addition there other reference implemetations that can be used:
 - `examples/drm.ts` : example with DRM
 - `examples/autocreate.ts` : example to auto create channel on demand
 - `examples/truncate.ts` : example when trimming start and end of a VOD
+- `examples/adbreak.ts` : example with a channel configured for HLS-interstitial ad breaks
 
 ### Source linking hls-vodtolive library
 
