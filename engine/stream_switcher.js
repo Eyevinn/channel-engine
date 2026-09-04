@@ -54,6 +54,39 @@ class StreamSwitcher {
     return this.eventId;
   }
 
+  /**
+   * Report this channel's event-polling state, used by the global StreamSwitchLoop
+   * to pick an adaptive poll cadence without leaking switcher internals.
+   *
+   * "Mid-event"/ongoing (per #365): the switcher is on a live stream
+   * (this.streamTypeLive === true) and the current scheduleObj is within its
+   * window, i.e. now >= start_time && now < end_time.
+   *
+   * "Near end": an ongoing event whose remaining time is within the switcher's
+   * existing end-of-event guard window (end_time - now <= 10000; see the 10000ms
+   * guard in streamSwitcher()). Derived from that guard rather than a new constant.
+   *
+   * @returns {{ midEvent: boolean, nearEnd: boolean, msUntilEnd: (number|null) }}
+   *   msUntilEnd is null when there is no ongoing event.
+   */
+  getEventPollingState() {
+    const NEAR_END_GUARD_MS = 10000;
+    const scheduleObj = this.timeDiff;
+    if (!this.streamTypeLive || !scheduleObj || scheduleObj.end_time == null || scheduleObj.start_time == null) {
+      return { midEvent: false, nearEnd: false, msUntilEnd: null };
+    }
+    const now = Date.now();
+    if (now < scheduleObj.start_time || now >= scheduleObj.end_time) {
+      return { midEvent: false, nearEnd: false, msUntilEnd: null };
+    }
+    const msUntilEnd = scheduleObj.end_time - now;
+    return {
+      midEvent: true,
+      nearEnd: msUntilEnd <= NEAR_END_GUARD_MS,
+      msUntilEnd,
+    };
+  }
+
   async abortLiveFeed(session, sessionLive, message) {
     if (this.streamTypeLive) {
       let status = null;

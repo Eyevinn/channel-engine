@@ -466,10 +466,15 @@ export class ChannelEngine {
           const ts_1 = Date.now();
           await this.updateStreamSwitchAsync()
           const ts_2 = Date.now();
-          const  interval = (timeIntervalMs - (ts_2 - ts_1)) < 0 ? minIntervalMs : (timeIntervalMs - (ts_2 - ts_1)); 
+          // Adaptive cadence: back off while all active channels are mid-event and
+          // speed up as any channel nears its end. The poll loop is global but event
+          // state is per-channel, so we take the MINIMUM interval required across all
+          // channels — never under-polling a channel that needs responsiveness.
+          const desiredIntervalMs = this.computeStreamSwitchIntervalMs(timeIntervalMs);
+          const  interval = (desiredIntervalMs - (ts_2 - ts_1)) < 0 ? minIntervalMs : (desiredIntervalMs - (ts_2 - ts_1));
           const tickInterval = await WTG.getWaitTime(interval);
           await timer(tickInterval)
-          debug(`StreamSwitchLoop waited for all channels. Next tick in: ${tickInterval}ms`)
+          debug(`StreamSwitchLoop waited for all channels. Next tick in: ${tickInterval}ms (desired base=${desiredIntervalMs}ms)`)
         } catch (err) {
           console.error(err)
           debug(`StreamSwitchLoop iteration failed. Trying Again in 1000ms!`);
@@ -480,6 +485,41 @@ export class ChannelEngine {
     if (this.streamSwitchManager) {
       StreamSwitchLoop(this.streamSwitchTimeIntervalMs);
     }
+  }
+
+  // Compute the desired next poll interval for the global StreamSwitchLoop from the
+  // aggregated per-channel event state. Because the loop is global but event state is
+  // per-channel, the result is the MINIMUM interval any channel requires so we never
+  // under-poll a channel that needs responsiveness:
+  //   - a channel that is near-end contributes the fast near-end interval;
+  //   - a channel that is mid-event but not near-end contributes the slower ongoing
+  //     interval;
+  //   - a channel with no ongoing event contributes the base interval.
+  // The loop uses the minimum across all channels. When no channel reports an ongoing
+  // event (no schedule / no ongoing event) this falls back to the base interval,
+  // keeping behavior identical to today.
+  computeStreamSwitchIntervalMs(baseIntervalMs) {
+    const channels = Object.keys(sessionSwitchers);
+    let desiredMs = baseIntervalMs;
+    for (const channel of channels) {
+      const switcher = sessionSwitchers[channel];
+      if (!switcher || typeof switcher.getEventPollingState !== "function") {
+        continue;
+      }
+      const state = switcher.getEventPollingState();
+      let channelMs;
+      if (state.nearEnd) {
+        channelMs = this.streamSwitchNearEndEventIntervalMs;
+      } else if (state.midEvent) {
+        channelMs = this.streamSwitchOngoingEventIntervalMs;
+      } else {
+        channelMs = baseIntervalMs;
+      }
+      if (channelMs < desiredMs) {
+        desiredMs = channelMs;
+      }
+    }
+    return desiredMs;
   }
 
   async updateStreamSwitchAsync() {
