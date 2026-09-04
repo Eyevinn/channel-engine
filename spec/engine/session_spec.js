@@ -150,6 +150,147 @@ describe("Session", () => {
     });
   });
 
+  describe("ad-break slate coordination (issue #369)", () => {
+    // A self-contained slate asset: one 4.000s segment. `_buildAdBreakSlate`
+    // repeats it `adBreak.slate.repetitions` times, so the slate segment run
+    // spans `repetitions * duration/1000` seconds — the same value #368 uses
+    // for the interstitial PLANNED-DURATION. Fixtures are fed in via the
+    // injected loaders so no network fetch happens in the spec.
+    const SLATE_TV = "spec/testvectors/slate/";
+    const slateMaster = () => fs.createReadStream(SLATE_TV + "master.m3u8");
+    const slateMedia = () => fs.createReadStream(SLATE_TV + "media.m3u8");
+    const FIXED_TS = Date.UTC(2026, 8, 4, 0, 0, 0); // 2026-09-04T00:00:00.000Z
+
+    function adBreakSession(slate) {
+      return new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: "https://ads.example.com/vast",
+          slate
+        }
+      }, sessionLiveStore);
+    }
+
+    async function renderAdBreakSlate(session) {
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia
+      });
+      const bw = slateVod.getBandwidths()[0];
+      return { slateVod, m3u8: slateVod.getLiveMediaSequences(0, bw, 0, 0) };
+    }
+
+    it("plays the configured slate for the whole ad-break window", async () => {
+      const session = adBreakSession({
+        uri: "https://slate.example.com/master.m3u8",
+        repetitions: 2,
+        duration: 4000
+      });
+
+      const { slateVod, m3u8 } = await renderAdBreakSlate(session);
+
+      // Slate run duration == repetitions * duration / 1000 == 8s == the
+      // interstitial PLANNED-DURATION computed by #368.
+      expect(slateVod.getDuration()).toEqual(8);
+      // The slate content is what fills the break: its segments are present.
+      const segmentLines = m3u8
+        .split("\n")
+        .filter((l) => l.trim() && !l.startsWith("#"));
+      expect(segmentLines.length).toEqual(2);
+      segmentLines.forEach((l) =>
+        expect(l).toEqual("https://slate.example.com/slate/segment1.ts")
+      );
+    });
+
+    it("brackets exactly the slate with the interstitial DATERANGE", async () => {
+      const session = adBreakSession({
+        uri: "https://slate.example.com/master.m3u8",
+        repetitions: 2,
+        duration: 4000
+      });
+
+      const { m3u8 } = await renderAdBreakSlate(session);
+      const lines = m3u8.split("\n");
+      const daterange = lines.find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      expect(daterange).toContain('CLASS="com.apple.hls.interstitial"');
+      // START-DATE is the break boundary == the first slate segment.
+      expect(daterange).toContain('START-DATE="2026-09-04T00:00:00.000Z"');
+      // PLANNED-DURATION spans exactly the slate run (2 x 4000ms = 8.000s).
+      expect(daterange).toContain("PLANNED-DURATION=8.000");
+      expect(daterange).toContain('X-ASSET-URI="https://slate.example.com/master.m3u8"');
+
+      // "Brackets exactly": the DATERANGE sits immediately before the FIRST
+      // slate segment (break start), and there is no daterange before any
+      // later segment — the tag opens exactly at the slate's first segment and
+      // its PLANNED-DURATION closes it at the slate's end.
+      const drIdx = lines.findIndex((l) => l.startsWith("#EXT-X-DATERANGE"));
+      const firstSegIdx = lines.findIndex((l) =>
+        l.trim() && !l.startsWith("#")
+      );
+      expect(drIdx).toBeGreaterThan(-1);
+      expect(drIdx).toBeLessThan(firstSegIdx);
+      // Exactly one interstitial DATERANGE brackets the run (not one per loop).
+      const dateranges = lines.filter((l) => l.startsWith("#EXT-X-DATERANGE"));
+      expect(dateranges.length).toEqual(1);
+    });
+
+    it("aligns the slate run length with #368's PLANNED-DURATION for other slate sizes", async () => {
+      // 3 reps x 4000ms => 12s, matching _addInterstitialMetadata's formula.
+      const session = adBreakSession({
+        uri: "https://slate.example.com/master.m3u8",
+        repetitions: 3,
+        duration: 4000
+      });
+
+      const { slateVod, m3u8 } = await renderAdBreakSlate(session);
+      const daterange = m3u8
+        .split("\n")
+        .find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(slateVod.getDuration()).toEqual(12);
+      expect(daterange).toContain("PLANNED-DURATION=12.000");
+    });
+
+    it("builds no ad-break slate when ad breaks are disabled (behavior unchanged)", async () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia
+      });
+      expect(slateVod).toBeNull();
+    });
+
+    it("builds no ad-break slate when enabled but no slate is configured", async () => {
+      const session = new Session("dummy", {
+        adBreak: { enabled: true, adServerUri: "https://ads.example.com/vast" }
+      }, sessionLiveStore);
+      const slateVod = await session._buildAdBreakSlate(null, FIXED_TS, {
+        master: slateMaster,
+        media: slateMedia
+      });
+      expect(slateVod).toBeNull();
+    });
+
+    it("leaves the non-ad-break filler slate config untouched", () => {
+      // The error/gap filler slate (slateUri/slateRepetitions/slateDuration)
+      // is a separate mechanism and must be unaffected by ad-break config.
+      const session = new Session("dummy", {
+        slateUri: "https://filler.example.com/master.m3u8",
+        slateRepetitions: 7,
+        slateDuration: 6000,
+        adBreak: {
+          enabled: true,
+          slate: { uri: "https://slate.example.com/master.m3u8", repetitions: 2, duration: 4000 }
+        }
+      }, sessionLiveStore);
+      expect(session.slateUri).toEqual("https://filler.example.com/master.m3u8");
+      expect(session.slateRepetitions).toEqual(7);
+      expect(session.slateDuration).toEqual(6000);
+    });
+  });
+
   it("sets the event flag when configured with { event: true }", () => {
     const session = new Session("dummy", { event: true }, sessionLiveStore);
     expect(session.event).toEqual(true);

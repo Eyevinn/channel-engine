@@ -1872,6 +1872,117 @@ class Session {
     vod.addMetadata("x-asset-uri", assetUri);
   }
 
+  // Ad-break slate coordination (issue #369).
+  //
+  // Builds the slate VOD that plays as the ad-break filler and brackets it with
+  // the #368 interstitial EXT-X-DATERANGE. The slate is driven by the #367
+  // `adBreak.slate` config (uri/repetitions/duration): a `HLSRepeatVod` repeats
+  // the slate asset `repetitions` times, so the slate segment run spans exactly
+  // `repetitions * duration / 1000` seconds — the very same value
+  // `_addInterstitialMetadata` computes for PLANNED-DURATION. Attaching that
+  // interstitial metadata to this slate VOD (at `unixTs`, its first segment)
+  // makes the DATERANGE START-DATE fall on the break boundary and its
+  // PLANNED-DURATION span exactly the slate run. Downstream (SSAI or the
+  // client-side interstitial) the slate is what gets replaced with real ads.
+  //
+  // Strictly gated on `this.adBreak.enabled` AND a configured `adBreak.slate`:
+  // when either is absent this returns null and every existing (non-ad-break)
+  // slate path — the error/gap filler slate via `_loadSlate`/`_truncateSlate` —
+  // is left completely untouched.
+  _buildAdBreakSlate(afterVod, unixTs, injectSlateLoaders) {
+    if (
+      !this.adBreak ||
+      !this.adBreak.enabled ||
+      !this.adBreak.slate ||
+      !this.adBreak.slate.uri
+    ) {
+      return Promise.resolve(null);
+    }
+    const slate = this.adBreak.slate;
+    const reps = slate.repetitions || 1;
+    const timestamp = typeof unixTs === "number" ? unixTs : Date.now();
+    // `injectSlateLoaders` lets callers (tests) feed the repeated slate asset
+    // from fixtures instead of the network; production passes nothing so the
+    // slate is fetched from `slate.uri` as usual.
+    const { master, media } = injectSlateLoaders || {};
+    return new Promise((resolve, reject) => {
+      try {
+        const slateVod = new HLSRepeatVod(slate.uri, reps);
+        let hlsVod;
+        slateVod
+          .load(master, media)
+          .then(() => {
+            const hlsOpts = {
+              sequenceAlwaysContainNewSegments: this.alwaysNewSegments,
+              forcedDemuxMode: this.use_demuxed_audio,
+              dummySubtitleEndpoint: this.dummySubtitleEndpoint,
+              subtitleSliceEndpoint: this.subtitleSliceEndpoint,
+              shouldContainSubtitles: this.use_vtt_subtitles,
+              expectedSubtitleTracks: this._subtitleTracks,
+              alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              skipSerializeMediaSequences: this.partialStoreHLSVod,
+              calculatePDT: this.rollingPDT
+            };
+            hlsVod = new HLSVod(slate.uri, null, timestamp, null, m3u8Header(this._instanceId), hlsOpts);
+            // Bracket exactly the slate: the interstitial DATERANGE lands on the
+            // slate's first segment (START-DATE = break boundary) and its
+            // PLANNED-DURATION equals the slate run length.
+            this._addInterstitialMetadata(hlsVod, timestamp);
+            const slateMediaManifestLoader = (bw) => {
+              let mediaManifestStream = new Readable();
+              // `HLSRepeatVod` prepends an EXT-X-DISCONTINUITY before the first
+              // repeated segment. That leading marker would occupy the VOD's
+              // first-segment slot and displace the interstitial DATERANGE
+              // (which the vod lib attaches only to the true first segment),
+              // breaking the "tag brackets exactly the slate" alignment. Drop
+              // that single leading discontinuity so the slate run begins
+              // cleanly at the break boundary and the DATERANGE lands on it.
+              const slateManifest = slateVod
+                .getMediaManifest(bw)
+                .replace(/(#EXT-X-MEDIA-SEQUENCE:\d+\r?\n)#EXT-X-DISCONTINUITY\r?\n/, "$1");
+              mediaManifestStream.push(slateManifest);
+              mediaManifestStream.push(null);
+              return mediaManifestStream;
+            };
+            if (this.use_demuxed_audio) {
+              const slateAudioManifestLoader = (audioGroupId, audioLanguage) => {
+                let mediaManifestStream = new Readable();
+                mediaManifestStream.push(slateVod.getAudioManifest(audioGroupId, audioLanguage));
+                mediaManifestStream.push(null);
+                return mediaManifestStream;
+              };
+              let subtitleManifestLoader;
+              if (this.use_vtt_subtitles && this._subtitleTracks) {
+                subtitleManifestLoader = (groupId, language) => {
+                  let mediaManifestStream = new Readable();
+                  mediaManifestStream.push(slateVod.getSubtitleManifest(groupId, language));
+                  mediaManifestStream.push(null);
+                  return mediaManifestStream;
+                };
+              }
+              if (afterVod) {
+                return hlsVod.loadAfter(afterVod, master || null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
+              }
+              return hlsVod.load(master || null, slateMediaManifestLoader, slateAudioManifestLoader, subtitleManifestLoader);
+            }
+            if (afterVod) {
+              return hlsVod.loadAfter(afterVod, master || null, slateMediaManifestLoader);
+            }
+            return hlsVod.load(master || null, slateMediaManifestLoader);
+          })
+          .then(() => {
+            resolve(hlsVod);
+          })
+          .catch((err) => {
+            debug(err);
+            reject(err);
+          });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   _isEndOfScheduleSignal(nextVod) {
     if (!nextVod) {
       return true;
