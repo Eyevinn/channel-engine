@@ -29,10 +29,39 @@ const eventStreams = {};
 const DefaultDummySubtitleEndpointPath = "/dummyUrl"
 const DefaultSubtitleSpliceEndpointPath = "/sliceUrl"
 
+// Configuration for SGAI HLS-interstitial ad breaks. Config surface only for
+// now (issue #367): this describes when/where a channel may open an ad break
+// and which slate to fall back to. No interstitial tags are emitted from this
+// config yet — that lands in a follow-up (#368). Defaults to disabled.
+export interface AdBreakOpts {
+  // Master enable/disable flag for interstitial ad breaks on the channel.
+  // When false (the default) no ad-break plumbing is active.
+  enabled: boolean;
+  // URL of the ad-serving endpoint queried to fill an interstitial break.
+  // Required and validated (must be an absolute http/https URL) when enabled.
+  adServerUri?: string;
+  // Optional slate reference shown while the break is being resolved. Reuses
+  // the existing slate shape (uri/repetitions/duration); when omitted the
+  // channel/engine slate configuration is used.
+  slate?: SlateOpts;
+}
+
+// Shared slate reference shape, mirroring the loosely-typed `channel.slate`
+// object already consumed by the session plumbing (slateUri/slateRepetitions/
+// slateDuration).
+export interface SlateOpts {
+  uri: string;
+  repetitions?: number;
+  duration?: number;
+}
+
 export interface ChannelEngineOpts {
   defaultSlateUri?: string;
   slateRepetitions?: number;
   slateDuration?: number;
+  // Default ad-break configuration applied to channels that do not carry their
+  // own per-channel `adBreak`. Defaults to disabled when unset.
+  adBreak?: AdBreakOpts;
   redisUrl?: string;
   memcachedUrl?: string;
   sharedStoreCacheTTL?: number;
@@ -159,6 +188,10 @@ export interface Channel {
   audioTracks?: AudioTracks[];
   subtitleTracks?: SubtitleTracks[];
   closedCaptions?: ClosedCaptions[];
+  slate?: SlateOpts;
+  // Per-channel ad-break configuration. Overrides the engine-level `adBreak`
+  // default when present. Defaults to disabled when neither is set.
+  adBreak?: AdBreakOpts;
 }
 
 export interface ClosedCaptions {
@@ -218,6 +251,7 @@ export class ChannelEngine {
   private alwaysMapBandwidthByNearest: boolean;
   private defaultSlateUri?: string;
   private slateDuration?: number;
+  private adBreak?: AdBreakOpts;
   private assetMgr: IAssetManager;
   private streamSwitchManager?: any;
   private slateRepetitions?: number;
@@ -238,7 +272,45 @@ export class ChannelEngine {
   private sessionResetKey: string = "";
   private sessionEventStream: boolean = false;
   private sessionHealthKey: string = "";
-  
+
+  // Validate and normalize an ad-break configuration (issue #367).
+  // Returns a config that is always defined and disabled-by-default:
+  //   - undefined/omitted            -> { enabled: false }
+  //   - { enabled: false, ... }      -> { enabled: false } (endpoint ignored)
+  //   - { enabled: true, adServerUri } -> validated, with the slate reference
+  //                                       (if any) carried through
+  // Throws when an enabled break is missing a syntactically valid absolute
+  // http(s) ad-serving endpoint URL. `scope` is only used for error context.
+  private static normalizeAdBreak(adBreak: AdBreakOpts | undefined, scope: string): AdBreakOpts {
+    if (!adBreak || !adBreak.enabled) {
+      return { enabled: false };
+    }
+    if (!adBreak.adServerUri) {
+      throw new Error(`Ad-break configuration (${scope}) is enabled but no adServerUri was provided`);
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(adBreak.adServerUri);
+    } catch (err) {
+      throw new Error(`Ad-break configuration (${scope}) has an invalid adServerUri: ${adBreak.adServerUri}`);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`Ad-break configuration (${scope}) adServerUri must be an http(s) URL: ${adBreak.adServerUri}`);
+    }
+    const normalized: AdBreakOpts = {
+      enabled: true,
+      adServerUri: adBreak.adServerUri
+    };
+    if (adBreak.slate && adBreak.slate.uri) {
+      normalized.slate = {
+        uri: adBreak.slate.uri,
+        repetitions: adBreak.slate.repetitions || 10,
+        duration: adBreak.slate.duration || 4000
+      };
+    }
+    return normalized;
+  }
+
   constructor(assetMgr: IAssetManager, options?: ChannelEngineOpts) {
     this.options = options;
     if (options && options.adCopyMgrUri) {
@@ -281,6 +353,10 @@ export class ChannelEngine {
       this.slateRepetitions = options.slateRepetitions || 10;
       this.slateDuration = options.slateDuration || 4000;
     }
+    // Ad-break config surface (issue #367). Validate and normalize the
+    // engine-level default; disabled when unset. Throws on an enabled break
+    // that lacks a valid ad-serving endpoint URL.
+    this.adBreak = ChannelEngine.normalizeAdBreak(options && options.adBreak, "engine");
     if (options && options.streamSwitchManager) {
       this.streamSwitchManager = options.streamSwitchManager;
     }
@@ -583,6 +659,7 @@ export class ChannelEngine {
         slateUri: channel.slate && channel.slate.uri ? channel.slate.uri : this.defaultSlateUri,
         slateRepetitions: channel.slate && channel.slate.repetitions ? channel.slate.repetitions : this.slateRepetitions,
         slateDuration: channel.slate && channel.slate.duration ? channel.slate.duration : this.slateDuration,
+        adBreak: channel.adBreak ? ChannelEngine.normalizeAdBreak(channel.adBreak, `channel ${channel.id}`) : this.adBreak,
         cloudWatchMetrics: this.logCloudWatchMetrics,
         sessionEventStream: options.sessionEventStream,
         rollingPDT: options.rollingPDT,

@@ -1,5 +1,7 @@
 export { ChannelEngine, 
   ChannelEngineOpts, 
+  AdBreakOpts,
+  SlateOpts,
   IAssetManager,
   IChannelManager,
   IStreamSwitchManager,

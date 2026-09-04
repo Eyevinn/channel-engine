@@ -97,6 +97,9 @@ class Session {
     // more VODs to play (see `_isEndOfScheduleSignal`). ENDLIST emission based on
     // this state is out of scope here and handled by #363.
     this.isEndOfSchedule = false;
+    // Ad-break / interstitial config surface (issue #367). Disabled by default;
+    // no interstitial tags are emitted from this yet (follow-up #368).
+    this.adBreak = { enabled: false };
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
@@ -165,6 +168,10 @@ class Session {
         this.slateRepetitions = config.slateRepetitions || 10;
         this.slateDuration = config.slateDuration || 4000;
         debug(`Will use slate URI ${this.slateUri} (${this.slateRepetitions} ${this.slateDuration}ms)`);
+      }
+      if (config.adBreak && config.adBreak.enabled) {
+        this.adBreak = config.adBreak;
+        debug(`Ad breaks enabled, ad server URI ${this.adBreak.adServerUri}`);
       }
       if (config.cloudWatchMetrics) {
         this.cloudWatchLogging = true;
