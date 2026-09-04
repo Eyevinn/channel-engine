@@ -8,15 +8,15 @@ const COMMON_HEADERS = {
   "Cache-Control": "no-cache"
 }
 
-const filterQueryParser = (filterQuery) => {
+const filterQueryParser = (filterQuery: string): any => {
   const conditions = filterQuery.match(/\(([^\(\)]*?)\)/g);
 
-  let filter = {};
+  let filter: any = {};
 
   if (!conditions) {
     return filter;
   }
-  conditions.map((c) => {
+  conditions.map((c: string) => {
     const m = c.match(/\(type=="(.*?)"(AND|\|\|)(.*?)(<|>)(.*)\)/);
     if (m) {
       const type = m[1];
@@ -43,8 +43,8 @@ const filterQueryParser = (filterQuery) => {
   return filter;
 };
 
-const applyFilter = (profiles, filter) => {
-  let filteredProfiles = {};
+const applyFilter = (profiles: any, filter: any): any => {
+  let filteredProfiles: any = {};
   const supportedFilterKeys = ["systemBitrate", "height"];
 
   if (!filter.video) {
@@ -89,7 +89,7 @@ const applyFilter = (profiles, filter) => {
   return filteredProfiles;
 };
 
-const ItemIsEmpty = (obj) => {
+const ItemIsEmpty = (obj: any): boolean => {
   if (!obj) {
     return true;
   }
@@ -101,7 +101,7 @@ const ItemIsEmpty = (obj) => {
   return true;
 };
 
-const cloudWatchLog = (silent, type, logEntry) => {
+const cloudWatchLog = (silent: boolean, type: string, logEntry: any): void => {
   if (!silent) {
     logEntry.type = type;
     logEntry.time = new Date().toISOString();
@@ -109,14 +109,14 @@ const cloudWatchLog = (silent, type, logEntry) => {
   }
 };
 
-const m3u8Header = (instanceId) => {
+const m3u8Header = (instanceId?: string): string => {
   let m3u8 = "";
   m3u8 += `## Created with Eyevinn Channel Engine library (version=${version}${instanceId ? "<" + instanceId + ">" : ""})\n`;
   m3u8 += "##    https://www.npmjs.com/package/eyevinn-channel-engine\n";
   return m3u8;
 };
 
-const toHHMMSS = (secs) => {
+const toHHMMSS = (secs: any): string => {
   var sec_num = parseInt(secs, 10);
   var hours = Math.floor(sec_num / 3600);
   var minutes = Math.floor(sec_num / 60) % 60;
@@ -125,28 +125,32 @@ const toHHMMSS = (secs) => {
   return [hours, minutes, seconds].map((v) => (v < 10 ? "0" + v : v)).join(":");
 };
 
-const logerror = (sessionId, err) => {
+const logerror = (sessionId: any, err: any): void => {
   console.error(`ERROR [${sessionId}]:`);
   console.error(err);
 };
 
-const timer = (ms) => new Promise((res) => setTimeout(res, ms));
+const timer = (ms: number): Promise<void> => new Promise((res) => setTimeout(res, ms));
 
 class WaitTimeGenerator {
-  constructor(defaultIntervalMs, minValue) {
+  declare timestamp: Date | null;
+  declare prevWaitTime: number | null;
+  declare defaultIntervalMs: number;
+  declare minValue: any;
+  constructor(defaultIntervalMs: number, minValue: any) {
     (this.timestamp = null), (this.prevWaitTime = null), (this.defaultIntervalMs = defaultIntervalMs || 3000), (this.minValue = minValue);
   }
-  _getWaitTimeFromTimestamp() {
+  _getWaitTimeFromTimestamp(): number {
     if (!this.timestamp) {
       this.timestamp = new Date();
     }
     const sec = this.timestamp.getSeconds();
     const defaultSec = this.defaultIntervalMs / 1000;
-    const d = parseInt(sec / defaultSec);
+    const d = parseInt((sec / defaultSec) as any);
     const waitSec = defaultSec * (d + 1) - sec;
     return waitSec * 1000;
   }
-  async getWaitTime(plannedTime) {
+  async getWaitTime(plannedTime: any): Promise<any> {
     if (!this.timestamp || (this.prevWaitTime === this.minValue && plannedTime !== this.minValue)) {
       this.timestamp = new Date();
       const waitMs = this._getWaitTimeFromTimestamp();
@@ -158,13 +162,13 @@ class WaitTimeGenerator {
   }
 }
 
-const findNearestValue = (val, array) => {
+const findNearestValue = (val: number, array: number[]): number => {
   const sorted = array.sort((a, b) => b - a);
   return sorted.reduce((a, b) => {
     return Math.abs(b - val) < Math.abs(a - val) ? b : a;
   });
 };
-const findAudioGroupOrLang = (val, array) => {
+const findAudioGroupOrLang = (val: any, array: any[]): any => {
   for(let  i = 0; i < array.length; i++) {
     if (array[i] === val) {
       return val
@@ -173,7 +177,7 @@ const findAudioGroupOrLang = (val, array) => {
   return array[0];
 };
 
-const isValidUrl = (url) => {
+const isValidUrl = (url: string): boolean => {
   try {
     const _url = new URL(url);
     return true;
@@ -182,10 +186,10 @@ const isValidUrl = (url) => {
   }
 };
 
-const fetchWithRetry = async (uri, opts, maxRetries, retryDelayMs, timeoutMs, debug) => {
+const fetchWithRetry = async (uri: any, opts: any, maxRetries?: number, retryDelayMs?: number, timeoutMs?: number, debug?: any): Promise<any> => {
   if (!debug) {
-    var debug = (msg) => { console.log(msg); };
-  } 
+    var debug: any = (msg: any) => { console.log(msg); };
+  }
   let tryFetchCount = 0;
   const RETRY_LIMIT = maxRetries || 5;
   const TIMEOUT_LIMIT = timeoutMs || 10 * 1000;
@@ -227,7 +231,7 @@ const fetchWithRetry = async (uri, opts, maxRetries, retryDelayMs, timeoutMs, de
   }
 };
 
-const codecsFromString = (codecs) => {
+const codecsFromString = (codecs: string): (string | undefined)[] => {
   const audioCodecs = codecs.split(",").find(c => {
     return c.match(/^mp4a/) || c.match(/^ac-3/) || c.match(/^ec-3/);
   });
@@ -237,7 +241,7 @@ const codecsFromString = (codecs) => {
   return [videoCodecs, audioCodecs];
 };
 
-const timeLeft = (endTimestamp, currentTimestamp) => {
+const timeLeft = (endTimestamp: number, currentTimestamp: number): string => {
   const secondsLeft = Math.floor((endTimestamp - currentTimestamp) / 1000);
   if (secondsLeft < 0) {
     return "Time has already passed.";
@@ -256,7 +260,7 @@ const timeLeft = (endTimestamp, currentTimestamp) => {
   return msg;
 };
 
-const roundToThreeDecimals = (number) => {
+const roundToThreeDecimals = (number: any): any => {
   if (typeof number !== "number") {
     try {
       number = parseFloat(number);

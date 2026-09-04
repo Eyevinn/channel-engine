@@ -1,11 +1,13 @@
 const fetch = require("node-fetch");
 const fs = require("fs");
 class SubtitleSlicer {
+  declare vttFiles: any;
+  declare vttFile: any;
   constructor() {
     this.vttFiles = {};
   }
 
-  async getVttFile(url) {
+  async getVttFile(url: string): Promise<string> {
     let resp = await fetch(url)
     if (resp.status === 200) { // TODO add error handeling
       let text = await resp.text();
@@ -17,7 +19,7 @@ class SubtitleSlicer {
 
   }
 
-  checkTimeStamp(line, startTime, endTime, elapsedtime) {
+  checkTimeStamp(line: string, startTime: any, endTime: any, elapsedtime: any): boolean {
     const times = line.split("-->");
     let startTimeTimestamp = times[0].split(":");
     let endTimeTimestamp = times[1].split(":");
@@ -50,22 +52,22 @@ class SubtitleSlicer {
 
   }
 
-  streamToString(stream) {
-    const chunks = [];
+  streamToString(stream: any): Promise<string> {
+    const chunks: Buffer[] = [];
     return new Promise((resolve, reject) => {
-      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      stream.on('error', (err) => reject(err));
+      stream.on('data', (chunk: any) => chunks.push(Buffer.from(chunk)));
+      stream.on('error', (err: any) => reject(err));
       stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     })
   }
 
-  async generateVtt(params, _injectedVttFile, _injectedPreviousVttFile) {
+  async generateVtt(params: any, _injectedVttFile?: any, _injectedPreviousVttFile?: any): Promise<string> {
     const paramEncode = new URLSearchParams(params)
     const uri = paramEncode.get("vtturi");
     const startTime = paramEncode.get("starttime");
     const endTime = paramEncode.get("endtime");
     const elapsedTime = paramEncode.get("elapsedtime");
-    const previousParams = new URLSearchParams(paramEncode.get("previousvtturi"))
+    const previousParams = new URLSearchParams(paramEncode.get("previousvtturi") as any)
     const previousUri = previousParams.get("vtturi");
     const previousStartTime = previousParams.get("starttime");
     const previousEndTime = previousParams.get("endtime");
