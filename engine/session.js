@@ -20,6 +20,9 @@ const {
 const ChaosMonkey = require('./chaos_monkey.js');
 
 const EVENT_LIST_LIMIT = 100;
+// Rejection marker used by `_getNextVod()` when, in `event` mode, the asset
+// manager signals that there are no more VODs to play (see issue #362).
+const END_OF_SCHEDULE = "END_OF_SCHEDULE";
 const DEFAULT_PLAYHEAD_DIFF_THRESHOLD = 1000;
 const DEFAULT_MAX_TICK_INTERVAL = 10000;
 const DEFAULT_DIFF_COMPENSATION_RATE = 0.5;
@@ -89,6 +92,11 @@ class Session {
     this.disableLegacyMasterManifestFormat = null;
     this.rollingPDT = null;
     this.event = false;
+    // End-of-schedule detection (issue #362). Only meaningful when `event` mode is
+    // enabled. Set to true once the asset manager has signalled that there are no
+    // more VODs to play (see `_isEndOfScheduleSignal`). ENDLIST emission based on
+    // this state is out of scope here and handled by #363.
+    this.isEndOfSchedule = false;
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
@@ -360,6 +368,10 @@ class Session {
         },
         slateInserted: sessionState.slateCount,
       };
+      if (this.event) {
+        // Surface the end-of-schedule state only in event mode (issue #362).
+        status.endOfSchedule = this.isEndOfSchedule;
+      }
       return status;
     }
   }
@@ -1600,6 +1612,14 @@ class Session {
           cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
             { event: 'error', on: 'nextvod', channel: this._sessionId, err: err, vod: vodResponse });
           await this._sessionState.remove("nextVod");
+          if (this.event && err === END_OF_SCHEDULE) {
+            // Event mode + end of schedule (issue #362): the session has already
+            // recorded its `ended` state in `_getNextVod()`. Do NOT fall through to
+            // slate insertion (that is the non-event retry behaviour). ENDLIST
+            // manifest handling is out of scope here and belongs to #363/#364.
+            debug(`[${this._sessionId}]: end of schedule reached, keeping current VOD (no slate in event mode)`);
+            break;
+          }
           currentVod = await this._insertSlate(currentVod);
           if (!currentVod) {
             debug("No slate to load");
@@ -1775,6 +1795,31 @@ class Session {
     }
   }
 
+  /**
+   * The "no more VODs" contract (issue #362).
+   *
+   * `AssetManager.getNextVod()` is normally expected to resolve with a `vodResponse`
+   * that either carries a playable `uri`, or is a `{ type: 'gap' }` marker. The
+   * end-of-schedule signal is therefore the natural absence of both: the asset
+   * manager resolving with a falsy value (`null`/`undefined`) or with an object
+   * that has neither a `uri` nor `type === 'gap'` (e.g. an empty `{}`).
+   *
+   * This is detection only — deciding what the session does with the signal is
+   * handled by the caller (and, later, ENDLIST emission by #363).
+   */
+  _isEndOfScheduleSignal(nextVod) {
+    if (!nextVod) {
+      return true;
+    }
+    if (nextVod.uri) {
+      return false;
+    }
+    if (nextVod.type === 'gap') {
+      return false;
+    }
+    return true;
+  }
+
   _getNextVod() {
     return new Promise((resolve, reject) => {
       let nextVodPromise;
@@ -1798,6 +1843,23 @@ class Session {
             title: 'GAP of ' + Math.floor(nextVod.desiredDuration) + ' sec',
           };
           resolve(nextVod);
+        } else if (this.event && this._isEndOfScheduleSignal(nextVod)) {
+          // Event mode: no new VOD was received from the asset manager, so the
+          // schedule has ended. Record an internal end-of-schedule state and log
+          // it, then reject with a distinguishable marker. No slate/retry here —
+          // that behaviour is deliberately reserved for non-event mode. ENDLIST
+          // manifest emission is out of scope for this issue (#363).
+          this.isEndOfSchedule = true;
+          debug(`[${this._sessionId}]: end of schedule detected (event mode), no new VOD received from asset manager`);
+          cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
+            { event: 'endOfSchedule', channel: this._sessionId });
+          this.produceEvent({
+            type: 'END_OF_SCHEDULE',
+            data: {
+              sessionId: this._sessionId,
+            }
+          });
+          reject(END_OF_SCHEDULE);
         } else {
           console.error("Invalid VOD:", nextVod);
           reject("Invalid VOD from asset manager")

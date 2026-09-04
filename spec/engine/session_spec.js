@@ -30,6 +30,60 @@ describe("Session", () => {
     expect(sessionEmptyConfig.event).toEqual(false);
   });
 
+  describe("end-of-schedule detection (event mode)", () => {
+    // The "no more VODs" signal is the asset manager resolving with a falsy value
+    // (null/undefined) or an object that has neither a `uri` nor `type === 'gap'`.
+    const noMoreVodValues = [null, undefined, {}];
+
+    it("does not record an ended state when event mode is off (preserves slate/retry)", async () => {
+      const session = new Session(
+        { getNextVod: async () => null },
+        null,
+        sessionLiveStore
+      );
+      expect(session.event).toEqual(false);
+      await expectAsync(session._getNextVod()).toBeRejected();
+      // No end-of-schedule state is recorded; current (slate/retry) behaviour is preserved.
+      expect(session.isEndOfSchedule).toEqual(false);
+    });
+
+    noMoreVodValues.forEach((value) => {
+      it(`records the ended state when event mode is on and nextVod yields ${JSON.stringify(value)}`, async () => {
+        const session = new Session(
+          { getNextVod: async () => value },
+          { event: true },
+          sessionLiveStore
+        );
+        expect(session.event).toEqual(true);
+        expect(session.isEndOfSchedule).toEqual(false);
+        await expectAsync(session._getNextVod()).toBeRejectedWith("END_OF_SCHEDULE");
+        expect(session.isEndOfSchedule).toEqual(true);
+      });
+    });
+
+    it("does not record an ended state in event mode when a valid VOD is returned", async () => {
+      const session = new Session(
+        { getNextVod: async () => ({ id: "1", uri: "https://example.com/vod.m3u8" }) },
+        { event: true },
+        sessionLiveStore
+      );
+      const vod = await session._getNextVod();
+      expect(vod.uri).toEqual("https://example.com/vod.m3u8");
+      expect(session.isEndOfSchedule).toEqual(false);
+    });
+
+    it("does not record an ended state in event mode for a gap marker", async () => {
+      const session = new Session(
+        { getNextVod: async () => ({ type: "gap", desiredDuration: 10 }) },
+        { event: true },
+        sessionLiveStore
+      );
+      const vod = await session._getNextVod();
+      expect(vod.type).toEqual("gap");
+      expect(session.isEndOfSchedule).toEqual(false);
+    });
+  });
+
   it("for demuxed, returns the appropriate audio increment value when desync is within acceptable limit, case I", async () => {
     const session = new Session("dummy", null, sessionLiveStore);
     const mockFinalAudioIdx = 50; // current Vod has 50 media sequences to serve.
