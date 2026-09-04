@@ -17,6 +17,46 @@ We follow the [GitHub Flow](https://guides.github.com/introduction/flow/index.ht
 
 When submitting code changes your submissions are understood to be under the same MIT License that covers the project. Feel free to contact Eyevinn Technology if that's a concern.
 
+# TypeScript migration
+
+The `engine/` tree is being migrated from JavaScript to TypeScript **incrementally**, one
+module at a time, so that `master` keeps building and testing green throughout. The build
+(`npm run build`, which runs `tsc --project ./`) already compiles a mixed JS/TS tree because
+`allowJs` is enabled in `tsconfig.json`.
+
+## Target strictness level
+
+The end state is a fully-typed, strictly-checked tree:
+
+- `strict: true` (implies `noImplicitAny`, `strictNullChecks`, etc.)
+- `checkJs: true` for any remaining `.js` files
+
+These global flags are **intentionally not enabled yet**. Turning them on across the ~7,500
+LOC of currently-untyped JS would surface a large number of errors at once and break
+`master`'s build. Instead, opt in **per file** as each module is hardened:
+
+- Add `// @ts-check` at the top of a `.js` file to type-check just that file, or
+- Convert the file to `.ts` (preferred — see checklist below).
+
+The global `strict` / `checkJs` flags land **last**, in the final migration slice (**#376**),
+once every module has already been converted or individually `@ts-check`-clean.
+
+## Per-file conversion checklist
+
+Convert **one module per commit** to keep diffs reviewable and bisectable:
+
+1. Rename the file `.js` → `.ts` (use `git mv` to preserve history).
+2. Add explicit types for all exported functions, classes, and their public members.
+3. Keep the **public API and runtime behavior identical** — this is a type-only migration,
+   no behavior changes. Prefer `unknown` + narrowing over `any` where practical; leave a
+   `// TODO(ts):` note if a proper type is deferred.
+4. Run `npm run build && npm test` locally and confirm both are green (the jasmine suite must
+   report `0 failures`).
+5. Commit with a conventional-commit message, e.g. `refactor(engine): migrate util to TypeScript`.
+
+CI already gates every push on `npm run build` (tsc) followed by `npm test`, so a file that
+fails type-checking or breaks a test cannot land on `master`.
+
 # Code of Conduct
 
 ## Our Pledge
