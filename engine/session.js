@@ -1327,6 +1327,7 @@ class Session {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
                 })
               }
+              this._addInterstitialMetadata(newVod, vodResponse.unixTs);
               currentVod = newVod;
               if (vodResponse.desiredDuration) {
                 try {
@@ -1516,6 +1517,7 @@ class Session {
                   newVod.addMetadata(k, vodResponse.timedMetadata[k]);
                 })
               }
+              this._addInterstitialMetadata(newVod, vodResponse.unixTs);
               this.produceEvent({
                 type: 'NEXT_VOD_SELECTED',
                 data: {
@@ -1829,6 +1831,45 @@ class Session {
     }
     const separator = m3u8.endsWith("\n") ? "" : "\n";
     return m3u8 + separator + "#EXT-X-ENDLIST\n";
+  }
+
+  // Attach the HLS-interstitial EXT-X-DATERANGE metadata for a configured ad
+  // break to a freshly-created content VOD (issue #368). Reuses the existing
+  // per-VOD `addMetadata`/`rangeMetadata` daterange pathway (the same one the
+  // slate VODs use for id/start-date/planned-duration), so the tag is rendered
+  // by @eyevinn/hls-vodtolive at the VOD's start segment. The `class` and
+  // `x-asset-uri`/`x-asset-list` keys are uppercased and rendered as standard
+  // DATERANGE attributes by the vod lib's daterange formatter.
+  //
+  // Strictly gated on `this.adBreak.enabled`: when ad breaks are disabled (the
+  // default) this is a no-op and the served manifest is byte-identical to the
+  // pre-#368 output. The asset reference is sourced from the #367 config
+  // (slate.uri preferred, falling back to adServerUri); resolving the real ad
+  // asset from the ad endpoint is out of scope here (#370).
+  _addInterstitialMetadata(vod, timestamp) {
+    if (!vod || !this.adBreak || !this.adBreak.enabled) {
+      return;
+    }
+    const assetUri =
+      (this.adBreak.slate && this.adBreak.slate.uri) || this.adBreak.adServerUri;
+    if (!assetUri) {
+      return;
+    }
+    const startDate = new Date(
+      typeof timestamp === "number" ? timestamp : Date.now()
+    ).toISOString();
+    let plannedDuration = 0;
+    if (this.adBreak.slate && this.adBreak.slate.duration) {
+      const reps = this.adBreak.slate.repetitions || 1;
+      plannedDuration = (reps * this.adBreak.slate.duration) / 1000;
+    }
+    vod.addMetadata("class", "com.apple.hls.interstitial");
+    vod.addMetadata("id", `adbreak-${this._sessionId}-${startDate}`);
+    vod.addMetadata("start-date", startDate);
+    if (plannedDuration > 0) {
+      vod.addMetadata("planned-duration", plannedDuration);
+    }
+    vod.addMetadata("x-asset-uri", assetUri);
   }
 
   _isEndOfScheduleSignal(nextVod) {

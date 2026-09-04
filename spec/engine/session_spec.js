@@ -1,4 +1,6 @@
 const Session = require("../../engine/session.js");
+const HLSVod = require("@eyevinn/hls-vodtolive");
+const fs = require("fs");
 
 const { SessionStateStore } = require("../../engine/session_state.js");
 const { PlayheadStateStore } = require("../../engine/playhead_state.js");
@@ -54,6 +56,97 @@ describe("Session", () => {
         repetitions: 5,
         duration: 3000
       });
+    });
+  });
+
+  describe("HLS-interstitial EXT-X-DATERANGE emission (issue #368)", () => {
+    // Loads a real content VOD from the vod-lib test vectors, applies the
+    // session's interstitial metadata via the same addMetadata pathway the
+    // engine uses at VOD creation, and renders the live media playlist so we
+    // can assert the produced EXT-X-DATERANGE tag byte-for-byte.
+    const VODLIB_TV = "node_modules/@eyevinn/hls-vodtolive/testvectors/hls1/";
+    const masterLoader = () => fs.createReadStream(VODLIB_TV + "master.m3u8");
+    const mediaLoader = (bandwidth) =>
+      fs.createReadStream(VODLIB_TV + bandwidth + ".m3u8");
+    const FIXED_TS = Date.UTC(2026, 8, 4, 0, 0, 0); // 2026-09-04T00:00:00.000Z
+
+    async function renderFirstMediaSequence(session) {
+      const vod = new HLSVod("http://mock.com/master.m3u8", [], FIXED_TS, 0);
+      session._addInterstitialMetadata(vod, FIXED_TS);
+      await vod.load(masterLoader, mediaLoader);
+      const bw = vod.getBandwidths()[0];
+      return vod.getLiveMediaSequences(0, bw, 0, 0);
+    }
+
+    it("emits an interstitial DATERANGE at the break start when ad breaks are enabled", async () => {
+      const session = new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: "https://ads.example.com/vast",
+          slate: { uri: "https://slate.example.com/slate.mp4", repetitions: 2, duration: 4000 }
+        }
+      }, sessionLiveStore);
+
+      const m3u8 = await renderFirstMediaSequence(session);
+      const daterange = m3u8.split("\n").find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      // Standard Apple HLS-interstitial class identifier.
+      expect(daterange).toContain('CLASS="com.apple.hls.interstitial"');
+      expect(daterange).toContain('START-DATE="2026-09-04T00:00:00.000Z"');
+      // Slate reference is preferred as the asset source (2 x 4000ms = 8.000s).
+      expect(daterange).toContain('X-ASSET-URI="https://slate.example.com/slate.mp4"');
+      expect(daterange).toContain("PLANNED-DURATION=8.000");
+      expect(daterange).toMatch(/ID="adbreak-/);
+    });
+
+    it("falls back to the ad server URI as the interstitial asset when no slate is configured", async () => {
+      const session = new Session("dummy", {
+        adBreak: { enabled: true, adServerUri: "https://ads.example.com/vast" }
+      }, sessionLiveStore);
+
+      const m3u8 = await renderFirstMediaSequence(session);
+      const daterange = m3u8.split("\n").find((l) => l.startsWith("#EXT-X-DATERANGE"));
+
+      expect(daterange).toBeDefined();
+      expect(daterange).toContain('X-ASSET-URI="https://ads.example.com/vast"');
+      // No slate duration configured -> no PLANNED-DURATION attribute emitted.
+      expect(daterange).not.toContain("PLANNED-DURATION");
+    });
+
+    it("emits no DATERANGE and a byte-identical playlist when ad breaks are disabled", async () => {
+      const enabledSession = new Session("dummy", {
+        adBreak: { enabled: true, adServerUri: "https://ads.example.com/vast" }
+      }, sessionLiveStore);
+      const disabledSession = new Session("dummy", null, sessionLiveStore);
+
+      // Baseline playlist with the feature disabled (default config).
+      const disabledM3u8 = await renderFirstMediaSequence(disabledSession);
+      // Same VOD/content with the feature enabled produces the interstitial tag.
+      const enabledM3u8 = await renderFirstMediaSequence(enabledSession);
+
+      expect(/#EXT-X-DATERANGE/.test(disabledM3u8)).toEqual(false);
+      expect(/#EXT-X-DATERANGE/.test(enabledM3u8)).toEqual(true);
+
+      // Proof that disabled output is unchanged: stripping the injected
+      // interstitial lines from the enabled playlist yields the disabled one.
+      const enabledStripped = enabledM3u8
+        .split("\n")
+        .filter((l) => !l.startsWith("#EXT-X-DATERANGE") && !l.startsWith("#EXT-X-PROGRAM-DATE-TIME"))
+        .join("\n");
+      const disabledStripped = disabledM3u8
+        .split("\n")
+        .filter((l) => !l.startsWith("#EXT-X-PROGRAM-DATE-TIME"))
+        .join("\n");
+      expect(enabledStripped).toEqual(disabledStripped);
+    });
+
+    it("is a no-op for _addInterstitialMetadata when ad breaks are disabled", () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      const calls = [];
+      const fakeVod = { addMetadata: (k, v) => calls.push([k, v]) };
+      session._addInterstitialMetadata(fakeVod, FIXED_TS);
+      expect(calls.length).toEqual(0);
     });
   });
 
