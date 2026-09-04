@@ -30,7 +30,7 @@ const constants = {
   STR_ORIGIN: 'origin',
   HTTP_NO_CONTENT: 204
 }
-module.exports.handler = async function (req, res) {
+module.exports.handler = async function (req: any, res: any) {
   if (req.method !== 'OPTIONS') return;
   res
     .header(constants.AC_ALLOW_ORIGIN, '*')
