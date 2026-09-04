@@ -56,6 +56,48 @@ describe("Channel Engine", () => {
     jasmine.clock().uninstall();
   });
 
+  describe("ad-break config validation (issue #367)", () => {
+    let testAssetManager;
+    let testChannelManager;
+
+    beforeEach(() => {
+      testAssetManager = new TestAssetManager();
+      testChannelManager = new TestChannelManager();
+    });
+
+    // NOTE: the module-level fastify instance is a singleton, so a *successful*
+    // ChannelEngine construction registers routes on it and cannot be repeated
+    // within a single process. These specs therefore only cover the validation
+    // paths that throw before any route registration happens (issue #367).
+
+    it("throws when an enabled ad-break config is missing the endpoint URL", () => {
+      expect(() => {
+        new ChannelEngine(testAssetManager, {
+          channelManager: testChannelManager,
+          adBreak: { enabled: true }
+        });
+      }).toThrowError(/adServerUri/);
+    });
+
+    it("throws when the ad-break endpoint URL is malformed", () => {
+      expect(() => {
+        new ChannelEngine(testAssetManager, {
+          channelManager: testChannelManager,
+          adBreak: { enabled: true, adServerUri: "not-a-url" }
+        });
+      }).toThrowError(/invalid adServerUri/);
+    });
+
+    it("throws when the ad-break endpoint URL is not http(s)", () => {
+      expect(() => {
+        new ChannelEngine(testAssetManager, {
+          channelManager: testChannelManager,
+          adBreak: { enabled: true, adServerUri: "ftp://ads.example.com/vast" }
+        });
+      }).toThrowError(/http\(s\)/);
+    });
+  });
+
   xit("is updated when new channels are added", async () => {
     const testAssetManager = new TestAssetManager();
     const testChannelManager = new TestChannelManager();

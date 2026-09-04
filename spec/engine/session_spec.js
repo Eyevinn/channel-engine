@@ -18,6 +18,45 @@ describe("Session", () => {
     expect(id1).not.toEqual(id2);
   });
 
+  describe("ad-break config surface (issue #367)", () => {
+    it("defaults ad breaks to disabled when unconfigured", () => {
+      const sessionNoConfig = new Session("dummy", null, sessionLiveStore);
+      const sessionEmptyConfig = new Session("dummy", {}, sessionLiveStore);
+      expect(sessionNoConfig.adBreak).toEqual({ enabled: false });
+      expect(sessionEmptyConfig.adBreak).toEqual({ enabled: false });
+    });
+
+    it("stores an enabled ad-break config when provided", () => {
+      const session = new Session("dummy", {
+        adBreak: { enabled: true, adServerUri: "https://ads.example.com/vast" }
+      }, sessionLiveStore);
+      expect(session.adBreak.enabled).toEqual(true);
+      expect(session.adBreak.adServerUri).toEqual("https://ads.example.com/vast");
+    });
+
+    it("treats an explicitly disabled ad-break config as disabled", () => {
+      const session = new Session("dummy", {
+        adBreak: { enabled: false, adServerUri: "https://ads.example.com/vast" }
+      }, sessionLiveStore);
+      expect(session.adBreak).toEqual({ enabled: false });
+    });
+
+    it("carries a slate reference through when present on an enabled config", () => {
+      const session = new Session("dummy", {
+        adBreak: {
+          enabled: true,
+          adServerUri: "https://ads.example.com/vast",
+          slate: { uri: "https://slate.example.com/slate.mp4", repetitions: 5, duration: 3000 }
+        }
+      }, sessionLiveStore);
+      expect(session.adBreak.slate).toEqual({
+        uri: "https://slate.example.com/slate.mp4",
+        repetitions: 5,
+        duration: 3000
+      });
+    });
+  });
+
   it("sets the event flag when configured with { event: true }", () => {
     const session = new Session("dummy", { event: true }, sessionLiveStore);
     expect(session.event).toEqual(true);
