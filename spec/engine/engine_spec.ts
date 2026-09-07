@@ -1,6 +1,7 @@
 const { ChannelEngine } = require('../../dist/index.js');
 
 class TestChannelManager {
+  declare _tick: number;
   constructor() {
     this._tick = 0;
   }
@@ -40,7 +41,7 @@ class TestAssetManager {
 
   }
 
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest?: any) {
     return new Promise((resolve, reject) => {
       resolve({})
     });

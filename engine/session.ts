@@ -338,7 +338,7 @@ class Session {
         }
       } catch (err) {
         debug(`[${this._sessionId}]: Playhead consumer crashed (1)`);
-        console.error(`[${this._sessionId}]: ${err.message}`);
+        console.error(`[${this._sessionId}]: ${err instanceof Error ? err.message : err}`);
         cloudWatchLog(!this.cloudWatchLogging, 'engine-session',
           { event: 'error', on: 'playhead', channel: this._sessionId, err: err });
         debug(err);
@@ -1951,7 +1951,7 @@ class Session {
       return null;
     } catch (err) {
       // Covers AbortError (timeout), network errors, and JSON parse errors.
-      debug(`[${this._sessionId}]: ad-server endpoint ${uri} request failed (${err && err.message ? err.message : err}), falling back to slate`);
+      debug(`[${this._sessionId}]: ad-server endpoint ${uri} request failed (${err instanceof Error ? err.message : err}), falling back to slate`);
       return null;
     } finally {
       clearTimeout(timeout);

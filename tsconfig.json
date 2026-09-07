@@ -1,21 +1,32 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
-    // Mixed JS/TS tree during the incremental migration (see CONTRIBUTING.md).
-    // `allowJs` lets legacy `.js` modules coexist with converted `.ts` ones.
-    // `checkJs` and `strict` are intentionally NOT enabled globally yet — they
-    // are turned on per-file (via `// @ts-check` or by converting to `.ts`) and
-    // flipped on globally only in the final migration slice (#376).
-    "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "target": "es2022",
     "module": "node16",
     "moduleResolution": "node16",
     "esModuleInterop": true,
-    "declaration": true
+    "declaration": true,
+    // Strict mode is on. Two strict sub-flags are still held back because the
+    // engine sources carry pre-existing debt that is being cleaned up in its own
+    // follow-up slice (they surface ~700 legacy findings unrelated to this spec
+    // migration): `noImplicitAny` (implicit-any params across session/server/
+    // session_live/stream_switcher) and `strictNullChecks` (possibly-undefined
+    // accesses in the same modules). Everything else strict enables
+    // (strictFunctionTypes, strictBindCallApply, strictPropertyInitialization,
+    // noImplicitThis, alwaysStrict, useUnknownInCatchVariables, ...) is on and
+    // passes for both the engine and the migrated TypeScript spec suite.
+    "strict": true,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "types": ["node", "jasmine"]
   },
+  // The production build emits only the engine + examples into `dist/`. The
+  // migrated TypeScript spec suite is type-checked separately via
+  // `tsconfig.spec.json` (see the `typecheck:spec` / `pretest` scripts) so the
+  // specs never leak into the published `dist/` tree.
   "include": [
-    "./examples/*", 
+    "./examples/*",
     "./engine/**/*"
   ]
 }

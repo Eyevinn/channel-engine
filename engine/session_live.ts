@@ -248,7 +248,7 @@ class SessionLive {
         await timer(timerValueMs);
       } catch (err) {
         debug(`[${this.sessionId}]: SessionLive-Playhead consumer crashed`);
-        console.error(`[${this.sessionId}]: ${err.message}`);
+        console.error(`[${this.sessionId}]: ${err instanceof Error ? err.message : err}`);
         debug(err);
         this.playheadState = PlayheadState.CRASHED;
       }

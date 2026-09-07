@@ -1,0 +1,16 @@
+{
+  // Type-checks the migrated TypeScript spec suite. It never emits — the specs
+  // run through the jasmine `ts-resolve` helper, and the production `dist/` is
+  // built from `tsconfig.json`. Strict mode matches the production build
+  // (`noImplicitAny`/`strictNullChecks` stay off for parity with the engine
+  // sources the specs import via untyped CommonJS `require`).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false
+  },
+  "include": [
+    "./engine/**/*",
+    "./spec/**/*"
+  ]
+}

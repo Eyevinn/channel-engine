@@ -251,6 +251,7 @@ const verificationLoop = async (session, increments) => {
   let lastUri = null;
   let lastManifest = null;
   let lastMediaSeq = null;
+  let manifest;
   for (let promiseFn of promiseFns) {
     manifest = await promiseFn();
     const parser = m3u8.createStream();
@@ -269,7 +270,7 @@ const verificationLoop = async (session, increments) => {
         }
         lastUri = firstItem.get('uri');
         lastMediaSeq = m3u.get('mediaSequence');
-        resolve();
+        resolve(undefined);
       });
     });
     lastManifest = manifest;
