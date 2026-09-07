@@ -312,7 +312,7 @@ describe("Session", () => {
     const okResponse = (body) => ({ ok: true, status: 200, json: async () => body });
     const errResponse = (status) => ({ ok: false, status, json: async () => ({}) });
 
-    function endpointSession(extra) {
+    function endpointSession(extra?: any) {
       return new Session("dummy", {
         adBreak: Object.assign(
           { enabled: true, adServerUri: AD_ENDPOINT },

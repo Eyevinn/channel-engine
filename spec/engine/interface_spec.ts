@@ -1,19 +1,20 @@
 const { ChannelEngine } = require('../../dist/index.js');
 
 class TestAssetManager {
-  constructor(opts, assets) {
+  declare errorHandlerFn: any;
+  constructor(opts?: any, assets?: any) {
     if (opts && opts.errorHandler) {
       this.errorHandlerFn = opts.errorHandler;
     }
   }
 
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest?: any) {
     return new Promise((resolve, reject) => {
       resolve({ id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/404/master.m3u8" });
     });
   }
 
-  handleError(err, vodResponse) {
+  handleError(err: any, vodResponse?: any) {
     if (this.errorHandlerFn) {
       this.errorHandlerFn(err, vodResponse);
     }

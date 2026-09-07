@@ -615,7 +615,7 @@ export class ChannelEngine {
           }
           switcherStatus[channel] = status;
         } catch (err) {
-          throw new Error (err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
        } else {
         debug(`Tried to switch stream on a non-existing channel=[${channel}]. Switching Ignored!)`);
@@ -625,7 +625,7 @@ export class ChannelEngine {
       await Promise.all(channels.map(channel => getSwitchStatusAndPerformSwitch(channel)));
     } catch (err) {
       debug('Problem occured when updating streamSwitchers');
-      throw new Error (err);
+      throw err instanceof Error ? err : new Error(String(err));
     }
 
   }

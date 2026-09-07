@@ -6,7 +6,10 @@ const { SessionStateStore } = require('../../engine/session_state.js');
 const { PlayheadStateStore } = require('../../engine/playhead_state.js');
 
 class TestAssetManager {
-  constructor(opts, assets) {
+  declare assets: any;
+  declare pos: number;
+  declare doFail: boolean;
+  constructor(opts?: any, assets?: any) {
     this.assets = [
       { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
       { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
@@ -20,7 +23,7 @@ class TestAssetManager {
       this.doFail = true;
     }
   }
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest?: any) {
     return new Promise((resolve, reject) => {
       if (this.doFail) {
         reject("should fail");
@@ -35,9 +38,9 @@ class TestAssetManager {
   }
 }
 
-const parseMediaManifest = async (manifest) => {
+const parseMediaManifest = async (manifest: any) => {
   const parser = m3u8.createStream();
-  const m3u = await new Promise((resolve, reject) => {
+  const m3u = await new Promise<any>((resolve, reject) => {
     let manifestStream = new Readable();
     manifestStream.push(manifest);
     manifestStream.push(null);

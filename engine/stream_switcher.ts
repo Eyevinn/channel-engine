@@ -105,7 +105,7 @@ class StreamSwitcher {
         return status;
       } catch (err) {
         debug(`Failed to force a switch off live feed: ${err}`);
-        throw new Error(err);
+        throw err instanceof Error ? err : new Error(String(err));
       }
     }
   }
@@ -261,7 +261,7 @@ class StreamSwitcher {
     } catch (err) {
       debug(`[${this.sessionId}]: Unexpected failure in Stream Switcher...`);
       console.error(err);
-      throw new Error(err);
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 
@@ -330,7 +330,7 @@ class StreamSwitcher {
           this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from V2L->LIVE ]`);
           console.error(err);
-          throw new Error(err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
 
       case SwitcherState.V2L_TO_VOD:
@@ -370,7 +370,7 @@ class StreamSwitcher {
           this.working = false;
           this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from V2L->VOD ]`);
-          throw new Error(err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
       case SwitcherState.LIVE_TO_V2L:
         try {
@@ -420,7 +420,7 @@ class StreamSwitcher {
           this.working = false;
           this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->V2L ] ${err}`);
-          throw new Error(err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
       case SwitcherState.LIVE_TO_VOD:
         try {
@@ -473,7 +473,7 @@ class StreamSwitcher {
           this.working = false;
           this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->VOD ]`);
-          throw new Error(err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
       case SwitcherState.LIVE_TO_LIVE:
         try {
@@ -524,7 +524,7 @@ class StreamSwitcher {
           this.working = false;
           this.eventId = null;
           debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->LIVE ]`);
-          throw new Error(err);
+          throw err instanceof Error ? err : new Error(String(err));
         }
       default:
         debug(`[${this.sessionId}]: SwitcherState [${state}] not implemented`);
@@ -709,7 +709,7 @@ class StreamSwitcher {
       debug(`[${this.sessionId}]: Loaded all Variants of the Preroll Slate!`);
       return { mediaSegments: prerollSegments, audioSegments: prerollSegmentsAudio };
     } catch (err) {
-      throw new Error(err);
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 

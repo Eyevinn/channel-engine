@@ -12,7 +12,11 @@ const StreamType = Object.freeze({
 const tsNow = Date.now();
 
 class TestAssetManager {
-  constructor(opts, assets) {
+  declare assets: any;
+  declare pos: number;
+  declare doFail: boolean;
+  declare failOnIndex: number;
+  constructor(opts?: any, assets?: any) {
     this.assets = [
       { id: 1, title: "Tears of Steel", uri: "https://maitv-vod.lab.eyevinn.technology/tearsofsteel_4k.mov/master.m3u8" },
       { id: 2, title: "VINN", uri: "https://maitv-vod.lab.eyevinn.technology/VINN.mp4/master.m3u8" }
@@ -30,7 +34,7 @@ class TestAssetManager {
     }
   }
 
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest?: any) {
     return new Promise((resolve, reject) => {
       if (this.doFail || this.pos === this.failOnIndex) {
         reject("should fail");
@@ -156,7 +160,10 @@ const allListSchedules = [
 ];
 
 class TestSwitchManager {
-  constructor(listNum) {
+  declare schedule: any[];
+  declare eventId: number;
+  declare listIndex: number;
+  constructor(listNum: number) {
     this.schedule = [];
     this.eventId = 0;
     this.listIndex = listNum;
@@ -251,7 +258,7 @@ describe("The Stream Switcher", () => {
 
     expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe(null);
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(testStreamSwitcher.getEventId()).toBe("live-0");
@@ -286,7 +293,7 @@ describe("The Stream Switcher", () => {
 
     expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe(null);
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(testStreamSwitcher.getEventId()).toBe("live-0");
@@ -309,7 +316,7 @@ describe("The Stream Switcher", () => {
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
 
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
     expect(testStreamSwitcher.getEventId()).toBe("live-0");
@@ -332,7 +339,7 @@ describe("The Stream Switcher", () => {
 
     expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe(null);
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe("vod-0");
@@ -349,7 +356,7 @@ describe("The Stream Switcher", () => {
     await session.initAsync();
     await session.incrementAsync();
 
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe("vod-0");
@@ -367,7 +374,7 @@ describe("The Stream Switcher", () => {
     await session.initAsync();
     await session.incrementAsync();
 
-    jasmine.clock().mockDate(tsNow);
+    jasmine.clock().mockDate(new Date(tsNow));
     jasmine.clock().tick((25 * 1000));
     expect(await testStreamSwitcher.streamSwitcher(session, null)).toBe(false);
     expect(testStreamSwitcher.getEventId()).toBe(null);
@@ -386,7 +393,7 @@ describe("The Stream Switcher", () => {
       await session.incrementAsync();
       sessionLive.initAsync();
 
-      jasmine.clock().mockDate(tsNow);
+      jasmine.clock().mockDate(new Date(tsNow));
       jasmine.clock().tick((25 * 1000));
       expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
       expect(testStreamSwitcher.getEventId()).toBe("live-1");
@@ -412,7 +419,7 @@ describe("The Stream Switcher", () => {
       await session.incrementAsync();
       await sessionLive.initAsync();
 
-      jasmine.clock().mockDate(tsNow);
+      jasmine.clock().mockDate(new Date(tsNow));
       jasmine.clock().tick((25 * 1000));
       expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(true);
       expect(testStreamSwitcher.getEventId()).toBe("live-2");
@@ -445,7 +452,7 @@ describe("The Stream Switcher", () => {
 
       sessionLive.startPlayheadAsync();
 
-      jasmine.clock().mockDate(tsNow);
+      jasmine.clock().mockDate(new Date(tsNow));
       jasmine.clock().tick((25 * 1000));
       expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
       expect(testStreamSwitcher.getEventId()).toBe("vod-2");
@@ -472,7 +479,7 @@ describe("The Stream Switcher", () => {
       await session.incrementAsync();
       await sessionLive.initAsync();
 
-      jasmine.clock().mockDate(tsNow);
+      jasmine.clock().mockDate(new Date(tsNow));
       jasmine.clock().tick((25 * 1000));
       expect(await testStreamSwitcher.streamSwitcher(session, sessionLive)).toBe(false);
       expect(testStreamSwitcher.getEventId()).toBe("vod-3");

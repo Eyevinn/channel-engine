@@ -237,7 +237,11 @@ const mockLiveSegments = {
 };
 
 class TestAssetManager {
-  constructor(opts, assets) {
+  declare assets: any;
+  declare pos: number;
+  declare doFail: boolean;
+  declare failOnIndex: number;
+  constructor(opts?: any, assets?: any) {
     this.assets = [
       {
         id: 1,
@@ -263,7 +267,7 @@ class TestAssetManager {
     }
   }
 
-  getNextVod(vodRequest) {
+  getNextVod(vodRequest?: any) {
     return new Promise((resolve, reject) => {
       if (this.doFail || this.pos === this.failOnIndex) {
         reject("should fail");
@@ -319,8 +323,8 @@ describe("The initialize switching", () => {
     await sessionLive.initAsync();
     sessionLive.startPlayheadAsync();
 
-    currVodSegments = await session.getCurrentMediaSequenceSegments();
-    currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    let currVodSegments = await session.getCurrentMediaSequenceSegments();
+    let currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
     expect(currVodCounts).toEqual({
       mediaSeq: 2,
       discSeq: 0,
@@ -847,8 +851,8 @@ describe("The initialize switching", () => {
     }
     await sessionLive.initAsync();
 
-    currVodSegments = await session.getCurrentMediaSequenceSegments();
-    currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
+    let currVodSegments = await session.getCurrentMediaSequenceSegments();
+    let currVodCounts = await session.getCurrentMediaAndDiscSequenceCount();
 
     await sessionLive.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq);
     await sessionLive.setCurrentMediaSequenceSegments(currVodSegments);
