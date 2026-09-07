@@ -107,6 +107,13 @@ class Session {
     // Ad-break / interstitial config surface (issue #367). Disabled by default;
     // no interstitial tags are emitted from this yet (follow-up #368).
     this.adBreak = { enabled: false };
+    // Custom pass-through parameters forwarded to the asset manager's
+    // getNextVod() (issue #378). Populated per-session by the master-manifest
+    // request handler (wired up in #379) after filtering against the
+    // customVodRequestParams allowlist (#377). Defaults to an empty object so
+    // that, until a setter populates it, existing IAssetManager implementations
+    // are unaffected.
+    this.customParams = {};
     if (config) {
       if (config.alwaysNewSegments) {
         this.alwaysNewSegments = config.alwaysNewSegments;
@@ -217,6 +224,14 @@ class Session {
 
   get sessionId() {
     return this._sessionId;
+  }
+
+  // Store the custom pass-through parameters for this session (issue #378).
+  // Intended to be called by the master-manifest request handler (#379) with the
+  // already-allowlist-filtered params. Passing a falsy value clears them back to
+  // an empty object so nothing extra is forwarded to the asset manager.
+  setCustomParams(customParams) {
+    this.customParams = customParams || {};
   }
 
   async startPlayheadAsync() {
@@ -2100,11 +2115,19 @@ class Session {
 
       let nextVodPromise;
 
-      nextVodPromise = this._assetManager.getNextVod({
+      // Forward per-session custom pass-through params (issue #378) when present.
+      // Only include the field if at least one param has been set, so existing
+      // IAssetManager implementations that don't expect it are unaffected.
+      const vodRequest: any = {
         sessionId: this._sessionId,
         category: this._category,
         playlistId: this._sessionId
-      });
+      };
+      if (this.customParams && Object.keys(this.customParams).length > 0) {
+        vodRequest.customParams = this.customParams;
+      }
+
+      nextVodPromise = this._assetManager.getNextVod(vodRequest);
 
       nextVodPromise.then(nextVod => {
         if (nextVod && nextVod.uri) {

@@ -550,6 +550,53 @@ describe("Session", () => {
     });
   });
 
+  describe("custom pass-through params forwarding (issue #378)", () => {
+    it("defaults customParams to an empty object", () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      expect(session.customParams).toEqual({});
+    });
+
+    it("omits customParams from the getNextVod request when none are set", async () => {
+      let received;
+      const session = new Session(
+        {
+          getNextVod: async (vodRequest) => {
+            received = vodRequest;
+            return { id: "1", uri: "https://example.com/vod.m3u8" };
+          }
+        },
+        null,
+        sessionLiveStore
+      );
+      await session._getNextVod();
+      expect(received.customParams).toBeUndefined();
+    });
+
+    it("forwards custom params to the asset manager's getNextVod when set", async () => {
+      let received;
+      const session = new Session(
+        {
+          getNextVod: async (vodRequest) => {
+            received = vodRequest;
+            return { id: "1", uri: "https://example.com/vod.m3u8" };
+          }
+        },
+        null,
+        sessionLiveStore
+      );
+      session.setCustomParams({ foo: "bar", baz: "qux" });
+      await session._getNextVod();
+      expect(received.customParams).toEqual({ foo: "bar", baz: "qux" });
+    });
+
+    it("clears custom params back to an empty object when set with a falsy value", () => {
+      const session = new Session("dummy", null, sessionLiveStore);
+      session.setCustomParams({ foo: "bar" });
+      session.setCustomParams(undefined);
+      expect(session.customParams).toEqual({});
+    });
+  });
+
   describe("EXT-X-ENDLIST on served media playlists (event mode, issue #363)", () => {
     // A served media playlist ends its last line with a newline (segment lines are
     // "\n"-terminated by the vod lib), so ENDLIST is appended on its own line.

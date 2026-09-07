@@ -140,6 +140,12 @@ export interface VodRequest {
   sessionId: string;
   category?: string;
   playlistId: string;
+  // Optional custom pass-through parameters forwarded to the asset manager's
+  // getNextVod() (issue #378). Sourced from per-session state populated by the
+  // master-manifest request handler (wired up in #379) and filtered against the
+  // customVodRequestParams allowlist (#377). Optional and defaults to absent so
+  // existing IAssetManager implementations are unaffected.
+  customParams?: { [key: string]: string };
 }
 
 export interface VodResponseMetadata {
