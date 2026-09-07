@@ -57,6 +57,17 @@ a slate fallback if that endpoint cannot be reached. Configure it through the
 [docs/reference.md](docs/reference.md#ad-break-configuration-hls-interstitials)
 for the full field reference and `examples/adbreak.ts` for a runnable example.
 
+### Custom VOD request parameters
+
+The engine can be configured with an allowlist of query-parameter names that
+are permitted to be forwarded to the asset manager's `getNextVod()` request,
+through the `customVodRequestParams` option on `ChannelEngineOpts`. Only
+parameters named in the allowlist may be passed through; all others are
+ignored, and the default (option omitted) is an empty allowlist with no
+pass-through. See
+[docs/reference.md](docs/reference.md#custom-vod-request-parameters) for the
+field reference.
+
 ## System Requirements
 
 Supported Node.js Versions

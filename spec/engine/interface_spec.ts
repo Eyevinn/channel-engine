@@ -53,7 +53,18 @@ describe("Asset Manager Interface", () => {
     const testAssetManager = new TestAssetManager({ errorHandler: errorHandler });
     const testChannelManager = new TestChannelManager();
 
-    const engine = new ChannelEngine(testAssetManager, { channelManager: testChannelManager });
+    // NOTE: the module-level fastify instance is a singleton, so only one
+    // *successful* ChannelEngine construction is possible per process (a second
+    // one throws FST_ERR_DUPLICATED_ROUTE). This is the suite's single such
+    // construction, so the custom-VOD-request-parameter allowlist (issue #377)
+    // is asserted here rather than in a separate construction. It is stored on
+    // the instance verbatim; config surface only — no forwarding to getNextVod()
+    // is wired up yet (#378/#379/#380).
+    const engine = new ChannelEngine(testAssetManager, {
+      channelManager: testChannelManager,
+      customVodRequestParams: ["category"]
+    });
+    expect(engine.customVodRequestParams).toEqual(["category"]);
     await engine.start();
     jasmine.clock().tick((10 * 1000) + 1);
   });
