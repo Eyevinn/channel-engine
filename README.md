@@ -40,7 +40,7 @@ Please see the [Documentation](https://vod2live.docs.eyevinn.technology) for int
 - Develop adapters to plugin with custom scheduling endpoints
 - High Availability with Redis Cache or Valkey as shared state store
 - Support for WebVTT subtitles
-- Support for DRM encrypted HLS VODs (in beta)
+- Support for Widevine DRM encrypted HLS+CMAF VODs (in beta); see `examples/drm.ts`
 - Improved performance with Redis connection pooling and pipelining
 - Enhanced stability in High Availability mode
 - Support for livemix with demuxed content (TS and CMAF)
@@ -80,10 +80,10 @@ Supported Node.js Versions
 
 ## Supported Source Formats
 
-| HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | Mix w. Live & Subtitles | DRM |
-| ---------- | ----- | ------- | ----------- | --------- | ----------------------- | --- |
-| HLS + TS   | Yes   | Yes     | Yes         | Yes       | No                      | No  |
-| HLS + CMAF | Yes   | Yes     | Yes         | Yes       | No                      | No  |
+| HLS Format | Muxed | Demuxed | Mix w. Live | Subtitles | Mix w. Live & Subtitles | DRM            |
+| ---------- | ----- | ------- | ----------- | --------- | ----------------------- | -------------- |
+| HLS + TS   | Yes   | Yes     | Yes         | Yes       | No                      | No             |
+| HLS + CMAF | Yes   | Yes     | Yes         | Yes       | No                      | Yes (Widevine) |
 
 NOTE: The engine does not support subtitles in the live-mix + demux setting. Furthermore, then using the live-mix + demux setting, it is most optimal to use HLS content which has the same segment durations on all variants.
 Using a mix of different segment durations may result in occasional playback/audio sync issues, but not always. Further development will be needed to resolve this and improve the robustness of the live-mix + demux experience.
