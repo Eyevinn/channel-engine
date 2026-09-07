@@ -80,3 +80,18 @@ When a break is opened on an enabled channel:
 
 See `examples/adbreak.ts` for a runnable channel wired with an ad break.
 
+## Custom VOD request parameters
+
+The engine can be configured with an allowlist of query-parameter names that are
+permitted to be forwarded to the asset manager's `getNextVod()` request. This is
+set through the `customVodRequestParams` option on `ChannelEngineOpts`. Only
+parameters whose name appears in the allowlist may be passed through; every other
+query parameter is ignored. When the option is omitted the allowlist is empty, so
+no parameters are forwarded (the default, current behaviour).
+
+### `ChannelEngineOpts` fields
+
+Field | Type | Default | Description
+----- | ---- | ------- | -----------
+customVodRequestParams (optional) | string[] | `[]` (empty — no pass-through) | Allowlist of query-parameter names permitted to be forwarded to `getNextVod()`. Config surface only for now; the forwarding itself is wired up in follow-up work.
+

@@ -96,6 +96,13 @@ export interface ChannelEngineOpts {
   sessionHealthKey?: string;
   rollingPDT?: boolean;
   event?: boolean;
+  // Allowlist of query-parameter names permitted to be forwarded to the asset
+  // manager's getNextVod() request (issue #377). Only parameters whose name is
+  // present in this list may be passed through; all others are ignored. This
+  // issue only establishes the config surface — the actual pass-through is wired
+  // up in follow-ups (#378/#379/#380). Defaults to no allowlist (an empty list),
+  // i.e. no pass-through, when omitted.
+  customVodRequestParams?: string[];
   // Base stream-switch polling interval in milliseconds (default 3000).
   // This is the cadence at which the global StreamSwitchLoop calls
   // updateStreamSwitchAsync() to evaluate live-schedule switches.
@@ -272,6 +279,11 @@ export class ChannelEngine {
   private sessionResetKey: string = "";
   private sessionEventStream: boolean = false;
   private sessionHealthKey: string = "";
+  // Allowlist of query-parameter names permitted to be forwarded to
+  // getNextVod() (issue #377). Config surface only — defaults to an empty list
+  // (no pass-through) when the option is omitted. Consumed in follow-ups
+  // (#378/#379/#380).
+  private customVodRequestParams: string[] = [];
 
   // Validate and normalize an ad-break configuration (issue #367).
   // Returns a config that is always defined and disabled-by-default:
@@ -363,6 +375,13 @@ export class ChannelEngine {
     if (options && options.autoCreateSession !== undefined) {
       this.autoCreateSession = options.autoCreateSession;
     }
+    // Custom VOD request-parameter allowlist (issue #377). Config surface only —
+    // stored on the instance so follow-ups (#378/#379/#380) can consume it.
+    // Defaults to an empty list (no pass-through) when omitted.
+    this.customVodRequestParams =
+      options && Array.isArray(options.customVodRequestParams)
+        ? options.customVodRequestParams
+        : [];
     this.assetMgr = assetMgr;
     this.monitorTimer = {};
     this.server = fastify;
