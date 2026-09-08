@@ -1,0 +1,9 @@
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:60
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:60.0,
+subtitlechunk_french_0.webvtt
+#EXTINF:60.0,
+subtitlechunk_french_1.webvtt
+#EXT-X-ENDLIST

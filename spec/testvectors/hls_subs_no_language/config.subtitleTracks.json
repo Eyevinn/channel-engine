@@ -1,0 +1,12 @@
+{
+  "_comment": "Repro for Eyevinn/channel-engine#325 / #384. The exact channel-engine session config.subtitleTracks used against master.m3u8 (whose SUBTITLES media tag has NAME=\"French\" but NO LANGUAGE attribute). channel-engine forwards this to @eyevinn/hls-vodtolive as expectedSubtitleTracks (engine/session.ts _tickAsync, hlsOpts ~line 1341). Session started with useVTTSubtitles/use_vtt_subtitles enabled.",
+  "useVTTSubtitles": true,
+  "matchingName": {
+    "_comment": "config name equals the manifest NAME -> real cues served today (NAME fallback works on @eyevinn/hls-vodtolive@4.1.10). Evidence: evidence_real_cues_name_match.m3u8",
+    "subtitleTracks": [{ "language": "fr", "name": "French" }]
+  },
+  "mismatchedName": {
+    "_comment": "config name differs from the manifest NAME and there is no LANGUAGE to fall back on -> matching fails, only dummy vtt segments served (the residual #325 bug). Evidence: evidence_dummy_segments_name_mismatch.m3u8",
+    "subtitleTracks": [{ "language": "fr", "name": "Francais" }]
+  }
+}
