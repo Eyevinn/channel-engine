@@ -363,7 +363,15 @@ class StreamSwitcher {
           }
 
           await session.setCurrentMediaAndDiscSequenceCount(currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq);
-          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true, eventAudioSegments, 0);
+          // #382: only carry audio segments into the write when THIS VOD actually
+          // provided demuxed audio. A muxed VOD returns {} from
+          // getTruncatedVodAudioSegments; passing that through would crash inside
+          // setCurrentMediaSequenceSegments (Object.keys on an undefined group).
+          if (this.useDemuxedAudio && vodHasDemuxedAudio) {
+            await session.setCurrentMediaSequenceSegments(eventSegments, 0, true, eventAudioSegments, 0);
+          } else {
+            await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+          }
 
           this.working = false;
           debug(`[${this.sessionId}]: [ Switched from V2L->VOD ]`);
