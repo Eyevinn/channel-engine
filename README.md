@@ -68,6 +68,46 @@ pass-through. See
 [docs/reference.md](docs/reference.md#custom-vod-request-parameters) for the
 field reference.
 
+Declare the allowlist when creating the engine and read the forwarded values
+from `vodRequest.customParams` in your asset manager's `getNextVod()`:
+
+```js
+const { ChannelEngine } = require('eyevinn-channel-engine');
+
+class MyAssetManager {
+  getNextVod(vodRequest) {
+    // Only allowlisted params are present; everything else is stripped.
+    // `customParams` is omitted entirely when no allowlisted param was sent.
+    const myparam = vodRequest.customParams && vodRequest.customParams.myparam;
+    return Promise.resolve({
+      id: '1',
+      title: 'Example',
+      uri: myparam
+        ? `https://vod.example.com/${myparam}/master.m3u8`
+        : 'https://vod.example.com/default/master.m3u8'
+    });
+  }
+}
+
+const engine = new ChannelEngine(new MyAssetManager(), {
+  channelManager: myChannelManager,
+  // Allowlist the query-parameter names to forward to getNextVod().
+  customVodRequestParams: ['myparam']
+});
+engine.start();
+engine.listen(8000);
+```
+
+A request such as:
+
+```
+GET /channels/1/master.m3u8?myparam=foo
+```
+
+forwards `{ myparam: 'foo' }` to `getNextVod()` via `vodRequest.customParams`.
+Any query parameter not in `customVodRequestParams` (e.g. `?other=bar`) is
+dropped before it reaches the asset manager.
+
 ## System Requirements
 
 Supported Node.js Versions
