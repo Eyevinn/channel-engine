@@ -448,6 +448,16 @@ class StreamSwitcher {
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
           eventAudioSegments = await session.getTruncatedVodAudioSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
+          // #383: reconcile across a possible muxed<->demuxed boundary at this
+          // LIVE->VOD switch point. The channel OUTPUT mode is `useDemuxedAudio`;
+          // each side of the transition may or may not actually carry demuxed
+          // audio. We only ever write audio into the (demuxed-output) channel when
+          // the SPECIFIC source being written actually provided demuxed audio, so a
+          // muxed source crossing into a demuxed channel does not corrupt the audio
+          // group / audio discontinuity-sequence with empty or mismatched data.
+          const liveHasDemuxedAudioLTV =
+            this.useDemuxedAudio && liveAudioSegments && !this._isEmpty(liveAudioSegments.currMseqSegs);
+          const vodHasDemuxedAudioLTV = this.useDemuxedAudio && this._sourceHasDemuxedAudio(eventAudioSegments);
 
           if (!eventSegments) {
             debug(`[${this.sessionId}]: [ ERROR Switching from LIVE->VOD ]`);
@@ -458,7 +468,7 @@ class StreamSwitcher {
           }
 
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq - 1, liveCounts.discSeq - 1, liveCounts.audioSeq - 1, liveCounts.audioDiscSeq - 1);
-          if (this.useDemuxedAudio) {
+          if (liveHasDemuxedAudioLTV) {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
           } else {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount);
@@ -469,12 +479,16 @@ class StreamSwitcher {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
 
-            if (this.useDemuxedAudio) {
+            if (vodHasDemuxedAudioLTV) {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               eventAudioSegments = this._mergeAudioSegments(prerollAudioSegments, eventAudioSegments, true);
             }
           }
-          await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+          if (vodHasDemuxedAudioLTV) {
+            await session.setCurrentMediaSequenceSegments(eventSegments, 0, true, eventAudioSegments, 0);
+          } else {
+            await session.setCurrentMediaSequenceSegments(eventSegments, 0, true);
+          }
 
           await sessionLive.resetSession();
           sessionLive.resetLiveStoreAsync(RESET_DELAY); // In parallel
@@ -499,6 +513,14 @@ class StreamSwitcher {
           eventAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           currLiveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
 
+          // #383: reconcile a possible muxed<->demuxed boundary across a LIVE->LIVE
+          // switch. Only carry the demuxed audio rendition when the outgoing live
+          // source actually produced one; if it didn't (a muxed source on a demuxed
+          // channel), skip the audio write so we don't push an empty audio group /
+          // desync the audio discontinuity-sequence into the next live source.
+          const liveHasDemuxedAudioLTL =
+            this.useDemuxedAudio && eventAudioSegments && !this._isEmpty(eventAudioSegments.currMseqSegs);
+
           await sessionLive.resetSession();
           await sessionLive.resetLiveStoreAsync(0);
 
@@ -508,10 +530,10 @@ class StreamSwitcher {
             this._insertTimedMetadata(prerollSegments, scheduleObj.timedMetadata || {});
             eventSegments.currMseqSegs = this._mergeSegments(prerollSegments, eventSegments.currMseqSegs, false);
 
-            if (this.useDemuxedAudio) {
+            if (liveHasDemuxedAudioLTL) {
               const prerollSegmentsAudio = this.prerollsCache[this.sessionId].audioSegments;
               this._insertTimedMetadataAudio(prerollSegmentsAudio, scheduleObj.timedMetadata || {});
-              eventSegments.currMseqSegs = this._mergeAudioSegments(prerollSegmentsAudio, eventAudioSegments.currMseqSegs, false);
+              eventAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollSegmentsAudio, eventAudioSegments.currMseqSegs, false);
             }
           }
 
@@ -520,7 +542,9 @@ class StreamSwitcher {
             console.error("cound not set switch live-> live", currVodCounts.mediaSeq, currVodCounts.discSeq, currVodCounts.audioSeq, currVodCounts.audioDiscSeq)
           }
           await sessionLive.setCurrentMediaSequenceSegments(eventSegments.currMseqSegs);
-          await sessionLive.setCurrentAudioSequenceSegments(eventAudioSegments.currMseqSegs);
+          if (liveHasDemuxedAudioLTL) {
+            await sessionLive.setCurrentAudioSequenceSegments(eventAudioSegments.currMseqSegs);
+          }
           liveUri = await sessionLive.setLiveUri(scheduleObj.uri);
 
           if (!liveUri) {
