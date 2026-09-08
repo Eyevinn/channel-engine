@@ -341,8 +341,11 @@ class StreamSwitcher {
           eventSegments = await session.getTruncatedVodSegments(scheduleObj.uri, scheduleObj.duration / 1000);
           eventAudioSegments = await session.getTruncatedVodAudioSegments(scheduleObj.uri, scheduleObj.duration / 1000);
 
+          // #382: derive per-source whether THIS VOD actually provided demuxed
+          // audio, instead of assuming it from the channel-level output flag.
+          const vodHasDemuxedAudio = this._sourceHasDemuxedAudio(eventAudioSegments);
 
-          if (!eventSegments || (this.useDemuxedAudio && !eventAudioSegments)) {
+          if (!eventSegments) {
             debug(`[${this.sessionId}]: [ ERROR Switching from V2L->VOD ]`);
             this.working = false;
             this.eventId = null;
@@ -353,7 +356,7 @@ class StreamSwitcher {
           if (this.prerollsCache[this.sessionId] && this.prerollsCache[this.sessionId].isValid) {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             eventSegments = this._mergeSegments(prerollSegments, eventSegments, true);
-            if (this.useDemuxedAudio) {
+            if (this.useDemuxedAudio && vodHasDemuxedAudio) {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               eventAudioSegments = this._mergeAudioSegments(prerollAudioSegments, eventAudioSegments, true);
             }
@@ -381,10 +384,14 @@ class StreamSwitcher {
             liveAudioSegments = await sessionLive.getCurrentAudioSequenceSegments();
           }
           liveCounts = await sessionLive.getCurrentMediaAndDiscSequenceCount();
+          // #382: derive per-source whether THIS live source actually produced
+          // demuxed audio, instead of asserting it purely from the channel flag.
+          const liveHasDemuxedAudio =
+            this.useDemuxedAudio && liveAudioSegments && !this._isEmpty(liveAudioSegments.currMseqSegs);
           if (scheduleObj && !scheduleObj.duration) {
             debug(`[${this.sessionId}]: Cannot switch VOD. No duration specified for schedule item: [${scheduleObj.assetId}]`);
           }
-          if (this._isEmpty(liveSegments.currMseqSegs) || (this.useDemuxedAudio && this._isEmpty(liveAudioSegments.currMseqSegs))) {
+          if (this._isEmpty(liveSegments.currMseqSegs)) {
             this.working = false;
             this.streamTypeLive = false;
             debug(`[${this.sessionId}]: [ Switched from LIVE->V2L ]`);
@@ -395,7 +402,7 @@ class StreamSwitcher {
             const prerollSegments = this.prerollsCache[this.sessionId].segments;
             liveSegments.currMseqSegs = this._mergeSegments(prerollSegments, liveSegments.currMseqSegs, false);
             liveSegments.segCount += prerollSegments.length;
-            if (this.useDemuxedAudio) {
+            if (liveHasDemuxedAudio) {
               const prerollAudioSegments = this.prerollsCache[this.sessionId].audioSegments;
               liveAudioSegments.currMseqSegs = this._mergeAudioSegments(prerollAudioSegments, liveAudioSegments.currMseqSegs, false);
               liveAudioSegments.segCount += prerollAudioSegments.length;
@@ -403,7 +410,7 @@ class StreamSwitcher {
           }
 
           await session.setCurrentMediaAndDiscSequenceCount(liveCounts.mediaSeq, liveCounts.discSeq, liveCounts.audioSeq, liveCounts.audioDiscSeq);
-          if (this.useDemuxedAudio) {
+          if (liveHasDemuxedAudio) {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false, liveAudioSegments.currMseqSegs, liveAudioSegments.segCount);
           } else {
             await session.setCurrentMediaSequenceSegments(liveSegments.currMseqSegs, liveSegments.segCount, false);
@@ -545,6 +552,20 @@ class StreamSwitcher {
       }
     }
     return true;
+  }
+
+  /**
+   * Per-source (#382): does THIS loaded VOD/live source actually provide demuxed
+   * audio? Derived from the presence of a non-empty audioSegments structure at
+   * load time, rather than assumed from the channel-level `useDemuxedAudio` flag.
+   *
+   * `useDemuxedAudio` stays the channel-level OUTPUT mode; this signal is the
+   * per-source INPUT fact used for validity/transition checks so a demuxed-output
+   * channel can still ingest a source that lacks demuxed audio (e.g. a muxed VOD)
+   * without flagging it invalid.
+   */
+  _sourceHasDemuxedAudio(audioSegments) {
+    return !ItemIsEmpty(audioSegments);
   }
 
   async _validURI(uri) {
