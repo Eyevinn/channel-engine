@@ -1,0 +1,11 @@
+#EXTM3U
+#EXT-X-VERSION:3
+# Minimal repro for Eyevinn/channel-engine#325 / #384:
+# The SUBTITLES media tag below carries a NAME attribute but NO LANGUAGE attribute.
+# channel-engine forwards config.subtitleTracks to @eyevinn/hls-vodtolive as
+# expectedSubtitleTracks; the dependency matches the manifest track's LANGUAGE (falling
+# back to NAME) against expected {language,name}. With no LANGUAGE here, matching must
+# rely on NAME. This fixture exists so #385 can build/verify the fix.
+#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="French",FORCED=NO,AUTOSELECT=YES,DEFAULT=YES,URI="french.m3u8"
+#EXT-X-STREAM-INF:BANDWIDTH=2962000,NAME="Main",CODECS="avc1.66.30",RESOLUTION=1280x720,SUBTITLES="subs"
+video.m3u8
