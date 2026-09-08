@@ -166,7 +166,23 @@ class Session {
         this._audioTracks = config.audioTracks;
       }
       if (config.subtitleTracks) {
-        this._subtitleTracks = config.subtitleTracks;
+        // Normalize expected subtitle tracks before forwarding them to
+        // @eyevinn/hls-vodtolive as expectedSubtitleTracks. The dependency's
+        // matcher (see node_modules/@eyevinn/hls-vodtolive/index.js) compares a
+        // source SUBTITLES rendition against BOTH element.language and
+        // element.name and unconditionally calls element.name.toLowerCase().
+        // When a source manifest omits LANGUAGE it falls back to matching on the
+        // manifest NAME. If an operator configures a track with only a
+        // `language` (no `name`), the matcher throws on the missing name and no
+        // track is ever matched (issue #385, broken out from #325). Defaulting
+        // `name` to `language` keeps the contract well-formed so a NAME-only
+        // source whose NAME equals the configured language/name still resolves
+        // to real cues instead of dummy vtt. This is not a fuzzy match: it only
+        // fills in an omitted field with the operator's own value.
+        this._subtitleTracks = config.subtitleTracks.map((track) => ({
+          ...track,
+          name: track.name != null ? track.name : track.language,
+        }));
       }
       if (config.closedCaptions) {
         this._closedCaptions = config.closedCaptions;
