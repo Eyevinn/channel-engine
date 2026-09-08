@@ -949,7 +949,22 @@ export class ChannelEngine {
     if (session) {
       const eventStream = new EventStream(session);
       eventStreams[session.sessionId] = eventStream;
-  
+
+      // Plumb allowlisted master.m3u8 query params into the session so the next
+      // _getNextVod() call includes them (#379). Sessions are persistent (created
+      // once in updateChannelsAsync and reused), so scope custom params per request:
+      // set them on every master-manifest request — using an empty object when the
+      // allowlist is unset or no allowlisted params are present — so a later request
+      // without them doesn't inherit a previous request's values. Non-allowlisted
+      // params are ignored.
+      const customParams: { [key: string]: string } = {};
+      for (const key of this.customVodRequestParams) {
+        if (request.query[key] !== undefined) {
+          customParams[key] = request.query[key];
+        }
+      }
+      session.setCustomParams(customParams);
+
       let filter;
       if (request.query['filter']) {
         debug(`Applying filter on master manifest ${request.query['filter']}`);
