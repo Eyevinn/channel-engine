@@ -41,12 +41,15 @@
     "@fastify/static": "^10.1.2",
     "abort-controller": "^3.0.0",
     "debug": "^3.2.7",
-    "fastify": "^5.0.0",
+    "fastify": "^5.12.1",
     "ioredis": "^5.3.2",
     "memcache-client": "^0.10.1",
     "node-fetch": "^2.6.1",
     "promise.allsettled": "^1.0.4",
     "uuid": "^14.0.0"
+  },
+  "overrides": {
+    "fast-uri": "^3.1.6"
   },
   "devDependencies": {
     "@types/jasmine": "^3.10.19",
