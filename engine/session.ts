@@ -1356,6 +1356,7 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+                channelProfile: this._sessionProfile,
                 skipSerializeMediaSequences: this.partialStoreHLSVod,
                 calculatePDT: this.rollingPDT
               };
@@ -1547,6 +1548,7 @@ class Session {
                 shouldContainSubtitles: this.use_vtt_subtitles,
                 expectedSubtitleTracks: this._subtitleTracks,
                 alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+                channelProfile: this._sessionProfile,
                 skipSerializeMediaSequences: this.partialStoreHLSVod,
                 calculatePDT: this.rollingPDT
               };
@@ -2041,6 +2043,7 @@ class Session {
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
               alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              channelProfile: this._sessionProfile,
               skipSerializeMediaSequences: this.partialStoreHLSVod,
               calculatePDT: this.rollingPDT
             };
@@ -2199,6 +2202,7 @@ class Session {
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
               alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              channelProfile: this._sessionProfile,
               skipSerializeMediaSequences: this.partialStoreHLSVod,
               calculatePDT: this.rollingPDT
             };
@@ -2323,6 +2327,7 @@ class Session {
               shouldContainSubtitles: this.use_vtt_subtitles,
               expectedSubtitleTracks: this._subtitleTracks,
               alwaysMapBandwidthByNearest: this.alwaysMapBandwidthByNearest,
+              channelProfile: this._sessionProfile,
               skipSerializeMediaSequences: this.partialStoreHLSVod,
               calculatePDT: this.rollingPDT
             };
